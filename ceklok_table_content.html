@@ -22,6 +22,12 @@
       <button onclick="goBackToAdminDashboard()">Kembali ke Pilih Guru</button>
     </span>
     <button onclick="navigateToHasilCeklok()">Lihat Hasil Ceklok</button>
+    <button onclick="openChangePasswordModal()">Ubah Password Saya</button>
+    <div id="googleLinkButtonAreaUser">
+        <button id="btnLinkGoogleAccountUser" onclick="linkGoogleAccount()" style="background-color: #4CAF50;">Hubungkan Akun Google</button>
+        <button id="btnUnlinkGoogleAccountUser" onclick="handleUnlinkGoogleAccount()" style="background-color: #f44336; display:none;">Putuskan Hubungan Akun Google</button>
+        <small id="linkedGoogleEmailUser" style="display:block; font-size:0.85em; color:var(--grey-text); margin-top:5px;"></small>
+    </div>
     <button onclick="logout()" class="btn-danger">Logout</button>
   </div>
 
