@@ -1,0 +1,1940 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ceklok Guru MTS TANUNTUNG</title>
+  <style>
+    :root {
+      --primary: #0066cc; 
+      --secondary: #004b99; 
+      --accent: #f0f4f8; 
+      --disabled: #e0e0e0;
+      --text: #333;
+      --bg: #f4f7f6; 
+      --white: #fff;
+      --danger: #e74c3c;
+      --danger-hover: #c0392b;
+      --grey-text: #555;
+      --border-color: #ccc;
+      --success: #28a745;
+      --success-hover: #218838;
+      --warning: #ffc107;
+      --warning-hover: #e0a800;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      margin:0;
+      padding:0;
+      font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      padding-bottom: 70px; /* Space for fixed footer */
+    }
+    #app {
+      flex-grow: 1;
+      width: 100%;
+      padding: 10px; /* Sedikit padding umum */
+      box-sizing: border-box;
+    }
+    .login-active #app { 
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px; 
+    }
+    .container { 
+        max-width:900px; 
+        margin:10px auto; /* Kurangi margin atas sedikit */
+        padding:15px; /* Kurangi padding container sedikit */
+        box-sizing: border-box; 
+        background-color: var(--white);
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    h2 { text-align:center; color:var(--primary); margin-top:0; margin-bottom:20px; font-size:1.8em; }
+    h3 { text-align:center; color:var(--secondary); margin-top:15px; margin-bottom:15px; font-size:1.4em;}
+    
+    label { 
+        font-weight:bold; 
+        display:block;
+        margin-bottom: 5px; 
+        font-size: 0.95em; 
+        color: var(--grey-text); 
+    }
+    select,input[type="text"], input[type="password"], input[type="date"], textarea { 
+      width:100%; padding:10px 12px; /* Konsistensi padding */
+      border-radius:6px; 
+      border:1px solid var(--border-color); font-size:16px; box-sizing: border-box; 
+      transition: border-color .3s, box-shadow .3s;
+      margin-bottom: 10px; /* Default margin bottom untuk form elements */
+    }
+    select { height: 42px; /* Samakan tinggi dengan input */ }
+    textarea { min-height: 80px; }
+
+    select:focus, input[type="text"]:focus, input[type="password"]:focus, input[type="date"]:focus, textarea:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 0.2rem rgba(0,102,204,.25);
+        outline: none;
+    }
+    input[disabled], select[disabled], textarea[disabled] { background:var(--disabled); color:#777; cursor: not-allowed; }
+    
+    button { 
+      padding:10px 18px; font-size:15px; border:none; border-radius:6px; 
+      cursor:pointer; margin:5px; /* Margin lebih konsisten */
+      transition:background .3s; 
+      color:var(--white); background:var(--primary); letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+    button:hover { background:var(--secondary); }
+    button.btn-danger { background: var(--danger); }
+    button.btn-danger:hover { background: var(--danger-hover); }
+    button.btn-success { background: var(--success); }
+    button.btn-success:hover { background: var(--success-hover); }
+    button.btn-warning { background: var(--warning); color: var(--text); }
+    button.btn-warning:hover { background: var(--warning-hover); color: var(--text); }
+    button:disabled { background: var(--disabled); color: #888; cursor: not-allowed; }
+    
+    .btn-container { display:flex; justify-content:center; flex-wrap:wrap; margin-top: 20px; margin-bottom: 10px; }
+    
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; background-color: var(--white); border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    th, td { padding: 10px 12px; text-align: left; border: 1px solid #ddd; vertical-align: middle; }
+    th { background:var(--primary); color:var(--white); font-weight: bold; text-transform: uppercase; font-size:0.85em; text-align: center;}
+    td.actions-cell { text-align: center; white-space: nowrap; }
+    td.actions-cell button { padding: 6px 10px; font-size: 0.9em; margin: 2px;}
+
+    tr:nth-child(even) { background-color: var(--accent); }
+    td input[type="text"].inline-input { width: 100%; box-sizing: border-box; margin: 0; padding: 8px 10px; line-height: 1.2; height: auto; vertical-align: middle; font-size:15px; text-align: center;}
+    
+    @media (max-width:700px) { 
+      table,thead,tbody,th,td,tr { display:block; }
+      thead { display:none; } 
+      tr { margin-bottom:15px; background:var(--white); border:1px solid #ddd; border-radius:8px; padding:10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+      td { text-align:right; padding:10px; position:relative; border: none; border-bottom: 1px solid #eee;} 
+      td:last-child { border-bottom: none; }
+      td::before { content:attr(data-label); font-weight:bold; display:inline-block; margin-right:10px; color:var(--primary); text-align:left; float:left;} 
+      td.actions-cell { text-align: right;}
+      td.actions-cell button { display: inline-block; margin-left: 5px; }
+      td input[type="text"].inline-input { text-align: right; } 
+      /* Mengembalikan tampilan tabel desktop untuk #hasilCeklokContainer */
+      #hasilCeklokContainer .table-container table {
+          display: table; /* Kembalikan ke perilaku tabel standar */
+          width: 100%;    /* Tabel akan mencoba mengambil lebar penuh dari .table-container */
+                          /* Jika kontennya lebih lebar, .table-container akan memberikan scroll */
+          /* Atur min-width jika Anda ingin scroll muncul lebih awal, contoh: min-width: 800px; */
+          margin-bottom: 0; /* Reset margin dari aturan tr umum */
+          background: transparent; /* Reset background dari aturan tr umum */
+          border: none; /* Reset border dari aturan tr umum */
+          border-radius: 0; /* Reset border-radius dari aturan tr umum */
+          padding: 0; /* Reset padding dari aturan tr umum */
+          box-shadow: none; /* Reset box-shadow dari aturan tr umum */
+      }
+
+      #hasilCeklokContainer .table-container thead {
+          display: table-header-group !important; /* Pastikan header tabel selalu terlihat */
+      }
+
+      #hasilCeklokContainer .table-container tbody {
+          display: table-row-group; /* Kembalikan ke perilaku tbody standar */
+      }
+
+      #hasilCeklokContainer .table-container tr {
+          display: table-row; /* Kembalikan ke perilaku baris tabel standar */
+          /* Reset gaya dari aturan 'tr' responsif umum jika diperlukan */
+          margin-bottom: 0;
+          background: var(--white); /* Anda mungkin ingin mempertahankan warna baris, atau gunakan transparent */
+          border: none; /* Hapus border individual tr jika tabel sudah punya border-collapse */
+          border-radius: 0;
+          padding: 0;
+          box-shadow: none;
+      }
+      /* Untuk tr:nth-child(even) jika ingin tetap ada beda warna baris */
+      #hasilCeklokContainer .table-container tr:nth-child(even) {
+          background-color: var(--accent);
+      }
+      #hasilCeklokContainer .table-container tr:nth-child(odd) {
+          background-color: var(--white); /* Pastikan baris ganjil juga punya background jika diperlukan */
+      }
+
+      #hasilCeklokContainer .table-container th,
+      #hasilCeklokContainer .table-container td {
+          display: table-cell; /* Kembalikan ke perilaku sel tabel standar */
+          text-align: left;    /* Kembalikan perataan teks default sel, atau sesuai kebutuhan */
+          padding: 10px 12px; /* Sesuaikan dengan padding asli Anda */
+          border: 1px solid #ddd; /* Kembalikan border sel asli */
+          position: static; /* Reset properti position jika ada dari aturan umum */
+          float: none; /* Reset float */
+          /* Hapus atau timpa properti lain dari aturan td responsif umum */
+      }
+
+      #hasilCeklokContainer .table-container td::before {
+          display: none !important; /* Sembunyikan label data-label yang biasanya muncul di mode mobile */
+      }
+
+      /* Pastikan gaya header tabel asli tetap berlaku */
+      #hasilCeklokContainer .table-container th {
+          background: var(--primary);
+          color: var(--white);
+          font-weight: bold;
+          text-transform: uppercase;
+          font-size: 0.85em;
+          text-align: center; /* Atau perataan yang Anda inginkan untuk header */
+      }
+
+      /* Styling untuk setiap "kartu" hari pada tabel input ceklok */
+      #ceklokInputContainer .table-container tr {
+          /* Gaya kartu (margin, border, padding, shadow) sudah diatur oleh aturan umum 'tr' */
+          /* Anda bisa menambahkan atau menimpa gaya di sini jika perlu khusus untuk input ceklok */
+          border-left: 3px solid var(--primary); /* Tambahkan aksen di kiri kartu */
+      }
+
+      /* Penyesuaian untuk sel (td) di dalam tabel input ceklok */
+      #ceklokInputContainer .table-container td {
+          display: flex; /* Gunakan flexbox untuk layout label dan value/input */
+          justify-content: space-between; /* Label di kiri, value/input di kanan */
+          align-items: center; /* Sejajarkan item secara vertikal di tengah */
+          text-align: left; /* Default text align untuk value/input */
+          padding: 10px 12px; /* Padding yang nyaman */
+          border-bottom: 1px dotted #e0e0e0; /* Garis pemisah visual antar field */
+          /* Hapus 'position: relative' jika tidak diperlukan lagi oleh flex */
+          position: static;
+      }
+
+      #ceklokInputContainer .table-container td:last-child {
+          border-bottom: none; /* Hapus border untuk field terakhir dalam satu kartu hari */
+      }
+
+      /* Label (yang dibuat oleh td::before) */
+      #ceklokInputContainer .table-container td::before {
+          float: none; /* Hapus float karena kita pakai flexbox */
+          flex-basis: 110px; /* Lebar dasar untuk label, sesuaikan jika perlu */
+          flex-shrink: 0; /* Mencegah label menyusut jika ruang terbatas */
+          font-weight: 500; /* Sedikit tebal untuk label */
+          color: var(--grey-text); /* Warna label yang standar */
+          margin-right: 8px; /* Jarak antara label dan value/input */
+          /* 'content' dan 'display:inline-block' sudah dari aturan umum */
+      }
+
+      #ceklokInputContainer .table-container td select.inline-select {
+        flex-grow: 1;
+        width: auto;
+        max-width: 250px; 
+        padding: 9px 10px; /* Samakan padding vertikal dengan input jika perlu */
+        font-size: 1em; /* Samakan font size dengan input jika perlu */
+      }
+
+      /* Menonjolkan label "Hari" dan "Tanggal" */
+      #ceklokInputContainer .table-container td[data-label="Hari"]::before,
+      #ceklokInputContainer .table-container td[data-label="Tanggal"]::before {
+          font-weight: bold;
+          color: var(--primary); /* Warna berbeda untuk label utama */
+      }
+      
+      /* Styling untuk nilai dari "Hari" dan "Tanggal" (teks di dalam TD) */
+      #ceklokInputContainer .table-container td[data-label="Hari"],
+      #ceklokInputContainer .table-container td[data-label="Tanggal"] {
+          font-weight: bold; /* Membuat teks hari dan tanggal juga tebal */
+          background-color: #f9f9f9; /* Latar belakang sedikit berbeda untuk header info */
+          padding-top: 12px;
+          padding-bottom: 12px;
+      }
+
+      /* Sel yang berisi data "Data Masuk" & "Data Pulang" (yang sudah ada/read-only) */
+      #ceklokInputContainer .table-container td[data-label="Data Masuk"],
+      #ceklokInputContainer .table-container td[data-label="Data Pulang"] {
+          color: var(--secondary); /* Warna teks untuk data yang sudah ada */
+          font-weight: 500;
+          /* Value akan otomatis ke kanan karena justify-content: space-between pada td */
+      }
+
+      /* Styling untuk input fields jam */
+      #ceklokInputContainer .table-container td input.inline-input {
+          flex-grow: 1; /* Input mengambil sisa ruang yang tersedia */
+          width: auto; /* Hapus width fix, biarkan flex yang mengatur */
+          max-width: 120px; /* Lebar maksimal untuk input jam (HH.MM) */
+          padding: 9px 10px;
+          text-align: center; /* Teks di tengah untuk input jam */
+          border: 1px solid var(--border-color);
+          border-radius: 5px; /* Sedikit lebih rounded */
+          font-size: 1em; /* Ukuran font yang pas untuk input */
+      }
+
+      #ceklokInputContainer .table-container td input.inline-input:focus {
+          border-color: var(--primary);
+          box-shadow: 0 0 0 0.2rem rgba(0,102,204,.25); /* Shadow saat fokus */
+      }
+
+      /* Styling khusus untuk baris hari libur */
+      #ceklokInputContainer .table-container tr.libur-row {
+          background-color: #fff5f5 !important; /* Latar belakang lembut untuk hari libur */
+          border-left-color: var(--danger); /* Aksen warna libur */
+      }
+
+      #ceklokInputContainer .table-container tr.libur-row td {
+          /* Aturan umum td flex sudah berlaku */
+      }
+      
+      /* Sel Hari & Tanggal pada baris libur */
+      #ceklokInputContainer .table-container tr.libur-row td[data-label="Hari"],
+      #ceklokInputContainer .table-container tr.libur-row td[data-label="Tanggal"],
+      #ceklokInputContainer .table-container tr.libur-row td.libur-text { /* Mencakup class libur-text jika digunakan */
+          color: var(--danger); /* Warna teks merah untuk info hari libur */
+          font-weight: bold;
+          background-color: #fff5f5; /* Pastikan background sama dengan tr.libur-row */
+      }
+      #ceklokInputContainer .table-container tr.libur-row td[data-label="Data Masuk"],
+      #ceklokInputContainer .table-container tr.libur-row td[data-label="Data Pulang"] {
+          color: var(--danger);
+      }
+
+
+      /* Sel Keterangan pada baris libur */
+      #ceklokInputContainer .table-container tr.libur-row td.libur-note {
+          display: block; /* Buat sel keterangan mengambil lebar penuh di bawah labelnya */
+          padding: 10px 12px; /* Padding yang konsisten */
+          background-color: transparent; /* Hapus background khusus jika td lain punya */
+      }
+
+      #ceklokInputContainer .table-container tr.libur-row td.libur-note::before { /* Label "Keterangan" */
+          display: block; /* Label agar berada di baris sendiri di atas teks keterangan */
+          flex-basis: auto; /* Hapus flex-basis agar tidak ada ruang kosong di kanan label */
+          margin-bottom: 6px; /* Jarak antara label dan teks keterangan */
+          font-weight: bold;
+          color: var(--danger);
+      }
+
+      #ceklokInputContainer .table-container tr.libur-row td.libur-note span.holiday-description {
+          display: block; /* Teks keterangan agar mengambil lebar penuh */
+          font-style: italic;
+          color: var(--danger);
+          text-align: left;
+          line-height: 1.4;
+      }
+    }
+    
+    #loading { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,.85); z-index:9999; display:none;
+      align-items:center; justify-content:center; flex-direction:column;
+    }
+    .spinner { border:8px solid #f3f3f3; border-top:8px solid var(--primary); border-radius:50%; width:50px; height:50px; animation:spin 1s linear infinite; }
+    #loading p { margin-top:15px; font-size:16px; color:var(--primary); font-weight:500; }
+    @keyframes spin { 0%{transform:rotate(0deg);}100%{transform:rotate(360deg);} }
+    
+    .error-message { 
+      font-size:.9em; color:var(--danger); margin-top: 5px; margin-bottom: 10px; display:block; text-align:left;
+      padding: 8px; background-color: #ffebee; border: 1px solid var(--danger); border-radius: 4px;
+    }
+    .error-message.inline-form-error { margin-bottom: 15px; } /* Untuk error di atas tombol form */
+    .input-error { border:1px solid var(--danger) !important; background:#fff0f0; }
+    
+    .libur-text { color:var(--danger); font-weight: bold; }
+    .libur-note { text-align:left !important; color:var(--danger); font-style: italic; }
+    
+    .form-column { 
+      display: flex; flex-direction: column; gap: 15px; /* Jarak antar form group */
+      max-width: 500px; 
+      margin: 20px auto; padding: 25px; 
+      background-color: var(--white); border-radius: 10px; 
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1); 
+      border-top: 5px solid var(--primary); 
+    }
+    .form-column h2 { margin-bottom: 20px; font-size: 1.6em; }
+    .form-column h3 { margin-bottom: 18px; font-size: 1.2em; color: var(--secondary); }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group input, .form-group select, .form-group textarea { margin-bottom: 0; } /* Hapus margin bawah default di sini, diatur oleh gap form-column */
+    .form-group small { font-size: 0.8em; color: var(--grey-text); margin-top: 3px; }
+
+
+    .form-row {
+        display: flex;
+        align-items: center; 
+        gap: 15px; 
+        margin-bottom: 15px;
+    }
+    .form-row label {
+        flex: 0 0 150px; 
+        margin-bottom: 0; 
+        text-align: right;
+        padding-right: 5px; 
+    }
+    .form-row .input-wrapper {
+        flex-grow: 1; 
+        display: flex; 
+        align-items: center;
+        gap: 10px; 
+    }
+    .form-row .input-wrapper input[type="text"],
+    .form-row .input-wrapper select {
+        margin-bottom: 0; 
+    }
+    .form-row-note { 
+        padding-left: 165px; 
+        font-size:0.85em; 
+        color:var(--grey-text); 
+        display:block; 
+        margin-top:-10px; /* Tarik ke atas sedikit */
+        margin-bottom: 10px;
+    }
+
+    .password-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+        width: 100%; 
+    }
+    .password-wrapper input[type="password"],
+    .password-wrapper input[type="text"] { /* Hanya target input password di dalam wrapper */
+        padding-right: 45px !important; 
+        margin-bottom:0 !important; /* Override margin jika ada */
+    }
+    .toggle-password-icon {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        cursor: pointer;
+        user-select: none;
+        /* font-size: 1.3em;  // Anda mungkin tidak memerlukan ini lagi jika ukuran SVG sudah pas */
+        color: var(--grey-text); /* Ini akan menjadi warna stroke SVG karena stroke="currentColor" */
+        transition: color 0.2s;
+        display: inline-flex; /* Untuk membantu alignment SVG vertikal jika perlu */
+        align-items: center; /* Untuk membantu alignment SVG vertikal jika perlu */
+    }
+    .toggle-password-icon:hover { color: var(--primary); }
+
+    footer {
+      background-color: var(--primary); color: var(--white);
+      text-align: center; padding: 12px 20px; width: 100%;
+      box-sizing: border-box; position: fixed; bottom: 0; left: 0; z-index: 1000;
+    }
+    footer p { margin: 0; font-size: 0.85em; }
+    
+    /* Kalender Pendidikan Styles */
+    .kalender-form-container, .kalender-list-container {
+      margin-top: 20px; padding: 20px; background-color: var(--white);
+      border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .kalender-form-container h3, .kalender-list-container h3 {
+        margin-top: 0; color: var(--primary);
+        border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px;
+    }
+
+    .custom-alert {
+        position: fixed;
+        top: 20px; 
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: var(--primary);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 10000;
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out, top 0.3s ease-in-out;
+        font-size: 0.95em;
+        text-align: center;
+        min-width: 250px;
+        max-width: 90%;
+    }
+    .custom-alert.show { opacity: 1; top: 60px; }
+    .custom-alert.error { background-color: var(--danger); }
+    .custom-alert.success { background-color: var(--success); }
+
+    @media (max-width: 600px) {
+        .form-column { gap: 12px; padding: 20px; }
+        .form-row {
+            flex-direction: column;
+            align-items: stretch; /* Label dan input full width */
+            gap: 5px; 
+            margin-bottom: 12px;
+        }
+        .form-row label {
+            flex-basis: auto; 
+            text-align: left;
+            padding-right: 0;
+            margin-bottom: 3px; 
+        }
+        .form-row .input-wrapper { width: 100%; }
+        .form-row .input-wrapper input[type="text"],
+        .form-row .input-wrapper select { width: 100%; }
+        .form-row .input-wrapper button { 
+            margin-left: 0 !important; 
+            margin-top: 8px !important; 
+            width: 100%;
+        }
+        .form-row-note { padding-left: 0; width: 100%; text-align: left; margin-top: 0;}
+    }
+    .table-container { overflow-x: auto; } /* Untuk tabel yang lebar */
+
+    /* Memberikan lebar yang lebih spesifik untuk kolom input di #ceklokInputContainer */
+    #ceklokInputContainer .table-container th:nth-child(5), /* Kolom "Input Jam Masuk" */
+    #ceklokInputContainer .table-container th:nth-child(6) { /* Kolom "Input Jam Pulang" */
+      width: 18%; /* Anda bisa sesuaikan persentase ini */
+      /* Jika ingin lebar tetap, bisa juga gunakan px, contoh: width: 150px; */
+    }
+
+    #ceklokInputContainer .table-container th:nth-child(7) { /* Kolom "Keterangan Libur/Alasan" */
+      width: 24%; /* Beri ruang lebih jika teks opsi panjang */
+      /* contoh: width: 250px; */
+    }
+
+    /* (Opsional) Pastikan input dan select mengisi selnya */
+    /* Ini mungkin sudah diatur, tapi untuk memastikan */
+    #ceklokInputContainer .table-container td .inline-input,
+    #ceklokInputContainer .table-container td .inline-select {
+      width: 100%;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    </div>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <p id="loadingMessage">Memproses...</p>
+  </div>
+
+  <div id="customAlert" class="custom-alert">Pesan Alert</div>
+
+  <footer>
+    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri</p>
+  </footer>
+
+  <script>
+    // Variabel global
+    let loggedInUser = null; 
+    let namaGuru = ''; 
+    let bulanTahun = ''; 
+    let dataTanggal = []; 
+    let allTeachersList = []; // Untuk dropdown nama guru di form user
+    let currentView = ''; // Untuk melacak tampilan saat ini (opsional, untuk navigasi kembali)
+    let currentLockIdValue = null;
+    let currentBackupSheetName = null; // Untuk menyimpan nama sheet cadangan yang aktif
+
+    let idleTimer = null;
+    const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 menit dalam milidetik
+
+    // --- Fungsi Utilitas Umum ---
+    function showAlert(message, type = 'info', duration = 3500) { // type: info, success, error
+        const alertBox = document.getElementById('customAlert');
+        alertBox.textContent = message;
+        alertBox.className = 'custom-alert'; // Reset classes
+        if (type === 'error') alertBox.classList.add('error');
+        else if (type === 'success') alertBox.classList.add('success');
+        // 'info' (default) tidak perlu class khusus warna jika --primary cocok
+
+        alertBox.classList.add('show');
+        setTimeout(() => { alertBox.classList.remove('show'); }, duration);
+    }
+    function showLoading(message = "Memproses...") {
+        document.getElementById("loadingMessage").textContent = message;
+        document.getElementById("loading").style.display = "flex";
+    }
+    function hideLoading() { document.getElementById("loading").style.display = "none"; }
+    function isValidJamFormat(j_input) { 
+        if (!j_input) return true; 
+        const m = j_input.match(/^(\d{1,2})[:.](\d{1,2})$/);
+        if (!m) return false; 
+        const h = parseInt(m[1], 10); const mn = parseInt(m[2], 10);
+        return h >= 0 && h < 24 && mn >= 0 && mn < 60;
+    }
+    function normalizeJamFormat(j_input) { 
+        if (!j_input) return ''; 
+        const m = j_input.match(/^(\d{1,2})[:.](\d{1,2})$/);
+        if (!m) return j_input; 
+        const h = String(m[1]).padStart(2, '0'); const mn = String(m[2]).padStart(2, '0'); 
+        return `${h}.${mn}`; 
+    }
+    function showInlineError(containerId, message) {
+        const el = document.getElementById(containerId);
+        if (el) { el.textContent = message; el.style.display = 'block'; }
+    }
+    function clearInlineError(containerId) {
+        const el = document.getElementById(containerId);
+        if (el) { el.textContent = ''; el.style.display = 'none'; }
+    }
+    function clearInputError(...inputElements) {
+        inputElements.forEach(inputElement => {
+            if(inputElement) inputElement.classList.remove('input-error');
+        });
+    }
+    function showInputError(inputElement) {
+        if(inputElement) inputElement.classList.add('input-error');
+    }
+
+    // --- Fungsi Memuat Konten HTML Parsial ---
+    function loadHtmlContent(filename, targetElementId, callback, dataForRender) {
+        showLoading("Memuat tampilan...");
+        google.script.run
+            .withSuccessHandler(html => {
+                const target = document.getElementById(targetElementId);
+                if (target) {
+                    target.innerHTML = html;
+                    if (callback) callback(dataForRender); // Panggil callback SETELAH HTML dimuat
+                } else {
+                    showAlert(`Error: Target elemen '${targetElementId}' tidak ditemukan.`, 'error');
+                }
+                hideLoading();
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                showAlert(`Gagal memuat ${filename}: ${err.message}`, 'error');
+                const target = document.getElementById(targetElementId);
+                if (target) target.innerHTML = `<div class="container"><p style="color:red;">Gagal memuat tampilan. Silakan coba lagi.</p><button onclick="renderLoginForm()">Kembali ke Login</button></div>`;
+            })
+            .getHtmlContent(filename);
+    }
+
+    // --- Navigasi dan Rendering Tampilan Utama ---
+    function renderView(viewName, data) {
+        currentView = viewName;
+        document.body.classList.remove('login-active'); // Hapus jika ada
+
+        switch(viewName) {
+            case 'login':
+                document.body.classList.add('login-active');
+                loadHtmlContent('login_form.html', 'app', setupLoginFormEventListeners);
+                break;
+            case 'admin_dashboard':
+                loadHtmlContent('admin_dashboard_content.html', 'app', setupAdminDashboardView, data);
+                break;
+            case 'ceklok_table':
+                loadHtmlContent('ceklok_table_content.html', 'app', setupCeklokTableView, data);
+                break;
+            case 'user_management':
+                loadHtmlContent('user_management_content.html', 'app', setupUserManagementView);
+                break;
+            case 'teacher_management':
+                loadHtmlContent('teacher_management_content.html', 'app', setupTeacherManagementView);
+                break;
+            case 'kalender_pendidikan':
+                loadHtmlContent('kalender_pendidikan_content.html', 'app', setupKalenderPendidikanView);
+                break;
+            case 'hasil_ceklok':
+                loadHtmlContent('hasil_ceklok_content.html', 'app', setupHasilCeklokView, data);
+                break;
+            default:
+                document.getElementById('app').innerHTML = '<p>Tampilan tidak ditemukan.</p>';
+        }
+    }
+
+    // --- LOGIN ---
+    function setupLoginFormEventListeners() {
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const togglePasswordButton = document.getElementById('togglePassword');
+        const loginButton = document.getElementById('loginButton');
+
+        if (loginButton) loginButton.onclick = handleLogin;
+        if (usernameInput) usernameInput.onkeydown = (e) => { if (e.key === 'Enter') handleLogin(); };
+        if (passwordInput) passwordInput.onkeydown = (e) => { if (e.key === 'Enter') handleLogin(); };
+
+        if (togglePasswordButton && passwordInput) {
+            // Definisikan string SVG Anda di sini
+            const svgIconShowPassword = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+            const svgIconHidePassword = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+
+            // Pastikan title awal sesuai dengan ikon di HTML (Lihat password)
+            // togglePasswordButton.setAttribute('title', 'Lihat password'); // Sudah diatur di HTML
+
+            togglePasswordButton.onclick = () => {
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text'; // Ubah ke teks (password terlihat)
+                    togglePasswordButton.innerHTML = svgIconHidePassword; // Tampilkan ikon mata tercoret
+                    togglePasswordButton.setAttribute('title', 'Sembunyikan password');
+                } else {
+                    passwordInput.type = 'password'; // Ubah ke password (password tersembunyi)
+                    togglePasswordButton.innerHTML = svgIconShowPassword; // Tampilkan ikon mata terbuka
+                    togglePasswordButton.setAttribute('title', 'Lihat password');
+                }
+            };
+        }
+        const footer = document.querySelector('footer');
+        if (footer) footer.style.display = 'block';
+    }
+
+    function handleLogin() {
+        const usernameEl = document.getElementById('username');
+        const passwordEl = document.getElementById('password');
+        const loginErrorEl = document.getElementById('loginError');
+
+        clearInputError(usernameEl, passwordEl);
+        if (loginErrorEl) loginErrorEl.style.display = "none";
+
+        const username = usernameEl.value.trim();
+        const password = passwordEl.value;
+
+        let hasError = false;
+        if (!username) { showInputError(usernameEl); hasError = true; }
+        if (!password) { showInputError(passwordEl); hasError = true; }
+
+        if (hasError) {
+            if (loginErrorEl) { loginErrorEl.textContent = "Username dan password wajib diisi."; loginErrorEl.style.display = "block"; }
+            return;
+        }
+        showLoading("Memverifikasi login...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success) {
+                    loggedInUser = { username: response.username, role: response.role, teacherName: response.teacherName };
+                    // *** MODIFIKASI: Simpan data user ke sessionStorage ***
+                    try {
+                        sessionStorage.setItem('loggedInUserData', JSON.stringify(loggedInUser));
+                        console.log("User data saved to sessionStorage.");
+                    } catch (e) {
+                        console.error("Failed to save user data to sessionStorage:", e);
+                        showAlert("Gagal menyimpan sesi login di browser.", "warning");
+                        // Tetap lanjutkan login, tapi mungkin tidak persisten
+                    }
+                    proceedAfterLogin();
+                } else {
+                    if (loginErrorEl) { loginErrorEl.textContent = response.error || "Login gagal."; loginErrorEl.style.display = "block"; }
+                    if (passwordEl) passwordEl.value = "";
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                if (loginErrorEl) { loginErrorEl.textContent = "Error server: " + err.message; loginErrorEl.style.display = "block"; }
+            })
+            .verifyLogin(username, password);
+    }
+
+    function logout() {
+        console.log("Logging out...");
+        loggedInUser = null; namaGuru = ''; bulanTahun = ''; dataTanggal = []; allTeachersList = [];
+        currentLockIdValue = null; currentBackupSheetName = null;
+
+        // *** MODIFIKASI: Hapus data user dari sessionStorage ***
+        sessionStorage.removeItem('loggedInUserData');
+        console.log("User data removed from sessionStorage.");
+
+        // *** MODIFIKASI: Hentikan timer idle ***
+        clearTimeout(idleTimer);
+        removeIdleListeners(); // Hapus listener aktivitas
+
+        renderView('login');
+        window.scrollTo(0, 0);
+        showAlert("Anda telah logout.", "info", 2000);
+    }
+
+    // *** TAMBAHAN: Fungsi untuk Idle Timeout ***
+    function resetIdleTimer() {
+        // console.log("Activity detected, resetting idle timer."); // Uncomment for debugging
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(logoutDueToIdle, IDLE_TIMEOUT_MS);
+    }
+
+    function logoutDueToIdle() {
+        console.log("Idle timeout reached.");
+        showAlert("Sesi Anda berakhir karena tidak aktif. Silakan login kembali.", "warning", 5000);
+        logout(); // Panggil fungsi logout yang sudah ada
+    }
+
+    function setupIdleTimer() {
+        console.log("Setting up idle timer and listeners.");
+        // Hapus listener lama jika ada (pencegahan)
+        removeIdleListeners();
+
+        // Tambahkan listener untuk aktivitas
+        window.addEventListener('mousemove', resetIdleTimer);
+        window.addEventListener('mousedown', resetIdleTimer); // Lebih baik dari click untuk beberapa kasus
+        window.addEventListener('keypress', resetIdleTimer);
+        window.addEventListener('scroll', resetIdleTimer, true); // Capture scroll events
+        window.addEventListener('touchstart', resetIdleTimer); // Untuk perangkat mobile
+
+        // Mulai timer pertama kali
+        resetIdleTimer();
+    }
+
+    function removeIdleListeners() {
+        console.log("Removing idle listeners.");
+        window.removeEventListener('mousemove', resetIdleTimer);
+        window.removeEventListener('mousedown', resetIdleTimer);
+        window.removeEventListener('keypress', resetIdleTimer);
+        window.removeEventListener('scroll', resetIdleTimer, true);
+        window.removeEventListener('touchstart', resetIdleTimer);
+    }
+    // *** AKHIR TAMBAHAN: Fungsi untuk Idle Timeout ***
+
+    function proceedAfterLogin() {
+        if (!loggedInUser) { renderView('login'); return; }
+
+        // *** TAMBAHAN: Mulai Idle Timer setelah login berhasil ***
+        setupIdleTimer();
+
+        showLoading("Memuat data aplikasi...");
+        if (loggedInUser.role === "admin") {
+             google.script.run
+                .withSuccessHandler(response => {
+                    hideLoading();
+                    if (response.error) {
+                        showAlert(`Error Inisialisasi Admin: ${response.error}`, 'error');
+                        document.getElementById('app').innerHTML = `<div class="container"><p style="color:red;">Gagal memuat data awal admin.</p><button onclick="logout()">Logout</button></div>`;
+                        // *** Jika gagal load, logout dan bersihkan session ***
+                        sessionStorage.removeItem('loggedInUserData');
+                        removeIdleListeners();
+                        clearTimeout(idleTimer);
+                        return;
+                    }
+                    bulanTahun = response.bulanTahun;
+                    allTeachersList = response.guruList || [];
+                    renderView('admin_dashboard', response);
+                })
+                .withFailureHandler(err => {
+                    hideLoading();
+                    showAlert(`Gagal memuat data admin: ${err.message}`, 'error');
+                    // *** Jika gagal load, logout dan bersihkan session ***
+                    sessionStorage.removeItem('loggedInUserData');
+                    removeIdleListeners();
+                    clearTimeout(idleTimer);
+                    logout(); // Kembali ke login
+                 })
+                .getInitialData();
+        } else if (loggedInUser.role === "user" && loggedInUser.teacherName) {
+            namaGuru = loggedInUser.teacherName;
+            google.script.run.withSuccessHandler(settingResponse => {
+                if (settingResponse.error) {
+                    hideLoading(); showAlert(`Error bulan/tahun: ${settingResponse.error}`, 'error');
+                    // *** Jika gagal load, logout dan bersihkan session ***
+                    sessionStorage.removeItem('loggedInUserData');
+                    removeIdleListeners();
+                    clearTimeout(idleTimer);
+                    logout(); // Kembali ke login
+                    return;
+                 }
+                bulanTahun = settingResponse.bulanTahun;
+                google.script.run.withSuccessHandler(ceklokResponse => {
+                    hideLoading();
+                    if (ceklokResponse.error) {
+                        showAlert(`Error data ceklok: ${ceklokResponse.error}`, 'error');
+                        // *** Jika gagal load, logout dan bersihkan session ***
+                        sessionStorage.removeItem('loggedInUserData');
+                        removeIdleListeners();
+                        clearTimeout(idleTimer);
+                        logout(); // Kembali ke login
+                        return;
+                    }
+                    dataTanggal = ceklokResponse.data;
+                    const ketLiburOptions = ceklokResponse.optionsKeteranganLibur;
+                    renderView('ceklok_table', { rows: dataTanggal, options: ketLiburOptions, isUserRole: true });
+                }).withFailureHandler(err => {
+                    hideLoading(); showAlert(`Gagal memuat data ceklok: ${err.message}`, 'error');
+                    // *** Jika gagal load, logout dan bersihkan session ***
+                    sessionStorage.removeItem('loggedInUserData');
+                    removeIdleListeners();
+                    clearTimeout(idleTimer);
+                    logout(); // Kembali ke login
+                 })
+                .getCeklokData(namaGuru, bulanTahun);
+            }).withFailureHandler(err => {
+                hideLoading(); showAlert(`Gagal mengambil pengaturan: ${err.message}`, 'error');
+                 // *** Jika gagal load, logout dan bersihkan session ***
+                 sessionStorage.removeItem('loggedInUserData');
+                 removeIdleListeners();
+                 clearTimeout(idleTimer);
+                 logout(); // Kembali ke login
+            })
+            .getBulanTahunSetting();
+        } else {
+            hideLoading(); showAlert("Peran pengguna tidak valid atau data guru tidak lengkap.", 'error');
+             // *** Jika role aneh, logout dan bersihkan session ***
+             sessionStorage.removeItem('loggedInUserData');
+             removeIdleListeners();
+             clearTimeout(idleTimer);
+            logout();
+        }
+    }
+
+    // --- ADMIN DASHBOARD ---
+    function setupAdminDashboardView(data) {
+        // Data sudah ada dari 'data' = response dari getInitialData
+        const namaSelect = document.getElementById('namaAdminSelect');
+        if (namaSelect) {
+            let guruOptionsHtml = data.guruList && data.guruList.length > 0 ?
+                data.guruList.map(n => `<option value="${n}">${n}</option>`).join('') :
+                '<option value="" disabled>Tidak ada data guru</option>';
+            namaSelect.innerHTML = `<option disabled selected value="">-- Pilih Nama Guru --</option>${guruOptionsHtml}`;
+            namaSelect.disabled = !(data.guruList && data.guruList.length > 0);
+        }
+        const bulanAdminInputEl = document.getElementById('bulanAdminInput');
+        if (bulanAdminInputEl) bulanAdminInputEl.value = data.bulanTahun || '';
+        
+        const nextBtn = document.getElementById('btnNextCeklokGuru');
+        if(nextBtn) nextBtn.disabled = !(data.guruList && data.guruList.length > 0);
+        // Event listeners untuk tombol-tombol navigasi sudah ada di HTML parsial via onclick
+        window.scrollTo(0, 0);
+
+        // --- MULAI KODE UNTUK MENAMPILKAN HISTORI LOGIN ---
+        const loadingMessageForHistory = document.getElementById('loginHistoryTableBody');
+        if (loadingMessageForHistory) {
+            // *** MODIFIKASI: Ubah colspan menjadi 3 ***
+            loadingMessageForHistory.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px;">Memuat histori login...</td></tr>`;
+        }
+
+        google.script.run
+            .withSuccessHandler(historyResponse => {
+                const historyTableBody = document.getElementById('loginHistoryTableBody');
+                if (!historyTableBody) { /* ... error handling ... */ return; }
+
+                if (historyResponse.success) {
+                    if (historyResponse.history && historyResponse.history.length > 0) {
+                        let historyHtml = '';
+                        historyResponse.history.forEach(entry => {
+                            // *** MODIFIKASI: Ubah urutan <td> dan pastikan data-label sesuai konten ***
+                            historyHtml += `<tr>
+                                <td data-label="Waktu Login">${entry.timestamp}</td>
+                                <td data-label="Pengguna">${entry.username}</td>
+                                <td data-label="Nama Guru">${entry.teacherName || '-'}</td>
+                            </tr>`;
+                        });
+                        historyTableBody.innerHTML = historyHtml;
+                    } else {
+                         // Colspan sudah benar 3
+                        historyTableBody.innerHTML = `<tr><td colspan="3" ...>...</td></tr>`;
+                    }
+                } else {
+                     // Colspan sudah benar 3
+                    historyTableBody.innerHTML = `<tr><td colspan="3" ...>...</td></tr>`;
+                }
+            })
+            .withFailureHandler(err => {
+                // ... (error handling, pastikan colspan=3 jika memodifikasi di sini) ...
+            })
+            .getLoginHistory();
+        // --- AKHIR KODE UNTUK MENAMPILKAN HISTORI LOGIN ---
+    } // Akhir fungsi setupAdminDashboardView
+
+    function handleAdminPilihGuru() { // Dipanggil dari onclick di admin_dashboard_content.html
+        const namaSelect = document.getElementById('namaAdminSelect');
+        if (!namaSelect || !namaSelect.value) { showAlert('Pilih nama guru dahulu.', 'error'); return; }
+        if (!bulanTahun || !/^\d{2}\/\d{4}$/.test(bulanTahun)) { showAlert('Bulan & Tahun (Setting A1) tidak valid.', 'error'); return; }
+        namaGuru = namaSelect.value;
+        showLoading("Memuat data ceklok guru...");
+        google.script.run
+            .withSuccessHandler(ceklokResponse => {
+                hideLoading();
+                if (ceklokResponse.error) { showAlert(`Error data ceklok: ${ceklokResponse.error}`, 'error'); return; }
+                dataTanggal = ceklokResponse.data; // Ambil array data
+                const ketLiburOptions = ceklokResponse.optionsKeteranganLibur; // Ambil opsi
+                renderView('ceklok_table', { rows: dataTanggal, options: ketLiburOptions, isUserRole: false }); // Kirim keduanya
+            })
+            .withFailureHandler(err => { hideLoading(); showAlert(`Gagal memuat data ceklok: ${err.message}`, 'error'); })
+            .getCeklokData(namaGuru, bulanTahun);
+    }
+
+    function handleUpdateBulanTahunAdmin() { // Dipanggil dari onclick
+        const bulanAdminInputEl = document.getElementById('bulanAdminInput');
+        if (!bulanAdminInputEl) { showAlert("Elemen input Bulan/Tahun tidak ditemukan.", 'error'); return; }
+        const newBulanTahunValue = bulanAdminInputEl.value.trim();
+        clearInputError(bulanAdminInputEl);
+
+        if (!newBulanTahunValue) { showAlert("Bulan & Tahun tidak boleh kosong.", 'error'); showInputError(bulanAdminInputEl); return; }
+        if (!/^(0[1-9]|1[0-2])\/(20\d{2}|21\d{2})$/.test(newBulanTahunValue)) {
+            showAlert("Format Bulan/Tahun salah (mm/yyyy, tahun 2000-2199).", 'error'); showInputError(bulanAdminInputEl); return;
+        }
+        showLoading("Memperbarui Bulan & Tahun...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success) {
+                    showAlert(response.message, 'success');
+                    bulanTahun = response.newBulanTahun; 
+                    if(bulanAdminInputEl) bulanAdminInputEl.value = response.newBulanTahun;
+                } else { showAlert(response.error || "Gagal update.", 'error'); }
+            })
+            .withFailureHandler(err => { hideLoading(); showAlert(`Error server update Bulan/Tahun: ${err.message}`, 'error'); })
+            .setBulanTahunSetting(newBulanTahunValue);
+    }
+    
+    function goBackToAdminDashboard() { // Universal back to admin dash
+        if (loggedInUser && loggedInUser.role === 'admin') {
+            proceedAfterLogin(); // Ini akan memuat ulang data awal dan render admin dashboard
+        } else {
+            logout();
+        }
+    }
+
+    // --- CEKLOK TABLE (INPUT) ---
+    function setupCeklokTableView(data) {
+        // data sekarang adalah objek: { rows: arrayDataCeklok, options: arrayOpsiKetLibur, isUserRole: boolean }
+        const { rows, options: ketLiburOptions, isUserRole } = data;
+        const tableBody = document.getElementById('ceklokTableBody');
+        const guruNameEl = document.getElementById('ceklokGuruName');
+        const bulanTahunEl = document.getElementById('ceklokBulanTahun');
+        const btnKembaliContainer = document.getElementById('ceklokTombolKembaliContainer');
+
+        // Mengisi nama guru dan bulan/tahun dari variabel global
+        // Pastikan variabel global 'namaGuru' dan 'bulanTahun' sudah terisi dengan benar sebelum memanggil fungsi ini.
+        if (guruNameEl) guruNameEl.textContent = namaGuru;
+        if (bulanTahunEl) bulanTahunEl.textContent = bulanTahun;
+
+        if (tableBody) {
+            let bodyHtml = '';
+            rows.forEach((row, i) => {
+                if (row.isLibur) { // Hari libur berdasarkan Kalender Pendidikan
+                    bodyHtml += `<tr class="libur-row">
+                        <td class="libur-text" data-label="Hari">${row.hari}</td>
+                        <td class="libur-text" data-label="Tanggal">${row.tanggal}</td>
+                        <td data-label="Data Masuk" style="text-align: center;">-</td>
+                        <td data-label="Data Pulang" style="text-align: center;">-</td>
+                        <td colspan="3" class="libur-note" data-label="Keterangan"><span class="holiday-description">${row.keterangan || 'Hari Libur'}</span></td>
+                    </tr>`;
+                } else { // Hari kerja, tampilkan input dan dropdown keterangan
+                    // Persiapan dropdown untuk Keterangan Libur Manual
+                    let ketLiburDropdownHtml = `<select id="ketLiburManual${i}" class="inline-select ket-libur-manual-dropdown" data-rowindex="${i}">`;
+                    ketLiburDropdownHtml += '<option value="">-- Alasan Tidak Hadir --</option>'; // Opsi default
+                    if (ketLiburOptions && ketLiburOptions.length > 0) {
+                        ketLiburOptions.forEach(opt => {
+                            // Pilih opsi yang sesuai jika sudah ada data keteranganLiburManual
+                            const selected = (opt === row.keteranganLiburManual) ? 'selected' : '';
+                            ketLiburDropdownHtml += `<option value="${opt}" ${selected}>${opt}</option>`;
+                        });
+                    }
+                    ketLiburDropdownHtml += '</select>';
+
+                    // Cek apakah ada keterangan libur manual yang sudah dipilih sebelumnya untuk hari ini
+                    const isKetLiburManualSelected = row.keteranganLiburManual && row.keteranganLiburManual.trim() !== "";
+
+                    // Jika ada keterangan libur manual yang dipilih, nilai input jam dikosongkan, jika tidak, gunakan dataMasuk/Pulang
+                    const jamMasukInputValue = isKetLiburManualSelected ? "" : (row.dataMasuk || "");
+                    const jamPulangInputValue = isKetLiburManualSelected ? "" : (row.dataPulang || "");
+
+                    bodyHtml += `<tr>
+                        <td data-label="Hari">${row.hari}</td>
+                        <td data-label="Tanggal">${row.tanggal}</td>
+                        <td data-label="Data Masuk" style="text-align: center;">${row.dataMasuk || '-'}</td>
+                        <td data-label="Data Pulang" style="text-align: center;">${row.dataPulang || '-'}</td>
+                        <td data-label="Input Jam Masuk"><input type="text" class="inline-input" id="jamMasuk${i}" placeholder="HH.MM" value="${jamMasukInputValue}" ${isKetLiburManualSelected ? 'disabled' : ''}></td>
+                        <td data-label="Input Jam Pulang"><input type="text" class="inline-input" id="jamPulang${i}" placeholder="HH.MM" value="${jamPulangInputValue}" ${isKetLiburManualSelected ? 'disabled' : ''}></td>
+                        <td data-label="Keterangan Libur/Alasan">${ketLiburDropdownHtml}</td>
+                    </tr>`;
+                }
+            });
+            tableBody.innerHTML = bodyHtml;
+
+            // Setelah tabel di-render, pasang event listener
+            attachTimeInputValidationToCeklok();
+            attachKetLiburDropdownListeners(); // Fungsi yang menangani onchange dropdown Keterangan Libur
+        }
+
+        // Atur visibilitas tombol "Kembali ke Pilih Guru" berdasarkan peran pengguna
+        if (btnKembaliContainer) {
+            btnKembaliContainer.style.display = isUserRole ? 'none' : 'inline-block';
+        }
+        setupLockIdAndExportClientFeatures(); // Panggil di sini
+        window.scrollTo(0, 0); // Gulir ke atas halaman
+    }
+
+    function attachTimeInputValidationToCeklok() {
+        const inputs = document.querySelectorAll('#ceklokTableBody input[type="text"]');
+        inputs.forEach(input => {
+            input.oninput = () => clearInputError(input); // Hapus error saat mengetik
+            input.onblur = (e) => {
+                const v = e.target.value.trim();
+                clearInputError(input);
+                if (v && !isValidJamFormat(v)) {
+                    showInputError(input);
+                    showAlert('Format jam salah (HH.MM). Contoh: 07.30 atau 14.15.', 'error', 2000);
+                } else if (v) {
+                    e.target.value = normalizeJamFormat(v);
+                }
+            };
+        });
+    }
+
+    function attachKetLiburDropdownListeners() {
+        const dropdowns = document.querySelectorAll('.ket-libur-manual-dropdown');
+        dropdowns.forEach(dropdown => {
+            dropdown.onchange = function() {
+                const rowIndex = this.dataset.rowindex; // Ambil index baris dari data attribute
+                const jamMasukInput = document.getElementById(`jamMasuk${rowIndex}`);
+                const jamPulangInput = document.getElementById(`jamPulang${rowIndex}`);
+                const isKeteranganSelected = this.value !== ""; // Cek apakah ada keterangan yang dipilih
+
+                if (jamMasukInput) {
+                    jamMasukInput.disabled = isKeteranganSelected;
+                    if (isKeteranganSelected) jamMasukInput.value = ""; 
+                }
+                if (jamPulangInput) {
+                    jamPulangInput.disabled = isKeteranganSelected;
+                    if (isKeteranganSelected) jamPulangInput.value = "";
+                }
+            };
+        });
+    }
+    
+    function submitCeklokData() { 
+        let hasInvalidFormat = false;
+        const inputsToValidate = document.querySelectorAll('#ceklokTableBody input[type="text"]:not([disabled])'); // Hanya validasi yang tidak disabled
+        inputsToValidate.forEach(input => {
+            const v = input.value.trim();
+            clearInputError(input);
+            if (v) {
+                if (!isValidJamFormat(v)) { showInputError(input); hasInvalidFormat = true; }
+                else { input.value = normalizeJamFormat(v); }
+            }
+        });
+
+        if (hasInvalidFormat) { showAlert("Ada format jam yang salah. Perbaiki sebelum menyimpan.", 'error'); return; }
+
+        showLoading("Menyimpan data ceklok...");
+        const dataToSave = dataTanggal.map((row, i) => { 
+            if (!row.isLibur) { // Hanya proses hari kerja (bukan libur dari Kalender Pendidikan)
+                const jamMasukEl = document.getElementById(`jamMasuk${i}`);
+                const jamPulangEl = document.getElementById(`jamPulang${i}`);
+                const ketLiburManualEl = document.getElementById(`ketLiburManual${i}`); // Ambil elemen dropdown
+
+                let jamMasukVal = jamMasukEl ? jamMasukEl.value.trim() : '';
+                let jamPulangVal = jamPulangEl ? jamPulangEl.value.trim() : '';
+                const ketLiburManualVal = ketLiburManualEl ? ketLiburManualEl.value : '';
+
+                // Jika keterangan libur manual dipilih, pastikan jam masuk & pulang dikosongkan
+                if (ketLiburManualVal && ketLiburManualVal !== "") {
+                    jamMasukVal = "";
+                    jamPulangVal = "";
+                }
+
+                return {
+                    tanggal: row.tanggal,
+                    jamMasuk: jamMasukVal,
+                    jamPulang: jamPulangVal,
+                    keteranganLiburManual: ketLiburManualVal // Kirim data ini
+                };
+            }
+            return null;
+        }).filter(item => item !== null);
+
+        google.script.run
+            .withSuccessHandler(msg => {
+                hideLoading();
+                const isError = String(msg).toLowerCase().startsWith("error:");
+                showAlert(msg, isError ? 'error' : 'success');
+                
+                showLoading("Memuat ulang data...");
+                google.script.run.withSuccessHandler(ceklokResponse => {
+                    hideLoading();
+                    if (ceklokResponse.error) { showAlert(`Error data ceklok: ${ceklokResponse.error}`, 'error'); return; }
+                    dataTanggal = ceklokResponse.data; // Perbarui dataTanggal
+                    const ketLiburOptions = ceklokResponse.optionsKeteranganLibur; // Ambil opsi terbaru
+                    renderView('ceklok_table', { rows: dataTanggal, options: ketLiburOptions, isUserRole: loggedInUser.role === 'user' });
+                }).withFailureHandler(err => { hideLoading(); showAlert(`Gagal memuat ulang data: ${err.message}`, 'error'); })
+                .getCeklokData(namaGuru, bulanTahun);
+            })
+            .withFailureHandler(err => { hideLoading(); showAlert(`Gagal menyimpan: ${err.message}`, 'error'); })
+            .simpanData(namaGuru, dataToSave);
+    }
+
+    // --- HASIL CEKLOK (REKAP) ---
+    function navigateToHasilCeklok() { // Dipanggil dari onclick
+        showLoading("Memuat hasil ceklok...");
+        google.script.run.withSuccessHandler(response => {
+            hideLoading();
+            if (response.error) { showAlert(`Error hasil ceklok: ${response.error}`, 'error'); return; }
+            renderView('hasil_ceklok', response); // response = { headers: [], data: [[]] }
+        }).withFailureHandler(err => { hideLoading(); showAlert(`Gagal memuat hasil ceklok: ${err.message}`, 'error'); })
+        .getCeklokHasil();
+    }
+
+    function setupHasilCeklokView(data) { // data = { headers: [], data: [[]] }
+        const { headers, data: actualRows } = data;
+        const tableHeader = document.getElementById('hasilCeklokThead');
+        const tableBody = document.getElementById('hasilCeklokTbody');
+        const bulanTahunEl = document.getElementById('hasilCeklokBulanTahun');
+
+        if(bulanTahunEl) bulanTahunEl.textContent = bulanTahun; // global
+
+        if (!tableHeader || !tableBody) { 
+            showAlert("Struktur tabel hasil ceklok tidak lengkap pada HTML.", "error"); 
+            if(tableBody) tableBody.innerHTML = `<tr><td colspan="1">Error: Struktur HTML tabel tidak benar.</td></tr>`;
+            return; 
+        }
+
+        if (!headers || headers.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="1">Header tabel tidak ditemukan.</td></tr>`;
+            // Tidak perlu render header jika header-nya sendiri tidak ada
+            tableHeader.innerHTML = ''; 
+            return;
+        }
+        // Selalu render header jika ada
+        tableHeader.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+        
+        if (actualRows.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="${headers.length}">Tidak ada data ceklok untuk ditampilkan.</td></tr>`;
+            return; 
+        }
+        
+        let tableBodyContentHtml = '';
+        const NAMA_GURU_COLUMN_INDEX = headers.indexOf("Nama_Guru");
+        const TANGGAL_COLUMN_INDEX = headers.indexOf("Tanggal"); // Asumsi nama header kolom tanggal adalah "Tanggal"
+
+        if (NAMA_GURU_COLUMN_INDEX === -1) {
+            // Fallback: Jika kolom "Nama_Guru" tidak ada, tampilkan semua baris.
+            // Tambahkan rata tengah untuk kolom Tanggal jika ada.
+            actualRows.forEach(row => {
+                tableBodyContentHtml += `<tr>${row.map((cell, cellIndex) => {
+                    let cellStyle = "";
+                    if (TANGGAL_COLUMN_INDEX !== -1 && cellIndex === TANGGAL_COLUMN_INDEX) {
+                        cellStyle = 'text-align: center;';
+                    }
+                    return `<td data-label="${headers[cellIndex] || ''}" style="${cellStyle}">${cell ?? ''}</td>`;
+                }).join('')}</tr>`;
+            });
+        } else {
+            for (let i = 0; i < actualRows.length; i++) {
+                const currentRow = actualRows[i];
+                const namaGuruCellContent = currentRow && currentRow[NAMA_GURU_COLUMN_INDEX] ? String(currentRow[NAMA_GURU_COLUMN_INDEX]).trim() : "";
+
+                if (namaGuruCellContent !== "") { // Jika ada Nama_Guru di baris ini (awal blok guru)
+                    for (let j = 0; j < 3; j++) { // Loop untuk 3 baris (baris nama guru + 2 baris berikutnya)
+                        if ((i + j) < actualRows.length) {
+                            const rowToDisplay = actualRows[i + j];
+                            tableBodyContentHtml += `<tr>${rowToDisplay.map((cell, cellIndex) => {
+                                let cellContent = cell ?? '';
+                                let stylesArray = []; // Menggunakan array untuk mengumpulkan style
+
+                                // 1. Buat Nama Guru tebal (hanya pada baris pertama blok, j===0)
+                                if (j === 0 && cellIndex === NAMA_GURU_COLUMN_INDEX) {
+                                    stylesArray.push('font-weight: bold;');
+                                }
+
+                                // 2. Buat Tanggal rata tengah (berlaku untuk semua 3 baris dalam blok guru ini)
+                                if (TANGGAL_COLUMN_INDEX !== -1 && cellIndex === TANGGAL_COLUMN_INDEX) {
+                                    stylesArray.push('text-align: center;');
+                                }
+                                
+                                return `<td data-label="${headers[cellIndex] || ''}" style="${stylesArray.join(' ')}">${cellContent}</td>`;
+                            }).join('')}</tr>`;
+                        }
+                    }
+                    i += 2; // Maju iterator i
+                }
+                // Baris tanpa Nama_Guru (dan bukan bagian dari blok 3 baris) akan dilewati
+            }
+        }
+
+        if (tableBodyContentHtml === "" && actualRows.length > 0) {
+            tableBodyContentHtml = `<tr><td colspan="${headers.length}">Tidak ada data guru yang ditemukan untuk ditampilkan sesuai format.</td></tr>`;
+        }
+        
+        tableBody.innerHTML = tableBodyContentHtml;
+        window.scrollTo(0,0);
+    }
+
+    function backToPreviousCeklokView() { // Kembali dari Hasil Ceklok atau Kalender
+        if (loggedInUser.role === 'user' || (dataTanggal && dataTanggal.length > 0 && namaGuru)) {
+            renderView('ceklok_table', { rows: dataTanggal, isUserRole: loggedInUser.role === 'user' });
+        } else if (loggedInUser.role === 'admin') {
+            goBackToAdminDashboard();
+        } else {
+            logout();
+        }
+    }
+    
+    function handleDownloadPDF() { // Dipanggil dari onclick
+        showLoading("Membuat PDF...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.error) showAlert(`Gagal PDF: ${response.error}`, 'error');
+                else if (response && typeof response === 'string' && response.startsWith('http')) window.open(response, '_blank');
+                else showAlert("URL PDF tidak valid.", 'error');
+            })
+            .withFailureHandler(err => { hideLoading(); showAlert(`Gagal PDF: ${err.message}`, 'error'); })
+            .downloadPDF();
+    }
+
+    // --- KALENDER PENDIDIKAN ---
+    function navigateToKalenderForm() { renderView('kalender_pendidikan'); }
+
+    function setupKalenderPendidikanView() {
+        loadAndDisplayKalenderEntries(); // Fungsi ini akan mengisi tabel di kalender_pendidikan_content.html
+        // Event listener untuk form tambah sudah via onclick di HTML parsial
+        window.scrollTo(0,0);
+    }
+
+    function loadAndDisplayKalenderEntries() {
+        showLoading("Memuat entri kalender...");
+        google.script.run
+            .withSuccessHandler(response => { // response adalah array of entries atau {error: ...}
+                hideLoading();
+                const container = document.getElementById('existingKalenderEntriesTableBody'); // Dari kalender_pendidikan_content.html
+                if (!container) return;
+                if (response.error) { container.innerHTML = `<tr><td colspan="3" style="color:red;">Error: ${response.error}</td></tr>`; return; }
+                
+                const entries = response; // Ini array
+                if (!entries || entries.length === 0) { container.innerHTML = `<tr><td colspan="3">Belum ada data di Kalender Pendidikan.</td></tr>`; return; }
+                
+                let tableHtml = '';
+                entries.forEach(entry => {
+                    tableHtml += `<tr>
+                        <td data-label="Tanggal">${entry.date || '-'}</td>
+                        <td data-label="Keterangan">${entry.description || '-'}</td>
+                        <td data-label="Aksi" class="actions-cell"><button class="btn-danger" onclick="confirmDeleteKalenderEntry(${entry.sheetRow})">Hapus</button></td>
+                    </tr>`;
+                });
+                container.innerHTML = tableHtml;
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                const container = document.getElementById('existingKalenderEntriesTableBody');
+                if(container) container.innerHTML = `<tr><td colspan="3" style="color:red;">Gagal memuat Kalender: ${err.message}</td></tr>`;
+            })
+            .getKalenderPendidikanEntries();
+    }
+
+    function submitNewKalenderEntry() { // Dipanggil dari onclick
+        const dateInputEl = document.getElementById('kalenderDate');
+        const descriptionEl = document.getElementById('kalenderDescription');
+        clearInputError(dateInputEl, descriptionEl);
+
+        const dateInputVal = dateInputEl.value; 
+        const description = descriptionEl.value.trim();
+
+        if (!dateInputVal) { showAlert("Tanggal wajib.", 'error'); showInputError(dateInputEl); return; } 
+        if (!description) { showAlert("Keterangan wajib.", 'error'); showInputError(descriptionEl); return; } 
+
+        const parts = dateInputVal.split('-'); // Format dari input type="date" adalah yyyy-mm-dd
+        const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`; // Konversi ke dd/mm/yyyy
+
+        showLoading("Menyimpan entri kalender...");
+        google.script.run
+            .withSuccessHandler(response => { // response = {success: true/false, message/error: "..."}
+                hideLoading();
+                showAlert(response.message || response.error, response.success ? 'success' : 'error');
+                if (response.success) {
+                    if(dateInputEl) dateInputEl.value = '';
+                    if(descriptionEl) descriptionEl.value = '';
+                    loadAndDisplayKalenderEntries(); 
+                }
+            })
+            .withFailureHandler(err => { hideLoading(); showAlert(`Gagal menambah entri: ${err.message}`, 'error'); })
+            .addKalenderPendidikanEntry({ date: formattedDate, description: description });
+    }
+
+    function confirmDeleteKalenderEntry(sheetRow) {
+        if (confirm("Yakin ingin menghapus entri Kalender ini?")) {
+            showLoading("Menghapus entri...");
+            google.script.run
+                .withSuccessHandler(response => {
+                    hideLoading();
+                    showAlert(response.message || response.error, response.success ? 'success' : 'error');
+                    if (response.success) loadAndDisplayKalenderEntries();
+                })
+                .withFailureHandler(err => { hideLoading(); showAlert(`Gagal menghapus: ${err.message}`, 'error'); })
+                .deleteKalenderPendidikanEntry(sheetRow);
+        }
+    }
+    
+    // --- MANAJEMEN PENGGUNA (ADMIN) ---
+    function navigateToUserManagement() { renderView('user_management'); }
+
+    function setupUserManagementView() {
+        showLoading("Memuat data...");
+        google.script.run
+            .withSuccessHandler(teacherData => {
+                allTeachersList = teacherData.success ? (teacherData.teachers || []) : [];
+                if (!teacherData.success) showAlert(`Gagal memuat daftar guru untuk form: ${teacherData.error || "Error"}`, 'warning');
+                
+                google.script.run
+                    .withSuccessHandler(userResponse => {
+                        hideLoading();
+                        if (userResponse.success) renderUserListTable(userResponse.users);
+                        else {
+                            const container = document.getElementById('userListTableContainer'); // Dari user_management_content.html
+                            if(container) container.innerHTML = `<p style="color:red;">Error: ${userResponse.error}</p>`;
+                            showAlert(userResponse.error, 'error');
+                        }
+                        populateTeacherDropdownForUserForm(); // Panggil setelah tabel dan form ada
+                        toggleManageTeacherNameInput(document.getElementById('manageUserRole').value); // ID dari user_management_content.html
+                        cancelEditUserForm(); // Reset form
+                    })
+                    .withFailureHandler(err => { hideLoading(); showAlert(`Gagal memuat pengguna: ${err.message}`, 'error'); })
+                    .getUsersForAdmin();
+            })
+            .withFailureHandler(err => { 
+                hideLoading(); 
+                allTeachersList = [];
+                showAlert(`Gagal memuat daftar guru: ${err.message}`, 'error');
+                // Tetap coba render user management
+                 google.script.run
+                    .withSuccessHandler(userResponse => { /* ... */ })
+                    .withFailureHandler(err => { /* ... */ })
+                    .getUsersForAdmin();
+            })
+            .getTeachersForAdmin(); // Ambil daftar guru DULU
+        window.scrollTo(0,0);
+    }
+
+    function populateTeacherDropdownForUserForm(selectedTeacher = "") {
+        const dropdown = document.getElementById('manageUserActualTeacherNameDropdown'); // Dari user_management_content.html
+        const textInput = document.getElementById('manageUserActualTeacherNameInput'); 
+        if (!dropdown || !textInput) return;
+
+        if (allTeachersList && allTeachersList.length > 0) {
+            dropdown.style.display = 'block'; textInput.style.display = 'none';
+            dropdown.innerHTML = '<option value="">-- Pilih Nama Guru --</option>';
+            allTeachersList.forEach(teacher => {
+                const option = document.createElement('option');
+                option.value = teacher; option.textContent = teacher;
+                if (teacher === selectedTeacher) option.selected = true;
+                dropdown.appendChild(option);
+            });
+            if(selectedTeacher) dropdown.value = selectedTeacher;
+
+        } else {
+            dropdown.style.display = 'none'; textInput.style.display = 'block';
+            textInput.value = selectedTeacher;
+        }
+    }
+
+    function toggleManageTeacherNameInput(role) { // Untuk form user management
+        const group = document.getElementById('manageUserTeacherNameGroup'); // Dari user_management_content.html
+        const dropdown = document.getElementById('manageUserActualTeacherNameDropdown');
+        const textInput = document.getElementById('manageUserActualTeacherNameInput');
+        if (group) group.style.display = (role === 'user') ? 'block' : 'none';
+        
+        // Panggil populate lagi untuk memastikan input/dropdown yang benar terlihat
+        if (role === 'user' && (dropdown || textInput)) {
+            const currentTeacher = dropdown && dropdown.style.display !== 'none' ? dropdown.value : (textInput ? textInput.value : '');
+            populateTeacherDropdownForUserForm(currentTeacher);
+        }
+    }
+
+    function renderUserListTable(users) {
+        const container = document.getElementById('userListTableBody'); // Dari user_management_content.html
+        if (!container) return;
+        let tableHtml = '';
+        if (users && users.length > 0) {
+            users.forEach(user => {
+                tableHtml += `<tr>
+                    <td data-label="Username">${user.username}</td>
+                    <td data-label="Role">${user.role}</td>
+                    <td data-label="Nama Guru Asli">${user.teacherName || '-'}</td>
+                    <td data-label="Aksi" class="actions-cell">
+                        <button class="btn-warning" onclick="prepareEditUserForm('${user.username}', '${user.role}', '${user.teacherName || ''}')">Edit</button>
+                        ${loggedInUser && loggedInUser.username !== user.username ? `<button class="btn-danger" onclick="confirmDeleteUser('${user.username}')">Hapus</button>` : ''}
+                    </td></tr>`;
+            });
+        } else {
+            tableHtml += `<tr><td colspan="4">Tidak ada pengguna.</td></tr>`;
+        }
+        container.innerHTML = tableHtml;
+    }
+
+    function prepareEditUserForm(username, role, teacherName) {
+        document.getElementById('userFormTitle').textContent = 'Edit Pengguna: ' + username;
+        document.getElementById('editUsernameKey').value = username; // Hidden input
+        document.getElementById('manageUsernameInput').value = username; // Dari user_management_content.html
+        document.getElementById('manageUsernameInput').readOnly = true;
+        document.getElementById('manageUserPasswordInput').value = '';
+        document.getElementById('manageUserPasswordInput').placeholder = 'Kosongkan jika tidak ubah password';
+        document.getElementById('manageUserRole').value = role;
+        
+        toggleManageTeacherNameInput(role); // Atur visibilitas field nama guru
+        // Isi dropdown atau text input nama guru
+        const teacherDropdown = document.getElementById('manageUserActualTeacherNameDropdown');
+        const teacherTextInput = document.getElementById('manageUserActualTeacherNameInput');
+        if (role === 'user') {
+            if (teacherDropdown && teacherDropdown.style.display !== 'none') {
+                teacherDropdown.value = teacherName;
+            } else if (teacherTextInput) {
+                teacherTextInput.value = teacherName;
+            }
+        } else {
+            if (teacherDropdown) teacherDropdown.value = '';
+            if (teacherTextInput) teacherTextInput.value = '';
+        }
+        
+        document.getElementById('btnSaveUser').textContent = 'Update Pengguna'; // Dari user_management_content.html
+        document.getElementById('btnCancelEditUser').style.display = 'inline-block'; // Dari user_management_content.html
+        clearInlineError('userFormErrorGlobal'); // Dari user_management_content.html
+        window.scrollTo(0, document.getElementById('userFormTitle').offsetTop);
+    }
+
+    function cancelEditUserForm() { // Dipanggil dari onclick btnCancelEditUser
+        document.getElementById('userFormTitle').textContent = 'Tambah Pengguna Baru';
+        document.getElementById('editUsernameKey').value = '';
+        const usernameInput = document.getElementById('manageUsernameInput');
+        if(usernameInput) { usernameInput.value = ''; usernameInput.readOnly = false; }
+        const passwordInput = document.getElementById('manageUserPasswordInput');
+        if(passwordInput) { passwordInput.value = ''; passwordInput.placeholder = 'Password baru/awal'; }
+        const roleSelect = document.getElementById('manageUserRole');
+        if(roleSelect) roleSelect.value = 'user';
+        
+        const teacherDropdown = document.getElementById('manageUserActualTeacherNameDropdown');
+        if(teacherDropdown) teacherDropdown.value = '';
+        const teacherTextInput = document.getElementById('manageUserActualTeacherNameInput');
+        if(teacherTextInput) teacherTextInput.value = '';
+
+        toggleManageTeacherNameInput('user');
+        
+        const saveBtn = document.getElementById('btnSaveUser');
+        if(saveBtn) saveBtn.textContent = 'Simpan Pengguna';
+        const cancelBtn = document.getElementById('btnCancelEditUser');
+        if(cancelBtn) cancelBtn.style.display = 'none';
+        clearInlineError('userFormErrorGlobal');
+    }
+
+    function handleSaveUser() { // Dipanggil dari onclick btnSaveUser
+        const editUsernameKey = document.getElementById('editUsernameKey').value;
+        const isEditMode = !!editUsernameKey;
+
+        const usernameEl = document.getElementById('manageUsernameInput');
+        const passwordEl = document.getElementById('manageUserPasswordInput');
+        const roleEl = document.getElementById('manageUserRole');
+        const teacherDropdownEl = document.getElementById('manageUserActualTeacherNameDropdown');
+        const teacherInputEl = document.getElementById('manageUserActualTeacherNameInput');
+        const errorContainerId = 'userFormErrorGlobal';
+        clearInlineError(errorContainerId);
+        clearInputError(usernameEl, passwordEl, roleEl, teacherDropdownEl, teacherInputEl);
+
+        const username = usernameEl.value.trim();
+        const password = passwordEl.value; // Jangan .trim()
+        const role = roleEl.value;
+        let teacherName = "";
+        if (role === 'user') {
+            teacherName = (teacherDropdownEl && teacherDropdownEl.style.display !== 'none') ? teacherDropdownEl.value : teacherInputEl.value.trim();
+        }
+
+        if (!username) { showInlineError(errorContainerId, "Username wajib."); showInputError(usernameEl); return; }
+        if (!isEditMode && !password) { showInlineError(errorContainerId, "Password wajib untuk user baru."); showInputError(passwordEl);return; }
+        if (password && password.length < 4 && (isEditMode && password || !isEditMode) ) { // Validasi jika password diisi
+            showInlineError(errorContainerId, "Password minimal 4 karakter."); showInputError(passwordEl); return;
+        }
+        if (role === 'user' && !teacherName) {
+            showInlineError(errorContainerId, "Nama Guru Asli wajib untuk role 'user'.");
+            if(teacherDropdownEl && teacherDropdownEl.style.display !== 'none') showInputError(teacherDropdownEl); else showInputError(teacherInputEl);
+            return;
+        }
+
+        showLoading(isEditMode ? "Memperbarui..." : "Menambahkan...");
+        if (isEditMode) {
+            const userDataToUpdate = { newRole: role, newTeacherName: teacherName };
+            if (password) userDataToUpdate.newPassword = password; // Hanya kirim jika diisi
+            google.script.run.withSuccessHandler(response => {
+                hideLoading(); showAlert(response.message || response.error, response.success ? 'success' : 'error');
+                if (response.success) { cancelEditUserForm(); setupUserManagementView(); /* Refresh */ }
+            }).withFailureHandler(err => { hideLoading(); showAlert(`Update gagal: ${err.message}`, 'error'); })
+            .updateUserByUsername(editUsernameKey, userDataToUpdate);
+        } else {
+            const newUser = { username, password, role, teacherName };
+            google.script.run.withSuccessHandler(response => {
+                hideLoading(); showAlert(response.message || response.error, response.success ? 'success' : 'error');
+                if (response.success) { cancelEditUserForm(); setupUserManagementView(); /* Refresh */ }
+            }).withFailureHandler(err => { hideLoading(); showAlert(`Tambah gagal: ${err.message}`, 'error'); })
+            .addNewUser(newUser);
+        }
+    }
+
+    function confirmDeleteUser(username) {
+        if (username === loggedInUser.username) { showAlert("Tidak bisa menghapus akun sendiri.", 'error'); return; }
+        if (confirm(`Yakin hapus pengguna '${username}'?`)) {
+            showLoading("Menghapus pengguna...");
+            google.script.run.withSuccessHandler(response => {
+                hideLoading(); showAlert(response.message || response.error, response.success ? 'success' : 'error');
+                if (response.success) setupUserManagementView(); /* Refresh */
+            }).withFailureHandler(err => { hideLoading(); showAlert(`Hapus gagal: ${err.message}`, 'error'); })
+            .deleteUserByUsername(username);
+        }
+    }
+
+    // --- MANAJEMEN GURU (ADMIN) ---
+    function navigateToTeacherManagement() { renderView('teacher_management'); }
+
+    function setupTeacherManagementView() {
+        showLoading("Memuat data guru...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success) {
+                    allTeachersList = response.teachers || [];
+                    renderTeacherListTable(allTeachersList);
+                } else {
+                    const container = document.getElementById('teacherListTableContainer'); // Dari teacher_management_content.html
+                    if(container) container.innerHTML = `<p style="color:red;">Error: ${response.error}</p>`;
+                    showAlert(response.error, 'error');
+                }
+                cancelEditTeacherForm(); // Reset form
+            })
+            .withFailureHandler(err => { hideLoading(); showAlert(`Gagal memuat guru: ${err.message}`, 'error'); })
+            .getTeachersForAdmin();
+        window.scrollTo(0,0);
+    }
+
+    function renderTeacherListTable(teachers) {
+        const container = document.getElementById('teacherListTableBody'); // Dari teacher_management_content.html
+        if (!container) return;
+        let tableHtml = '';
+        if (teachers && teachers.length > 0) {
+            teachers.forEach(teacher => {
+                tableHtml += `<tr>
+                    <td data-label="Nama Guru">${teacher}</td>
+                    <td data-label="Aksi" class="actions-cell">
+                        <button class="btn-warning" onclick="prepareEditTeacherForm('${teacher}')">Edit</button>
+                        <button class="btn-danger" onclick="confirmDeleteTeacher('${teacher}')">Hapus</button>
+                    </td></tr>`;
+            });
+        } else {
+            tableHtml += `<tr><td colspan="2">Belum ada nama guru.</td></tr>`;
+        }
+        container.innerHTML = tableHtml;
+    }
+
+    function prepareEditTeacherForm(teacherName) {
+        document.getElementById('teacherFormTitle').textContent = 'Edit Nama Guru'; // Dari teacher_management_content.html
+        document.getElementById('editTeacherNameKey').value = teacherName;
+        document.getElementById('manageTeacherNameInput').value = teacherName; // Dari teacher_management_content.html
+        document.getElementById('btnSaveTeacher').textContent = 'Update Nama Guru'; // Dari teacher_management_content.html
+        document.getElementById('btnCancelEditTeacher').style.display = 'inline-block'; // Dari teacher_management_content.html
+        clearInlineError('teacherFormErrorGlobal'); // Dari teacher_management_content.html
+        window.scrollTo(0, document.getElementById('teacherFormTitle').offsetTop);
+    }
+
+    function cancelEditTeacherForm() { // Dipanggil dari onclick btnCancelEditTeacher
+        document.getElementById('teacherFormTitle').textContent = 'Tambah Nama Guru Baru';
+        document.getElementById('editTeacherNameKey').value = '';
+        const nameInput = document.getElementById('manageTeacherNameInput');
+        if(nameInput) nameInput.value = '';
+        const saveBtn = document.getElementById('btnSaveTeacher');
+        if(saveBtn) saveBtn.textContent = 'Simpan Nama Guru';
+        const cancelBtn = document.getElementById('btnCancelEditTeacher');
+        if(cancelBtn) cancelBtn.style.display = 'none';
+        clearInlineError('teacherFormErrorGlobal');
+    }
+
+    function handleSaveTeacher() { // Dipanggil dari onclick btnSaveTeacher
+        const editTeacherNameKey = document.getElementById('editTeacherNameKey').value;
+        const isEditMode = !!editTeacherNameKey;
+        const teacherNameEl = document.getElementById('manageTeacherNameInput');
+        const teacherName = teacherNameEl.value.trim();
+        const errorContainerId = 'teacherFormErrorGlobal';
+        clearInlineError(errorContainerId); clearInputError(teacherNameEl);
+
+        if (!teacherName) { showInlineError(errorContainerId, "Nama guru wajib."); showInputError(teacherNameEl); return; }
+
+        showLoading(isEditMode ? "Memperbarui..." : "Menambahkan...");
+        if (isEditMode) {
+            if (editTeacherNameKey === teacherName) { hideLoading(); showInlineError(errorContainerId, "Nama baru sama dengan nama lama."); return; }
+            google.script.run.withSuccessHandler(response => {
+                hideLoading(); showAlert(response.message || response.error, response.success ? 'success' : 'error');
+                if (response.success) { cancelEditTeacherForm(); setupTeacherManagementView(); /* Refresh */ }
+            }).withFailureHandler(err => { hideLoading(); showAlert(`Update gagal: ${err.message}`, 'error'); })
+            .updateTeacherByName(editTeacherNameKey, teacherName);
+        } else {
+            google.script.run.withSuccessHandler(response => {
+                hideLoading(); showAlert(response.message || response.error, response.success ? 'success' : 'error');
+                if (response.success) { cancelEditTeacherForm(); setupTeacherManagementView(); /* Refresh */ }
+            }).withFailureHandler(err => { hideLoading(); showAlert(`Tambah gagal: ${err.message}`, 'error'); })
+            .addNewTeacher(teacherName);
+        }
+    }
+
+    function confirmDeleteTeacher(teacherName) {
+        if (confirm(`Yakin hapus nama guru '${teacherName}'? Ini juga bisa mempengaruhi akun user yang terhubung.`)) {
+            showLoading("Menghapus nama guru...");
+            google.script.run.withSuccessHandler(response => {
+                hideLoading(); showAlert(response.message || response.error, response.success ? 'success' : 'error');
+                if (response.success) setupTeacherManagementView(); /* Refresh */
+            }).withFailureHandler(err => { hideLoading(); showAlert(`Hapus gagal: ${err.message}`, 'error'); })
+            .deleteTeacherByName(teacherName);
+        }
+    }
+    
+    // --- Inisialisasi Aplikasi ---
+    function updateFooterYear() {
+        const yearEl = document.getElementById('currentYear');
+        if (yearEl) yearEl.textContent = new Date().getFullYear();
+    }
+
+    window.onload = function() {
+        document.getElementById('app').innerHTML = ''; // Pastikan #app kosong
+        renderView('login'); // Mulai dengan form login
+        updateFooterYear();
+    };
+
+    // *** MODIFIKASI: window.onload ***
+    window.onload = function() {
+        console.log("Page loaded. Checking for existing session...");
+        document.getElementById('app').innerHTML = ''; // Pastikan #app kosong
+        updateFooterYear();
+
+        // Cek apakah ada data user di sessionStorage
+        const storedUserData = sessionStorage.getItem('loggedInUserData');
+        if (storedUserData) {
+            console.log("Found user data in sessionStorage.");
+            try {
+                loggedInUser = JSON.parse(storedUserData);
+                if (loggedInUser && loggedInUser.username && loggedInUser.role) {
+                    console.log("User data parsed successfully. Proceeding...");
+                    // Langsung ke tampilan sesuai data yang tersimpan
+                    proceedAfterLogin();
+                } else {
+                    // Data tidak valid, bersihkan dan tampilkan login
+                    console.warn("Stored user data is invalid. Clearing session.");
+                    sessionStorage.removeItem('loggedInUserData');
+                    renderView('login');
+                }
+            } catch (e) {
+                // Gagal parse JSON, bersihkan dan tampilkan login
+                console.error("Failed to parse stored user data:", e);
+                sessionStorage.removeItem('loggedInUserData');
+                renderView('login');
+            }
+        } else {
+            // Tidak ada data sesi, tampilkan form login
+            console.log("No user data in sessionStorage. Rendering login view.");
+            renderView('login');
+        }
+    };
+
+
+    function promptForLockIdAndExport() {
+      if (!namaGuru || !bulanTahun) {
+        showAlert("Nama guru atau periode bulan/tahun tidak valid.", "error");
+        return;
+      }
+
+      const lockId = prompt(`Masukkan LOCK_ID untuk ${namaGuru} (akan disimpan/diperbarui):`);
+      if (lockId === null) { 
+        return;
+      }
+      if (!lockId.trim()) {
+        showAlert("LOCK_ID tidak boleh kosong.", "error");
+        return;
+      }
+      if (isNaN(parseInt(lockId.trim()))) { // Validasi sederhana bahwa LOCK_ID adalah angka
+        showAlert("LOCK_ID harus berupa angka.", "error");
+        return;
+      }
+
+      showLoading("Mempersiapkan data untuk export Excel...");
+      google.script.run
+        .withSuccessHandler(response => {
+          hideLoading();
+          if (response.success && response.base64Data && response.fileName && response.mimeType) {
+            // Panggil fungsi helper untuk memicu unduhan di sisi klien
+            triggerClientSideDownload(response.base64Data, response.fileName, response.mimeType);
+          } else {
+            showAlert(response.error || "Gagal menyiapkan export Excel untuk diunduh.", "error");
+          }
+        })
+        .withFailureHandler(err => {
+          hideLoading();
+          showAlert(`Error server saat export: ${err.message}`, "error");
+        })
+        .requestExcelExport(namaGuru, bulanTahun, lockId.trim());
+    }
+
+    function triggerClientSideDownload(base64Data, fileName, mimeType) {
+      try {
+        // Konversi Base64 ke byte array
+        const byteCharacters = atob(base64Data); // atob() adalah fungsi window bawaan
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+
+        // Buat link sementara untuk memicu unduhan
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName; // Ini akan mengatur nama file yang diunduh
+
+        document.body.appendChild(link); // Diperlukan untuk beberapa browser seperti Firefox
+        link.click(); // Picu klik pada link
+        document.body.removeChild(link); // Hapus link setelah diklik
+        URL.revokeObjectURL(link.href); // Bersihkan memori dari object URL
+
+        showAlert(`Mengunduh file: ${fileName}...`, 'success', 4000);
+      } catch (e) {
+        console.error("Error saat memicu unduhan di browser:", e);
+        showAlert("Gagal memulai unduhan di browser. Periksa konsol untuk detail.", "error");
+      }
+    }
+
+    // Panggil fungsi ini di dalam setupCeklokTableView setelah elemen HTML dimuat
+    function setupLockIdAndExportClientFeatures() {
+        const lockIdInput = document.getElementById('lockIdInput');
+        const btnSimpanLockId = document.getElementById('btnSimpanLockIdClient');
+        const btnExportExcel = document.getElementById('btnExportExcelClient');
+        const lockIdStatusMsg = document.getElementById('lockIdStatusMessage');
+
+        if (lockIdInput) {
+            lockIdInput.addEventListener('input', function() {
+                // Saat pengguna mengetik LOCK_ID baru, reset status tombol export
+                if (btnExportExcel) {
+                    btnExportExcel.disabled = true;
+                    btnExportExcel.classList.remove('btn-ready-export');
+                    btnExportExcel.classList.add('btn-greyed-out');
+                }
+                if (lockIdStatusMsg) lockIdStatusMsg.textContent = '';
+                currentLockIdValue = null; // Reset LOCK_ID yang tersimpan di klien
+                currentBackupSheetName = null;
+            });
+        }
+        // Event listener untuk tombol sudah diatur via onclick di HTML-nya
+    }
+
+    function handleSimpanLockIdClientSite() {
+        const lockIdInputEl = document.getElementById('lockIdInput');
+        const btnExportExcel = document.getElementById('btnExportExcelClient');
+        const lockIdStatusMsg = document.getElementById('lockIdStatusMessage');
+
+        if (!lockIdInputEl || !btnExportExcel || !lockIdStatusMsg) {
+            showAlert("Komponen LOCK_ID tidak ditemukan.", "error");
+            return;
+        }
+
+        const lockIdValue = lockIdInputEl.value.trim();
+        if (!lockIdValue) {
+            showAlert("LOCK_ID tidak boleh kosong.", "error");
+            lockIdInputEl.focus();
+            return;
+        }
+        if (isNaN(parseInt(lockIdValue))) {
+            showAlert("LOCK_ID harus berupa angka.", "error");
+            lockIdInputEl.focus();
+            return;
+        }
+
+
+        // 1. Kumpulkan data ceklok saat ini dari form
+        const currentCeklokDataForBackup = dataTanggal.map((row, i) => {
+            // 'row' adalah objek dari array 'dataTanggal', yang berisi properti:
+            // row.isLibur (boolean): true jika hari Minggu atau terdaftar di sheet Kalender_Pendidikan.
+            // row.keterangan (string): Deskripsi dari sheet Kalender_Pendidikan (misalnya, "Hari Raya Waisak"). Ini BUKAN opsi libur manual.
+            // row.keteranganLiburManual (string): Opsi libur yang dipilih/disimpan secara manual dari sheet Ceklok_Manual 
+            //                                   untuk guru ini pada tanggal ini (misalnya, "Sakit", "Izin"). Bisa jadi string kosong.
+            // row.hari (string): Nama hari.
+            // row.tanggal (string): Tanggal format dd/MM/yyyy.
+
+            let jamMasukVal = '';
+            let jamPulangVal = '';
+            let ketValForBackup = ''; // Ini yang akan mengisi kolom F & G di backup sheet
+
+            if (row.isLibur) {
+                // Ini adalah "tanggal merah" (dari Kalender Pendidikan atau hari Minggu).
+                // Untuk tanggal merah, jam masuk dan pulang otomatis kosong.
+                jamMasukVal = "";
+                jamPulangVal = "";
+
+                // Kolom F & G hanya diisi jika ada keterangan libur yang DIPILIH/DISIMPAN SECARA MANUAL (dari Ceklok_Manual).
+                // Jika tidak ada (row.keteranganLiburManual kosong), maka kolom F & G juga kosong.
+                // Kita TIDAK menggunakan row.keterangan (deskripsi umum hari libur dari Kalender_Pendidikan) di sini.
+                ketValForBackup = row.keteranganLiburManual || ""; // Ambil data manual yang sudah tersimpan, jika ada.
+
+            } else {
+                // Ini adalah hari kerja biasa.
+                // Ambil nilai dari input form di tabel UI.
+                const jamMasukEl = document.getElementById(`jamMasuk${i}`);
+                const jamPulangEl = document.getElementById(`jamPulang${i}`);
+                const ketLiburManualEl = document.getElementById(`ketLiburManual${i}`); // Ini adalah dropdown "Opsi Keterangan Libur" di UI
+
+                jamMasukVal = jamMasukEl ? jamMasukEl.value.trim() : '';
+                jamPulangVal = jamPulangEl ? jamPulangEl.value.trim() : '';
+                ketValForBackup = ketLiburManualEl ? ketLiburManualEl.value : ''; // Ambil dari pilihan dropdown di UI
+
+                // Jika pengguna memilih alasan tidak hadir dari dropdown untuk hari kerja,
+                // maka jam masuk dan pulang harus dikosongkan.
+                if (ketValForBackup && ketValForBackup !== "") {
+                    jamMasukVal = "";
+                    jamPulangVal = "";
+                }
+            }
+
+            return {
+                tanggal: row.tanggal, // Format: dd/MM/yyyy
+                hari: row.hari,
+                jamMasuk: jamMasukVal,
+                jamPulang: jamPulangVal,
+                keteranganLiburManual: ketValForBackup // Nilai ini yang akan dikirim ke server
+            };
+        });
+
+
+        showLoading("Menyimpan LOCK_ID & menyiapkan data export...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success) {
+                    showAlert(response.message || "LOCK_ID berhasil disimpan dan data disiapkan.", "success");
+                    lockIdStatusMsg.textContent = `LOCK_ID '${lockIdValue}' aktif. Sheet cadangan: ${response.backupSheetName}. Siap export.`;
+                    lockIdStatusMsg.style.color = "green";
+                    btnExportExcel.disabled = false;
+                    btnExportExcel.classList.remove('btn-greyed-out');
+                    btnExportExcel.classList.add('btn-ready-export');
+                    currentLockIdValue = lockIdValue; // Simpan LOCK_ID yang berhasil disimpan
+                    currentBackupSheetName = response.backupSheetName; // Simpan nama sheet cadangan
+                } else {
+                    showAlert(response.error || "Gagal menyimpan LOCK_ID.", "error");
+                    lockIdStatusMsg.textContent = response.error || "Gagal memproses.";
+                    lockIdStatusMsg.style.color = "red";
+                    btnExportExcel.disabled = true;
+                    btnExportExcel.classList.add('btn-greyed-out');
+                    btnExportExcel.classList.remove('btn-ready-export');
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                showAlert(`Error server: ${err.message}`, "error");
+                lockIdStatusMsg.textContent = `Error: ${err.message}`;
+                lockIdStatusMsg.style.color = "red";
+                btnExportExcel.disabled = true;
+                btnExportExcel.classList.add('btn-greyed-out');
+                btnExportExcel.classList.remove('btn-ready-export');
+            })
+            .saveLockIdAndPrepareBackupSheet(namaGuru, bulanTahun, lockIdValue, currentCeklokDataForBackup);
+    }
+
+    function handleExportExcelClientSite() {
+        const btnExportExcel = document.getElementById('btnExportExcelClient');
+        const lockIdInputEl = document.getElementById('lockIdInput'); // Untuk membersihkan setelah export
+        const lockIdStatusMsg = document.getElementById('lockIdStatusMessage');
+
+
+        if (!currentBackupSheetName || !currentLockIdValue) {
+            showAlert("LOCK_ID belum disimpan atau sheet cadangan belum siap. Klik 'Simpan LOCK_ID' dahulu.", "error");
+            return;
+        }
+        if (btnExportExcel && btnExportExcel.disabled) {
+            showAlert("Tombol export belum aktif. Pastikan LOCK_ID sudah disimpan.", "warning");
+            return;
+        }
+
+        showLoading("Mengekspor data dari sheet cadangan...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success && response.base64Data && response.fileName && response.mimeType) {
+                    triggerClientSideDownload(response.base64Data, response.fileName, response.mimeType);
+                    showAlert("Export Excel berhasil dimulai.", "success");
+                    // Reset setelah export berhasil
+                    if (lockIdInputEl) lockIdInputEl.value = '';
+                    if (lockIdStatusMsg) lockIdStatusMsg.textContent = "Export selesai. Sheet cadangan akan segera dihapus.";
+                    if (btnExportExcel) {
+                        btnExportExcel.disabled = true;
+                        btnExportExcel.classList.remove('btn-ready-export');
+                        btnExportExcel.classList.add('btn-greyed-out');
+                    }
+                    currentLockIdValue = null;
+                    currentBackupSheetName = null; // Reset nama sheet cadangan
+                } else {
+                    showAlert(response.error || "Gagal mengekspor data.", "error");
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                showAlert(`Error server saat export: ${err.message}`, "error");
+            })
+            .exportBackupSheetToExcel(currentBackupSheetName, namaGuru, bulanTahun, currentLockIdValue);
+    }
+  </script>
+</body>
+</html>
