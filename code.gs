@@ -1,5 +1,6 @@
 // Code.gs
 
+
 // Variabel global untuk nama sheet
 const KALENDER_SHEET_NAME = "Kalender_Pendidikan";
 const USERS_SHEET_NAME = "Users"; // Kolom: A=Username, B=Password, C=Role, D=Nama_Guru_Asli
