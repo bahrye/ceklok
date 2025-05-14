@@ -33,6 +33,12 @@
       <button class="btn-success" onclick="navigateToUserManagement()">Kelola Akun Login Pengguna</button>
       <button class="btn-warning" onclick="navigateToTeacherManagement()">Kelola Daftar Nama Guru</button>
       <button onclick="navigateToHasilCeklok()">Lihat Hasil Ceklok</button>
+      <button onclick="openChangePasswordModal()">Ubah Password Saya</button>
+      <div id="googleLinkButtonAreaAdmin">
+          <button id="btnLinkGoogleAccountAdmin" onclick="linkGoogleAccount()" style="background-color: #4CAF50;">Hubungkan Akun Google</button>
+          <button id="btnUnlinkGoogleAccountAdmin" onclick="handleUnlinkGoogleAccount()" style="background-color: #f44336; display:none;">Putuskan Hubungan Akun Google</button>
+          <small id="linkedGoogleEmailAdmin" style="display:block; font-size:0.85em; color:var(--grey-text); margin-top:5px;"></small>
+      </div>
       <button class="btn-danger" onclick="logout()">Logout</button>
     </div>
 
