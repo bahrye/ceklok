@@ -1,6 +1,5 @@
 // Code.gs
 
-
 // Variabel global untuk nama sheet
 const KALENDER_SHEET_NAME = "Kalender_Pendidikan";
 const USERS_SHEET_NAME = "Users"; // Kolom: A=Username, B=Password, C=Role, D=Nama_Guru_Asli
@@ -57,19 +56,35 @@ function setBulanTahunSetting(newBulanTahun) {
   }
 }
 
+// Di Code.gs
+// Pastikan USERS_SHEET_NAME, LOGIN_HISTORY_SHEET_NAME, NAMA_GURU_SHEET_NAME sudah didefinisikan
+// Kolom: A=Username (0), B=Password (1), C=Role (2), D=Nama_Guru_Asli (3), E=GoogleEmail (4)
+
 function verifyLogin(username, password) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
     if (!usersSheet) return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
-    
-    const data = usersSheet.getRange(2, 1, usersSheet.getLastRow() -1, 4).getValues(); // Username, Password, Role, Nama_Guru_Asli
 
-    for (let i = 0; i < data.length; i++) {
+    const data = usersSheet.getDataRange().getValues();
+    const headers = data[0]; // Ambil header
+    const googleEmailColIdx = headers.indexOf("GoogleEmail"); // Dapatkan indeks kolom GoogleEmail
+
+    // Jika kolom GoogleEmail tidak ada, log error tapi jangan gagalkan login sepenuhnya,
+    // hanya saja fitur terkait Google link tidak akan berfungsi dengan baik.
+    if (googleEmailColIdx === -1) {
+        Logger.log("PERINGATAN di verifyLogin: Kolom 'GoogleEmail' tidak ditemukan di sheet Users.");
+        // Anda bisa memutuskan untuk mengembalikan error di sini jika fitur ini krusial
+        // return { success: false, error: "Konfigurasi sheet Users tidak lengkap (kolom GoogleEmail hilang)." };
+    }
+
+    for (let i = 1; i < data.length; i++) { // Mulai dari baris data
       const rowUsername = String(data[i][0]).trim();
       const rowPassword = String(data[i][1]); // Password tidak di-trim
       const rowRole = String(data[i][2]).trim();
       const rowActualTeacherName = data[i][3] ? String(data[i][3]).trim() : "";
+      // Ambil GoogleEmail jika kolomnya ada
+      const rowGoogleEmail = (googleEmailColIdx !== -1 && data[i][googleEmailColIdx]) ? String(data[i][googleEmailColIdx]).trim() : null;
 
       if (rowUsername === username && rowPassword === password) {
         let effectiveTeacherName = null;
@@ -90,23 +105,25 @@ function verifyLogin(username, password) {
         }
 
         try {
-            const ss = SpreadsheetApp.getActiveSpreadsheet(); // Definisikan ss jika belum ada di scope ini
             let loginHistorySheet = ss.getSheetByName(LOGIN_HISTORY_SHEET_NAME);
             if (!loginHistorySheet) {
                 loginHistorySheet = ss.insertSheet(LOGIN_HISTORY_SHEET_NAME);
-                // *** MODIFIKASI: Tambah header Nama_Guru ***
-                loginHistorySheet.appendRow(["Username", "Login_Timestamp", "Nama_Guru"]);
-                loginHistorySheet.getRange("A1:C1").setFontWeight("bold"); // Opsional: buat header tebal
+                // Langsung buat semua header yang dibutuhkan
+                loginHistorySheet.appendRow(["Username", "Login_Timestamp", "Nama_Guru", "Metode_Login"]);
+                loginHistorySheet.getRange("A1:D1").setFontWeight("bold"); // Asumsi 4 kolom
             }
             const timestamp = new Date();
-            // *** MODIFIKASI: Tambahkan effectiveTeacherName ke appendRow ***
-            // Gunakan '' jika effectiveTeacherName null/undefined agar sel tidak kosong total
-            loginHistorySheet.appendRow([rowUsername, timestamp, effectiveTeacherName || '']);
+            loginHistorySheet.appendRow([rowUsername, timestamp, effectiveTeacherName || '', "Password"]);
         } catch (logError) {
             Logger.log(`Gagal mencatat histori login untuk ${rowUsername}: ${logError.toString()}`);
-            // Jangan gagalkan proses login hanya karena gagal mencatat histori
         }
-        return { success: true, username: rowUsername, role: rowRole, teacherName: effectiveTeacherName };
+        return {
+            success: true,
+            username: rowUsername,
+            role: rowRole,
+            teacherName: effectiveTeacherName,
+            googleEmail: rowGoogleEmail // <-- TAMBAHKAN INI
+        };
       }
     }
     return { success: false, error: "Username atau password salah." };
@@ -970,9 +987,9 @@ function ensureTemplateSheetExists() {
     templateSheet = ss.insertSheet(TEMPLATE_SHEET_FOR_BACKUP);
     // Anda mungkin ingin menambahkan header default ke template sheet di sini jika belum ada
     const worksheetHeaders = [
-      "EXPORT_ID", "Tanggal (YYYY-MM-DD)", "Hari (Bahasa Indonesia)",
-      "Jam Masuk (HH:MM)", "Jam Pulang (HH:MM)",
-      "Keterangan Libur 1", "Keterangan Libur 2" // Keterangan Libur 1 dan 2 bisa sama (keteranganLiburManual)
+      "LOCK ID", "TANGGAL", "HARI",
+      "JAM MASUK", "JAM PULANG",
+      "ALASAN TIDAK HADIR", "DESKRIPSI" // Keterangan Libur 1 dan 2 bisa sama (keteranganLiburManual)
     ];
     templateSheet.appendRow(worksheetHeaders);
     templateSheet.getRange(1, 1, 1, worksheetHeaders.length).setFontWeight("bold").setHorizontalAlignment("center");
@@ -1246,29 +1263,262 @@ function deleteTriggerByName(triggerHandlerFunctionName) {
   }
 }
 
-
-function saveOrUpdateLockId(teacherName, lockId) {
-  if (!teacherName || !lockId) {
-    return { success: false, error: "Nama Guru dan LOCK_ID tidak boleh kosong." };
-  }
+function changeUserPassword(username, oldPassword, newPassword) {
   try {
-    const lockIdSheet = ensureSheet(LOCK_ID_SHEET_NAME, ["Nama_Guru", "LOCK_ID"]); // LOCK_ID_SHEET_NAME adalah variabel global
-    const data = lockIdSheet.getDataRange().getValues();
+    if (!username) {
+      return { success: false, error: "Informasi pengguna tidak valid." };
+    }
+    if (!oldPassword) {
+      return { success: false, error: "Password lama wajib diisi." };
+    }
+    if (!newPassword || String(newPassword).length < 4) {
+      return { success: false, error: "Password baru minimal 4 karakter." };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
+    if (!usersSheet) {
+      return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    }
+
+    const data = usersSheet.getDataRange().getValues();
     let rowIndex = -1;
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === teacherName) {
-        rowIndex = i + 1;
+    let actualOldPassword = "";
+
+    // Kolom: A=Username (0), B=Password (1), C=Role (2), D=Nama_Guru_Asli (3)
+    for (let i = 1; i < data.length; i++) { // Mulai dari baris 1 (data), baris 0 adalah header
+      if (String(data[i][0]).trim() === username) {
+        rowIndex = i + 1; // Nomor baris di sheet (1-based)
+        actualOldPassword = String(data[i][1]); // Password ada di kolom B (index 1)
         break;
       }
     }
-    if (rowIndex !== -1) {
-      lockIdSheet.getRange(rowIndex, 2).setValue(lockId);
-    } else {
-      lockIdSheet.appendRow([teacherName, lockId]);
+
+    if (rowIndex === -1) {
+      return { success: false, error: "Pengguna tidak ditemukan." };
     }
-    return { success: true, message: "LOCK_ID berhasil disimpan." };
+
+    if (actualOldPassword !== oldPassword) {
+      return { success: false, error: "Password lama salah." };
+    }
+
+    // Update password baru di kolom B (index 2 dari getRange)
+    usersSheet.getRange(rowIndex, 2).setValue(newPassword);
+    SpreadsheetApp.flush(); // Pastikan perubahan disimpan
+
+    return { success: true, message: "Password berhasil diubah." };
+
   } catch (e) {
-    Logger.log(`Error in saveOrUpdateLockId: ${e.toString()}`);
-    return { success: false, error: `Gagal menyimpan LOCK_ID: ${e.message}` };
+    Logger.log(`Error in changeUserPassword for ${username}: ${e.toString()}`);
+    return { success: false, error: `Gagal mengubah password: ${e.message}` };
+  }
+}
+
+
+// ... (fungsi lainnya) ...
+
+// Pastikan USERS_SHEET_NAME sudah didefinisikan
+// const USERS_SHEET_NAME = "Users"; // Kolom: A=Username, B=Password, C=Role, D=Nama_Guru_Asli, E=GoogleEmail (BARU)
+
+function linkCurrentUserToGoogle(customUsername) {
+  try {
+    if (!customUsername) {
+      return { success: false, error: "Username kustom tidak diberikan." };
+    }
+
+    const activeUserEmail = Session.getActiveUser().getEmail(); // Email akun Google yang menjalankan skrip
+    const effectiveUserEmail = Session.getEffectiveUser().getEmail(); // Email pemilik skrip (jika dieksekusi oleh pemilik)
+
+    // Tentukan email Google yang akan digunakan.
+    // Jika aplikasi dieksekusi "sebagai pengguna yang mengakses aplikasi web", activeUserEmail adalah yang relevan.
+    let googleEmailToLink = activeUserEmail;
+
+    if (!googleEmailToLink) {
+      // Ini bisa terjadi jika skrip tidak memiliki izin atau pengguna tidak login ke Google.
+      // Atau jika skrip dijalankan oleh pemilik dan activeUser adalah pemilik.
+      // Dalam Apps Script Web App yang berjalan "execute as me (owner)", activeUser adalah owner.
+      // Jika "execute as user accessing the app", activeUser adalah user yang login.
+      // Untuk web app publik, ini mungkin tidak selalu mengembalikan email pengguna tanpa OAuth Flow yang lebih eksplisit.
+      // Namun, untuk web app yang dibatasi untuk domain tertentu, ini bisa berfungsi.
+      Logger.log(`Active user email: ${activeUserEmail}, Effective user: ${effectiveUserEmail}`);
+      return { success: false, error: "Tidak dapat mengambil email akun Google Anda. Pastikan Anda login ke Google dan telah memberikan izin." };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
+    if (!usersSheet) {
+      return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    }
+
+    // Pastikan header kolom E adalah 'GoogleEmail' atau sesuaikan
+    const headers = usersSheet.getRange(1, 1, 1, usersSheet.getLastColumn()).getValues()[0];
+    const googleEmailColIdx = headers.indexOf("GoogleEmail"); // Cari indeks kolom GoogleEmail
+
+    if (googleEmailColIdx === -1) {
+        return { success: false, error: "Kolom 'GoogleEmail' tidak ditemukan di sheet Users. Harap tambahkan kolom tersebut (misalnya di kolom E)." };
+    }
+
+    const data = usersSheet.getDataRange().getValues();
+    let rowIndex = -1;
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === customUsername) {
+        rowIndex = i + 1;
+        // Cek apakah sudah ada email Google yang tertaut dan apakah berbeda
+        if (data[i][googleEmailColIdx] && String(data[i][googleEmailColIdx]).trim() !== "" && String(data[i][googleEmailColIdx]).trim() !== googleEmailToLink) {
+            return { success: false, error: `Akun '<span class="math-inline">\{customUsername\}' sudah tertaut dengan email Google lain \(</span>{data[i][googleEmailColIdx]}).` };
+        }
+        if (String(data[i][googleEmailColIdx]).trim() === googleEmailToLink) {
+             return { success: true, message: `Akun Anda sudah tertaut dengan ${googleEmailToLink}.`, linkedEmail: googleEmailToLink };
+        }
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      return { success: false, error: `Pengguna kustom '${customUsername}' tidak ditemukan.` };
+    }
+
+    // Simpan email Google di kolom yang sesuai (googleEmailColIdx + 1 karena 1-based)
+    usersSheet.getRange(rowIndex, googleEmailColIdx + 1).setValue(googleEmailToLink);
+    SpreadsheetApp.flush();
+
+    return { success: true, message: `Akun '${customUsername}' berhasil ditautkan dengan email Google: ${googleEmailToLink}.`, linkedEmail: googleEmailToLink };
+
+  } catch (e) {
+    Logger.log(`Error in linkCurrentUserToGoogle for ${customUsername}: ${e.toString()}`);
+    return { success: false, error: `Gagal menautkan akun Google: ${e.message}` };
+  }
+}
+
+// ... (fungsi lainnya, pastikan USERS_SHEET_NAME, LOGIN_HISTORY_SHEET_NAME, NAMA_GURU_SHEET_NAME sudah didefinisikan) ...
+
+function loginViaLinkedGoogleAccount() {
+  try {
+    const activeUserGoogleEmail = Session.getActiveUser().getEmail();
+
+    if (!activeUserGoogleEmail) {
+      Logger.log("Tidak dapat mengambil email Google pengguna aktif. Pengguna mungkin tidak login ke Google atau belum memberikan izin.");
+      return { success: false, error: "Tidak dapat mengakses akun Google Anda. Pastikan Anda login ke Google dan telah memberikan izin ke aplikasi ini." };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
+    if (!usersSheet) {
+      return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    }
+
+    const data = usersSheet.getDataRange().getValues();
+    // Kolom: A=Username (0), B=Password (1), C=Role (2), D=Nama_Guru_Asli (3), E=GoogleEmail (4)
+    const headers = data[0];
+    const googleEmailColIdx = headers.indexOf("GoogleEmail");
+
+    if (googleEmailColIdx === -1) {
+      return { success: false, error: "Konfigurasi internal error: Kolom 'GoogleEmail' tidak ditemukan di backend." };
+    }
+
+    for (let i = 1; i < data.length; i++) { // Mulai dari baris data
+      const rowCustomUsername = String(data[i][0]).trim();
+      const rowRole = String(data[i][2]).trim();
+      const rowActualTeacherName = data[i][3] ? String(data[i][3]).trim() : "";
+      const linkedGoogleEmailInSheet = data[i][googleEmailColIdx] ? String(data[i][googleEmailColIdx]).trim() : "";
+
+      if (linkedGoogleEmailInSheet && linkedGoogleEmailInSheet.toLowerCase() === activeUserGoogleEmail.toLowerCase()) {
+        // Akun Google cocok dengan yang tertaut di sheet
+        let effectiveTeacherName = null;
+        if (rowRole === "user") {
+          if (!rowActualTeacherName) {
+            return { success: false, error: `Login Google berhasil untuk '<span class="math-inline">\{activeUserGoogleEmail\}', tetapi 'Nama\_Guru\_Asli' untuk akun '</span>{rowCustomUsername}' kosong. Hubungi admin.` };
+          }
+          effectiveTeacherName = rowActualTeacherName;
+          const sheetGuru = ss.getSheetByName(NAMA_GURU_SHEET_NAME);
+          if (sheetGuru) {
+            const guruList = sheetGuru.getRange(1, 1, sheetGuru.getLastRow(), 1).getValues().flat().filter(String).map(g => String(g).trim());
+            if (!guruList.includes(effectiveTeacherName)) {
+              return { success: false, error: `Nama Guru Asli '${effectiveTeacherName}' (akun: <span class="math-inline">\{rowCustomUsername\}\) tidak ada di sheet '</span>{NAMA_GURU_SHEET_NAME}'.` };
+            }
+          } else {
+            return { success: false, error: `Konfigurasi error: Sheet '${NAMA_GURU_SHEET_NAME}' tidak ditemukan.` };
+          }
+        }
+
+        // Catat histori login
+        try {
+          let loginHistorySheet = ss.getSheetByName(LOGIN_HISTORY_SHEET_NAME);
+          if (!loginHistorySheet) {
+            loginHistorySheet = ss.insertSheet(LOGIN_HISTORY_SHEET_NAME);
+            loginHistorySheet.appendRow(["Username", "Login_Timestamp", "Nama_Guru", "Metode_Login"]); // Tambah header Metode_Login
+            loginHistorySheet.getRange("A1:D1").setFontWeight("bold");
+          }
+          const timestamp = new Date();
+          loginHistorySheet.appendRow([rowCustomUsername, timestamp, effectiveTeacherName || '', "Google"]);
+        } catch (logError) {
+          Logger.log(`Gagal mencatat histori login Google untuk ${rowCustomUsername}: ${logError.toString()}`);
+        }
+
+        return {
+          success: true,
+          username: rowCustomUsername, // Kembalikan username kustom agar sistem tetap konsisten
+          role: rowRole,
+          teacherName: effectiveTeacherName,
+          googleEmail: activeUserGoogleEmail // Info tambahan
+        };
+      }
+    }
+
+    return { success: false, error: `Akun Google Anda (${activeUserGoogleEmail}) tidak tertaut dengan akun manapun di sistem ini. Silakan login dengan username/password, lalu tautkan akun Anda dari dashboard.` };
+
+  } catch (e) {
+    Logger.log(`Error in loginViaLinkedGoogleAccount: ${e.toString()}`);
+    return { success: false, error: `Error server saat login Google: ${e.message}` };
+  }
+}
+
+
+// Di Code.gs
+// Pastikan USERS_SHEET_NAME sudah didefinisikan
+
+function unlinkCurrentUserFromGoogle(customUsername) {
+  try {
+    if (!customUsername) {
+      return { success: false, error: "Username kustom tidak diberikan." };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
+    if (!usersSheet) {
+      return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    }
+
+    const headers = usersSheet.getRange(1, 1, 1, usersSheet.getLastColumn()).getValues()[0];
+    const googleEmailColIdx = headers.indexOf("GoogleEmail");
+
+    if (googleEmailColIdx === -1) {
+      return { success: false, error: "Kolom 'GoogleEmail' tidak ditemukan di sheet Users (backend)." };
+    }
+
+    const data = usersSheet.getDataRange().getValues();
+    let rowIndex = -1;
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === customUsername) {
+        rowIndex = i + 1; // Nomor baris di sheet (1-based)
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      return { success: false, error: `Pengguna kustom '${customUsername}' tidak ditemukan.` };
+    }
+
+    // Kosongkan nilai di kolom GoogleEmail
+    usersSheet.getRange(rowIndex, googleEmailColIdx + 1).setValue(''); // googleEmailColIdx + 1 karena 1-based
+    SpreadsheetApp.flush();
+
+    return { success: true, message: `Hubungan akun Google untuk '${customUsername}' berhasil diputuskan.` };
+
+  } catch (e) {
+    Logger.log(`Error in unlinkCurrentUserFromGoogle for ${customUsername}: ${e.toString()}`);
+    return { success: false, error: `Gagal memutuskan hubungan akun Google: ${e.message}` };
   }
 }
