@@ -501,6 +501,30 @@
 
   <div id="customAlert" class="custom-alert">Pesan Alert</div>
 
+  <div id="changePasswordModal" style="display:none; position:fixed; z-index:1001; left:0; top:0; width:100%; height:100%; overflow:auto; background-color:rgba(0,0,0,0.4);">
+    <div style="background-color:#fefefe; margin:10% auto; padding:20px; border:1px solid #888; width:80%; max-width:400px; border-radius:8px; position:relative;">
+      <span onclick="closeChangePasswordModal()" style="color:#aaa; float:right; font-size:28px; font-weight:bold; cursor:pointer;" title="Tutup">&times;</span>
+      <h3>Ubah Password</h3>
+      <div class="form-group">
+        <label for="currentPassword">Password Lama:</label>
+        <input type="password" id="currentPassword" style="width: calc(100% - 24px);">
+      </div>
+      <div class="form-group">
+        <label for="newPassword">Password Baru:</label>
+        <input type="password" id="newPassword" style="width: calc(100% - 24px);">
+      </div>
+      <div class="form-group">
+        <label for="confirmNewPassword">Konfirmasi Password Baru:</label>
+        <input type="password" id="confirmNewPassword" style="width: calc(100% - 24px);">
+      </div>
+      <div id="changePasswordError" class="error-message" style="display:none; margin-bottom:15px;"></div>
+      <div class="btn-container">
+        <button onclick="submitChangePassword()">Simpan Perubahan</button>
+        <button onclick="closeChangePasswordModal()" style="background-color:#ccc; color:#333;">Batal</button>
+      </div>
+    </div>
+  </div>
+
   <footer>
     <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri</p>
   </footer>
@@ -591,35 +615,75 @@
     }
 
     // --- Navigasi dan Rendering Tampilan Utama ---
-    function renderView(viewName, data) {
+    // Di index.html, ganti fungsi renderView Anda dengan ini:
+    function renderView(viewName, data, postRenderCallback) { // Tambah parameter postRenderCallback opsional
+        console.log("Merender tampilan:", viewName, "dengan data:", data);
         currentView = viewName;
-        document.body.classList.remove('login-active'); // Hapus jika ada
+        document.body.classList.remove('login-active');
+
+        let targetElementId = 'app';
+        let htmlFile = '';
+        let setupFunction = null; // Fungsi spesifik untuk setup view tersebut
 
         switch(viewName) {
             case 'login':
                 document.body.classList.add('login-active');
-                loadHtmlContent('login_form.html', 'app', setupLoginFormEventListeners);
+                htmlFile = 'login_form.html';
+                setupFunction = setupLoginFormEventListeners;
                 break;
             case 'admin_dashboard':
-                loadHtmlContent('admin_dashboard_content.html', 'app', setupAdminDashboardView, data);
+                htmlFile = 'admin_dashboard_content.html';
+                setupFunction = setupAdminDashboardView;
                 break;
             case 'ceklok_table':
-                loadHtmlContent('ceklok_table_content.html', 'app', setupCeklokTableView, data);
+                htmlFile = 'ceklok_table_content.html';
+                setupFunction = setupCeklokTableView;
                 break;
             case 'user_management':
-                loadHtmlContent('user_management_content.html', 'app', setupUserManagementView);
+                htmlFile = 'user_management_content.html';
+                setupFunction = setupUserManagementView;
                 break;
             case 'teacher_management':
-                loadHtmlContent('teacher_management_content.html', 'app', setupTeacherManagementView);
+                htmlFile = 'teacher_management_content.html';
+                setupFunction = setupTeacherManagementView;
                 break;
             case 'kalender_pendidikan':
-                loadHtmlContent('kalender_pendidikan_content.html', 'app', setupKalenderPendidikanView);
+                htmlFile = 'kalender_pendidikan_content.html';
+                setupFunction = setupKalenderPendidikanView;
                 break;
             case 'hasil_ceklok':
-                loadHtmlContent('hasil_ceklok_content.html', 'app', setupHasilCeklokView, data);
+                htmlFile = 'hasil_ceklok_content.html';
+                setupFunction = setupHasilCeklokView;
                 break;
             default:
-                document.getElementById('app').innerHTML = '<p>Tampilan tidak ditemukan.</p>';
+                console.error("Tampilan tidak dikenal:", viewName);
+                document.getElementById('app').innerHTML = '<p>Tampilan tidak ditemukan: ' + viewName + '</p>';
+                hideLoading();
+                return; // Keluar jika viewName tidak dikenal
+        }
+
+        if (htmlFile) {
+            // 'data' yang diterima renderView akan diteruskan sebagai argumen ke-4 ke loadHtmlContent,
+            // yang kemudian akan diteruskan ke 'callback' sebagai argumennya.
+            loadHtmlContent(htmlFile, targetElementId, (dataForSetupFunction) => {
+                // Tahap 1: Jalankan fungsi setup spesifik untuk view tersebut (jika ada)
+                if (setupFunction) {
+                    console.log("Menjalankan setupFunction untuk", viewName);
+                    setupFunction(dataForSetupFunction); // dataForSetupFunction adalah 'data' dari renderView
+                }
+                // Tahap 2: Setelah HTML ada dan setup (jika ada) selesai, perbarui visibilitas tombol Google
+                console.log("Memperbarui visibilitas tombol Google untuk view:", viewName);
+                updateGoogleLinkButtonVisibility(); // Panggil di sini!
+
+                // Tahap 3: Jalankan callback tambahan jika ada (misalnya, untuk scroll, dll.)
+                if (postRenderCallback) {
+                    postRenderCallback();
+                }
+            }, data); // 'data' dari renderView diteruskan sebagai 'dataForRender' ke loadHtmlContent
+        } else {
+            console.error("File HTML tidak ditentukan untuk tampilan:", viewName);
+            document.getElementById('app').innerHTML = '<p>File HTML tidak ditentukan untuk tampilan: ' + viewName + '</p>';
+            hideLoading();
         }
     }
 
@@ -682,7 +746,7 @@
             .withSuccessHandler(response => {
                 hideLoading();
                 if (response.success) {
-                    loggedInUser = { username: response.username, role: response.role, teacherName: response.teacherName };
+                    loggedInUser = { username: response.username, role: response.role, teacherName: response.teacherName, googleEmail: response.googleEmail };
                     // *** MODIFIKASI: Simpan data user ke sessionStorage ***
                     try {
                         sessionStorage.setItem('loggedInUserData', JSON.stringify(loggedInUser));
@@ -761,6 +825,63 @@
         window.removeEventListener('touchstart', resetIdleTimer);
     }
     // *** AKHIR TAMBAHAN: Fungsi untuk Idle Timeout ***
+
+    function linkGoogleAccount() {
+        if (!loggedInUser || !loggedInUser.username) {
+            showAlert("Error: Informasi pengguna tidak ditemukan. Silakan login ulang.", "error");
+            return;
+        }
+
+        if (confirm(`Anda akan mencoba menautkan akun Google Anda saat ini ke pengguna '${loggedInUser.username}'. Lanjutkan?`)) {
+            showLoading("Menautkan akun Google...");
+            google.script.run
+                .withSuccessHandler(response => {
+                    hideLoading();
+                    if (response.success) {
+                        showAlert(response.message, 'success');
+                        // Anda mungkin ingin memperbarui tampilan atau data loggedInUser jika perlu
+                        if (response.linkedEmail) {
+                            console.log("Akun Google tertaut: " + response.linkedEmail);
+                            // Jika ada elemen UI untuk menampilkan status penautan, perbarui di sini
+                            // Misalnya, disable tombol "Hubungkan Akun Google"
+                            const btnLinkGoogleAdmin = document.getElementById('btnLinkGoogleAccount');
+                            if(btnLinkGoogleAdmin) btnLinkGoogleAdmin.disabled = true;
+                            const btnLinkGoogleUser = document.getElementById('btnLinkGoogleAccountUser');
+                            if(btnLinkGoogleUser) btnLinkGoogleUser.disabled = true;
+                        }
+                    } else {
+                        showAlert(response.error || "Gagal menautkan akun Google.", 'error');
+                    }
+                })
+          google.script.run
+              .withSuccessHandler(response => {
+                  hideLoading();
+                  if (response.success) {
+                      showAlert(response.message, 'success');
+                      if (response.linkedEmail) {
+                          loggedInUser.googleEmail = response.linkedEmail; // Update objek loggedInUser
+                          // Perbarui juga di sessionStorage jika Anda menggunakannya secara persisten
+                          try {
+                              const storedData = JSON.parse(sessionStorage.getItem('loggedInUserData'));
+                              if (storedData) {
+                                  storedData.googleEmail = response.linkedEmail;
+                                  sessionStorage.setItem('loggedInUserData', JSON.stringify(storedData));
+                              }
+                          } catch(e) { console.error("Error updating sessionStorage for googleEmail:", e); }
+                      }
+                      updateGoogleLinkButtonVisibility(); // Perbarui tampilan tombol
+                  } else {
+                      showAlert(response.error || "Gagal menautkan akun Google.", 'error');
+                  }
+              })
+                .withFailureHandler(err => {
+                    hideLoading();
+                    showAlert(`Error server: ${err.message}`, 'error');
+                })
+                .linkCurrentUserToGoogle(loggedInUser.username);
+        }
+    }
+
 
     function proceedAfterLogin() {
         if (!loggedInUser) { renderView('login'); return; }
@@ -849,7 +970,17 @@
              clearTimeout(idleTimer);
             logout();
         }
+
+        updateGoogleLinkButtonVisibility(); // Panggil ini setelah view yang berisi tombol dimuat
+
+      if (loggedInUser.googleEmailLinked) {
+          const btnLinkGoogleAdmin = document.getElementById('btnLinkGoogleAccount');
+          if(btnLinkGoogleAdmin) btnLinkGoogleAdmin.disabled = true;
+          const btnLinkGoogleUser = document.getElementById('btnLinkGoogleAccountUser');
+          if(btnLinkGoogleUser) btnLinkGoogleUser.disabled = true;
+      }
     }
+
 
     // --- ADMIN DASHBOARD ---
     function setupAdminDashboardView(data) {
@@ -1652,12 +1783,6 @@
         if (yearEl) yearEl.textContent = new Date().getFullYear();
     }
 
-    window.onload = function() {
-        document.getElementById('app').innerHTML = ''; // Pastikan #app kosong
-        renderView('login'); // Mulai dengan form login
-        updateFooterYear();
-    };
-
     // *** MODIFIKASI: window.onload ***
     window.onload = function() {
         console.log("Page loaded. Checking for existing session...");
@@ -1934,6 +2059,200 @@
                 showAlert(`Error server saat export: ${err.message}`, "error");
             })
             .exportBackupSheetToExcel(currentBackupSheetName, namaGuru, bulanTahun, currentLockIdValue);
+    }
+
+    function openChangePasswordModal() {
+        clearInlineError('changePasswordError');
+      document.getElementById('currentPassword').value = '';
+      document.getElementById('newPassword').value = '';
+      document.getElementById('confirmNewPassword').value = '';
+      document.getElementById('changePasswordModal').style.display = 'block';
+      }
+
+    function closeChangePasswordModal() {
+        document.getElementById('changePasswordModal').style.display = 'none';
+    }
+
+    function submitChangePassword() {
+        const currentPasswordEl = document.getElementById('currentPassword');
+        const newPasswordEl = document.getElementById('newPassword');
+        const confirmNewPasswordEl = document.getElementById('confirmNewPassword');
+        const errorContainerId = 'changePasswordError';
+
+        clearInlineError(errorContainerId);
+        clearInputError(currentPasswordEl, newPasswordEl, confirmNewPasswordEl);
+
+        const currentPassword = currentPasswordEl.value;
+        const newPassword = newPasswordEl.value;
+        const confirmNewPassword = confirmNewPasswordEl.value;
+
+        if (!currentPassword) {
+            showInlineError(errorContainerId, "Password lama wajib diisi.");
+            showInputError(currentPasswordEl);
+            return;
+        }
+        if (!newPassword) {
+            showInlineError(errorContainerId, "Password baru wajib diisi.");
+            showInputError(newPasswordEl);
+            return;
+        }
+        if (newPassword.length < 4) {
+            showInlineError(errorContainerId, "Password baru minimal 4 karakter.");
+            showInputError(newPasswordEl);
+            return;
+        }
+        if (newPassword !== confirmNewPassword) {
+            showInlineError(errorContainerId, "Konfirmasi password baru tidak cocok.");
+            showInputError(confirmNewPasswordEl);
+            return;
+        }
+
+        if (!loggedInUser || !loggedInUser.username) {
+            showAlert("Error: Informasi pengguna tidak ditemukan. Silakan login ulang.", "error");
+            return;
+        }
+
+        showLoading("Mengubah password...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success) {
+                    showAlert(response.message, 'success');
+                    closeChangePasswordModal();
+                } else {
+                    showInlineError(errorContainerId, response.error || "Gagal mengubah password.");
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                showInlineError(errorContainerId, `Error server: ${err.message}`);
+            })
+            .changeUserPassword(loggedInUser.username, currentPassword, newPassword);
+    }
+
+    // ... (fungsi lainnya) ...
+
+    function handleGoogleLoginAttempt() {
+        const loginErrorEl = document.getElementById('loginError');
+        if (loginErrorEl) loginErrorEl.style.display = "none"; // Sembunyikan error lama
+
+        showLoading("Mencoba login dengan Google...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success) {
+                    loggedInUser = { username: response.username, role: response.role, teacherName: response.teacherName, googleEmail: response.googleEmail }; // Simpan info user
+                    try {
+                        sessionStorage.setItem('loggedInUserData', JSON.stringify(loggedInUser));
+                    } catch (e) {
+                        console.error("Gagal menyimpan sesi login Google di browser:", e);
+                    }
+                    proceedAfterLogin(); // Panggil fungsi yang sama seperti login biasa
+                } else {
+                    if (loginErrorEl) {
+                        loginErrorEl.textContent = response.error || "Login dengan Google gagal.";
+                        loginErrorEl.style.display = "block";
+                    } else {
+                        showAlert(response.error || "Login dengan Google gagal.", "error");
+                    }
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                if (loginErrorEl) {
+                    loginErrorEl.textContent = "Error server saat login Google: " + err.message;
+                    loginErrorEl.style.display = "block";
+                } else {
+                    showAlert("Error server saat login Google: " + err.message, "error");
+                }
+            })
+            .loginViaLinkedGoogleAccount(); // Fungsi backend baru yang akan kita buat
+    }
+
+    function updateGoogleLinkButtonVisibility() {
+        const btnLinkAdmin = document.getElementById('btnLinkGoogleAccountAdmin');
+        const btnUnlinkAdmin = document.getElementById('btnUnlinkGoogleAccountAdmin');
+        const linkedEmailTextAdmin = document.getElementById('linkedGoogleEmailAdmin');
+
+        const btnLinkUser = document.getElementById('btnLinkGoogleAccountUser');
+        const btnUnlinkUser = document.getElementById('btnUnlinkGoogleAccountUser');
+        const linkedEmailTextUser = document.getElementById('linkedGoogleEmailUser');
+
+        let currentBtnLink = null;
+        let currentBtnUnlink = null;
+        let currentLinkedEmailText = null;
+
+        // Tentukan elemen mana yang aktif berdasarkan tampilan saat ini
+        // Ini bisa disederhanakan jika Anda hanya punya satu set tombol global
+        if (document.getElementById('adminDashboardContainer') && document.getElementById('adminDashboardContainer').offsetParent !== null) { // Cek apakah admin dashboard visible
+            currentBtnLink = btnLinkAdmin;
+            currentBtnUnlink = btnUnlinkAdmin;
+            currentLinkedEmailText = linkedEmailTextAdmin;
+        } else if (document.getElementById('ceklokInputContainer') && document.getElementById('ceklokInputContainer').offsetParent !== null) { // Cek apakah ceklok table visible
+            currentBtnLink = btnLinkUser;
+            currentBtnUnlink = btnUnlinkUser;
+            currentLinkedEmailText = linkedEmailTextUser;
+        }
+        // Tambahkan kondisi lain jika tombol ini ada di view lain
+
+        if (loggedInUser && loggedInUser.googleEmail) { // Jika ada email Google yang tertaut
+            if (currentBtnLink) currentBtnLink.style.display = 'none';
+            if (currentBtnUnlink) currentBtnUnlink.style.display = 'inline-block'; // atau 'block' sesuai layout
+            if (currentLinkedEmailText) {
+                currentLinkedEmailText.textContent = 'Tertaut dengan: ' + loggedInUser.googleEmail;
+                currentLinkedEmailText.style.display = 'block';
+            }
+        } else { // Jika tidak ada email Google yang tertaut
+            if (currentBtnLink) currentBtnLink.style.display = 'inline-block';
+            if (currentBtnUnlink) currentBtnUnlink.style.display = 'none';
+            if (currentLinkedEmailText) {
+                currentLinkedEmailText.textContent = '';
+                currentLinkedEmailText.style.display = 'none';
+            }
+        }
+    }
+
+
+    function handleUnlinkGoogleAccount() {
+        if (!loggedInUser || !loggedInUser.username) {
+            showAlert("Error: Informasi pengguna tidak ditemukan. Silakan login ulang.", "error");
+            return;
+        }
+        if (!loggedInUser.googleEmail) {
+            showAlert("Akun Anda tidak sedang tertaut dengan email Google.", "info");
+            return;
+        }
+
+        // PERBAIKAN PESAN KONFIRMASI:
+        const confirmationMessage = `Anda akan memutuskan hubungan akun Google (${loggedInUser.googleEmail}) dari pengguna '${loggedInUser.username}'. Lanjutkan?`;
+
+        if (confirm(confirmationMessage)) { // Gunakan variabel yang sudah diformat dengan benar
+            showLoading("Memutuskan hubungan akun Google...");
+            google.script.run
+                .withSuccessHandler(response => {
+                    hideLoading();
+                    if (response.success) {
+                        showAlert(response.message, 'success');
+                        loggedInUser.googleEmail = null; // Hapus dari objek loggedInUser
+                        // Perbarui juga di sessionStorage
+                        try {
+                            const storedData = JSON.parse(sessionStorage.getItem('loggedInUserData'));
+                            if (storedData) {
+                                delete storedData.googleEmail; // atau set ke null
+                                sessionStorage.setItem('loggedInUserData', JSON.stringify(storedData));
+                            }
+                        } catch(e) { console.error("Error updating sessionStorage for googleEmail unlink:", e); }
+                        updateGoogleLinkButtonVisibility(); // Perbarui tampilan tombol
+                    } else {
+                        showAlert(response.error || "Gagal memutuskan hubungan akun Google.", 'error');
+                    }
+                })
+                .withFailureHandler(err => {
+                    hideLoading();
+                    showAlert(`Error server: ${err.message}`, 'error');
+                })
+                .unlinkCurrentUserFromGoogle(loggedInUser.username);
+        }
     }
   </script>
 </body>
