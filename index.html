@@ -648,6 +648,10 @@
     #profileMenuContainer.show-dropdown .profile-dropdown-content {
       display: block;
     }
+
+    /* Di dalam <style> di index.html */
+    button.btn-info { background-color: #17a2b8; } /* Contoh warna biru info */
+    button.btn-info:hover { background-color: #138496; }
   </style>
 </head>
 <body>
@@ -663,6 +667,7 @@
       <div id="dropdownUsernameDisplay">Username</div> 
       <a href="#" id="menuChangePrimaryEmail">Ganti Email Utama</a>
       <a href="#" id="menuChangePassword">Ubah Password</a>
+      <a href="#" id="menuTutorial">Petunjuk Penggunaan</a>
       <a href="#" id="menuLogoutProfile">Logout</a>
     </div>
   </div>
@@ -772,7 +777,7 @@
   </div>
 
   <footer>
-    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri</p>
+    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v1.2</p>
   </footer>
 
   <script>
@@ -935,12 +940,20 @@
                 htmlFile = 'hasil_ceklok_content.html';
                 setupFunction = setupHasilCeklokView;
                 break;
+            case 'tutorial': // TAMBAHKAN CASE INI
+                htmlFile = 'tutorial_content.html';
+                setupFunction = setupTutorialView; // Akan kita buat di bawah
+                break;
             default:
                 console.error("Tampilan tidak dikenal:", viewName);
                 const appEl = document.getElementById('app');
                 if (appEl) appEl.innerHTML = '<p>Tampilan tidak ditemukan: ' + viewName + '</p>';
                 hideLoading();
                 return;
+        }
+
+        if (viewName !== 'tutorial' && viewName !== 'login') { // Jangan simpan jika view login atau tutorial itu sendiri
+            previousViewBeforeTutorial = currentView; // Simpan view saat ini SEBELUM pindah ke tutorial
         }
 
         if (htmlFile) {
@@ -1013,6 +1026,14 @@
               const profileMenuContainer = document.getElementById('profileMenuContainer');
               if (profileMenuContainer) profileMenuContainer.classList.remove('show-dropdown');
               logout(); 
+          };
+      }
+
+      const menuTutorial = document.getElementById('menuTutorial');
+      if (menuTutorial) {
+          menuTutorial.onclick = function(e) {
+              e.preventDefault();
+              navigateToTutorial();
           };
       }
     }
@@ -3650,6 +3671,55 @@
             .verifyAndChangePrimaryEmail(loggedInUser.username, otp, proposedNewPrimaryEmail);
     }
 
+    function navigateToTutorial() {
+        const profileMenuContainer = document.getElementById('profileMenuContainer');
+        if (profileMenuContainer && profileMenuContainer.classList.contains('show-dropdown')) {
+            profileMenuContainer.classList.remove('show-dropdown');
+        }
+        renderView('tutorial');
+    }
+
+    function setupTutorialView(data) {
+        // Jika ada setup khusus untuk halaman tutorial, tambahkan di sini.
+        // Untuk sekarang, mungkin hanya scroll ke atas.
+        window.scrollTo(0, 0);
+        console.log("Tutorial view setup.");
+    }
+
+    // Fungsi baru
+    function goBackFromTutorial() {
+        if (previousViewBeforeTutorial && previousViewBeforeTutorial !== 'tutorial') {
+            // Perlu memuat ulang data untuk view sebelumnya jika diperlukan
+            // Ini contoh sederhana, mungkin perlu logika lebih kompleks tergantung view sebelumnya
+            if (previousViewBeforeTutorial === 'admin_dashboard') {
+                goBackToAdminDashboard(); // Fungsi ini sudah ada dan menangani load data
+            } else if (previousViewBeforeTutorial === 'ceklok_table' && loggedInUser) {
+                loadCeklokDataFromServer(namaGuru, activeCeklokMonthYear || globalServerCurrentMonthYear, loggedInUser.role === 'user');
+            } else if (previousViewBeforeTutorial === 'hasil_ceklok') {
+                navigateToHasilCeklok(); // Fungsi ini sudah ada
+            }
+            // Tambahkan kondisi lain untuk view lain yang mungkin
+            else {
+                // Fallback jika tidak ada view sebelumnya yang spesifik atau jika login
+                if (loggedInUser) {
+                    if (loggedInUser.role === 'admin') goBackToAdminDashboard();
+                    else if (loggedInUser.role === 'user') loadCeklokDataFromServer(namaGuru, activeCeklokMonthYear || globalServerCurrentMonthYear, true);
+                    else logout();
+                } else {
+                    logout();
+                }
+            }
+        } else {
+            // Fallback jika tidak ada view sebelumnya yang valid
+            if (loggedInUser) {
+                if (loggedInUser.role === 'admin') goBackToAdminDashboard();
+                else if (loggedInUser.role === 'user') loadCeklokDataFromServer(namaGuru, activeCeklokMonthYear || globalServerCurrentMonthYear, true);
+                else logout();
+            } else {
+                logout();
+            }
+        }
+    }
   </script>
 </body>
 </html>
