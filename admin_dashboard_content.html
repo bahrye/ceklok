@@ -36,6 +36,25 @@
       <button class="btn-info" onclick="navigateToTutorial()">Petunjuk Penggunaan</button>
     </div>
 
+    <hr style="margin: 20px 0;">
+    <h3>Pengelolaan Penguncian Bulan Ceklok</h3>
+    <div class="form-row">
+      <label for="monthToLockAdminInput">Pilih Bulan/Tahun:</label>
+      <div class="input-wrapper">
+        <input type="month" id="monthToLockAdminInput" style="flex-grow:1;">
+        <button id="btnLockMonthAdmin" onclick="handleLockThisMonth()">Kunci Bulan</button>
+      </div>
+    </div>
+    <div class="form-row-note">
+        <small>Bulan yang dikunci tidak dapat diubah datanya oleh guru.</small>
+    </div>
+    <div id="lockedMonthsListContainer" style="margin-top:15px;">
+        <h4>Daftar Bulan Terkunci:</h4>
+        <div id="lockedMonthsDisplay" style="padding:10px; border:1px solid #eee; border-radius:5px; min-height:50px; background-color:#f9f9f9;">
+            Memuat daftar...
+        </div>
+    </div>
+
     <hr style="margin: 25px 0;">
     <h3>Histori Login Pengguna (20 Terbaru)</h3>
     <div class="table-container" id="loginHistoryTableContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px;">
