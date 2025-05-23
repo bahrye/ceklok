@@ -1,4 +1,51 @@
 <div class="container" id="ceklokInputContainer">
+  <div id="teacherDashboardSummary" class="dashboard-summary-section">
+    <h3 class="summary-title">Ringkasan Kehadiran Bulan Ini</h3>
+    <div id="summaryContentLoading" class="summary-loading">Memuat ringkasan...</div>
+    <div id="summaryContentData" class="summary-data" style="display: none;">
+      <p class="summary-period"><strong>Periode:</strong> <span id="summaryMonthYear"></span></p>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <span class="summary-label">Total Hari Kerja Sebulan:</span>
+          <span class="summary-value" id="summaryTotalWorkingDays"></span> hari
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Hari Kerja Efektif Berlalu:</span>
+          <span class="summary-value" id="summaryDaysPassed"></span> hari
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Ceklok Terisi Lengkap:</span>
+          <span class="summary-value" id="summaryCompletedChecklok"></span> hari
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Hadir (Jam Lengkap):</span>
+          <span class="summary-value" id="summaryPresent"></span> hari
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Hari Libur Sekolah (Diinput Guru):</span>
+          <span class="summary-value" id="summarySchoolHoliday"></span> hari
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Alasan Lain (Valid):</span>
+          <span class="summary-value" id="summaryOtherValidReason"></span> hari
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Alpa (Kosong di Hari Kerja):</span>
+          <span class="summary-value" id="summaryAbsent"></span> hari
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Ceklok Tidak Lengkap (Salah Satu Jam):</span>
+          <span class="summary-value" id="summaryIncomplete"></span> hari
+        </div>
+        <div class="summary-item summary-highlight">
+          <span class="summary-label"><strong>Persentase Kehadiran (Hadir/Efektif):</strong></span>
+          <span class="summary-value"><strong><span id="summaryAttendancePercentage"></span>%</strong></span>
+        </div>
+      </div>
+    </div>
+    <div id="summaryContentError" class="error-message summary-error" style="display:none;"></div>
+  </div>
+
   <h3>INPUT CEKLOK</h3>
   <h3 id="ceklokGuruName" style="color: var(--secondary);">Nama Guru</h3>
 
