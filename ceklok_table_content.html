@@ -5,40 +5,40 @@
     <div id="summaryContentData" class="summary-data" style="display: none;">
       <p class="summary-period"><strong>Periode:</strong> <span id="summaryMonthYear"></span></p>
       <div class="summary-grid">
-        <div class="summary-item">
+        <div class="summary-item color-green">
           <span class="summary-label">Total Hari Kerja Sebulan:</span>
           <span class="summary-value" id="summaryTotalWorkingDays"></span> hari
         </div>
-        <div class="summary-item">
+        <div class="summary-item color-green">
           <span class="summary-label">Hari Kerja Efektif Berlalu:</span>
           <span class="summary-value" id="summaryDaysPassed"></span> hari
         </div>
-        <div class="summary-item">
+        <div class="summary-item color-orange">
           <span class="summary-label">Ceklok Terisi Lengkap:</span>
           <span class="summary-value" id="summaryCompletedChecklok"></span> hari
         </div>
-        <div class="summary-item">
+        <div class="summary-item color-yellow">
           <span class="summary-label">Hadir (Jam Lengkap):</span>
           <span class="summary-value" id="summaryPresent"></span> hari
         </div>
-        <div class="summary-item">
+        <div class="summary-item color-yellow">
           <span class="summary-label">Hari Libur Sekolah (Diinput Guru):</span>
           <span class="summary-value" id="summarySchoolHoliday"></span> hari
         </div>
-        <div class="summary-item">
+        <div class="summary-item color-yellow">
           <span class="summary-label">Alasan Lain (Valid):</span>
           <span class="summary-value" id="summaryOtherValidReason"></span> hari
         </div>
-        <div class="summary-item">
+        <div class="summary-item color-red">
           <span class="summary-label">Alpa (Kosong di Hari Kerja):</span>
           <span class="summary-value" id="summaryAbsent"></span> hari
         </div>
-        <div class="summary-item">
+        <div class="summary-item color-gray">
           <span class="summary-label">Ceklok Tidak Lengkap (Salah Satu Jam):</span>
           <span class="summary-value" id="summaryIncomplete"></span> hari
         </div>
         <div class="summary-item summary-highlight">
-          <span class="summary-label"><strong>Persentase Kehadiran (Hadir/Efektif):</strong></span>
+          <span class="summary-label"><strong>Persentase Pengisian Ceklok:</strong></span>
           <span class="summary-value"><strong><span id="summaryAttendancePercentage"></span>%</strong></span>
         </div>
       </div>
@@ -58,8 +58,6 @@
               align-items: center;    /* Menyejajarkan item secara vertikal di tengah */
               margin-bottom: 20px; 
               gap: 8px; /* Jarak antar elemen (bulan, strip, tahun, tombol) */
-              /* 'flex-wrap: wrap;' dari style inline sebelumnya dihapus agar mencoba tetap sebaris.
-                 Responsivitas akan ditangani oleh media query global untuk .form-row jika ada. */
               ">
       
       <select id="ceklokBulanSelect" title="Pilih Bulan" 
@@ -103,6 +101,7 @@
                      font-size: 0.95em;">Muat Data</button>
   </div>
   <p style="text-align:center;"><strong>Data untuk Bulan:</strong> <span id="ceklokBulanTahunDisplay">Bulan/Tahun</span></p>
+  <div id="ceklokLockMessage" style="display:none; color:var(--danger); text-align:center; margin-bottom:10px; font-weight:bold; padding:8px; background-color:#ffebee; border:1px solid var(--danger); border-radius:4px;"></div>
   
   <div class="table-container">
     <table>
@@ -120,7 +119,7 @@
   </div>
   
   <div class="btn-container">
-    <button onclick="submitCeklokData()">Simpan Data Ceklok</button>
+    <button id="btnSimpanCeklok" onclick="submitCeklokData()">Simpan Data Ceklok</button>
     <span id="ceklokTombolKembaliContainer" style="display:inline-block;">
       <button onclick="goBackToAdminDashboard()">Kembali ke Dashboard</button> 
     </span>
@@ -147,26 +146,6 @@
       <small id="lockIdStatusMessage" style="display: block; margin-top: 8px; font-style: italic;"></small>
     </div>
   </div>
-
-  <!--
-  </div> <div id="currentUserEmailDisplay"
-      style="position: fixed; 
-              bottom: 65px; /* Sesuaikan agar tidak tertutup footer, jika footer 70px, mungkin 75px atau 80px */
-              right: 15px; 
-              background-color: var(--accent); 
-              padding: 8px 12px; 
-              border-radius: 6px; 
-              box-shadow: 0 2px 8px rgba(0,0,0,0.15); 
-              font-size: 0.85em; 
-              color: var(--text); 
-              cursor: pointer; 
-              z-index: 1001; /* Di atas footer jika footer punya z-index 1000 */
-              display: none; /* Awalnya disembunyikan, ditampilkan via JS jika email ada */
-              border: 1px solid var(--border-color);"
-      title="Klik untuk ubah email utama Anda">
-    Email: <span id="userPrimaryEmailText" style="font-weight: bold;"></span>
-  </div>
-  -->
 </div>
 
 <style>
