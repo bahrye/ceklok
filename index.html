@@ -418,10 +418,13 @@
         align-items: center;
         width: 100%;
     }
+
     .password-wrapper input[type="password"],
-    .password-wrapper input[type="text"] {
-        padding-right: 45px !important;
-        margin-bottom:0 !important;
+    .password-wrapper input[type="text"] { /* Ini penting agar input bertipe teks (saat password terlihat) juga mendapat style yang sama */
+        padding-right: 45px !important; /* !important mungkin diperlukan jika ada style lain yang menimpa */
+        margin-bottom:0 !important; /* Jika input memiliki margin-bottom default */
+        width: 100%; /* Pastikan input mengambil lebar penuh di dalam wrapper */
+        box-sizing: border-box; /* Agar padding tidak menambah lebar total */
     }
     .toggle-password-icon {
         position: absolute;
@@ -432,7 +435,7 @@
         user-select: none;
         color: var(--grey-text);
         transition: color 0.2s;
-        display: inline-flex;
+        display: inline-flex; /* Atau flex agar SVG terpusat jika perlu */
         align-items: center;
     }
     .toggle-password-icon:hover { color: var(--primary); }
@@ -763,6 +766,75 @@
         font-size: 1em;
       }
     }
+
+    /* Tambahkan ini di dalam tag <style> di index.html */
+
+    /* Custom Summary Item Colors */
+    .summary-item.color-green {
+      background-color: #e6ffed; /* Light green */
+      border-left: 4px solid #28a745; /* Green (menggunakan var(--success) jika ada) */
+    }
+    .summary-item.color-green .summary-value {
+      color: #155724; /* Darker green text for value */
+    }
+    .summary-item.color-green .summary-label { /* Opsional: jika ingin label juga berwarna */
+      color: #155724;
+    }
+
+    .summary-item.color-orange {
+      background-color: #fff8e1; /* Light orange */
+      border-left: 4px solid #ffc107; /* Orange (menggunakan var(--warning) jika ada) */
+    }
+    .summary-item.color-orange .summary-value {
+      color: #856404; /* Darker orange text for value */
+    }
+    .summary-item.color-orange .summary-label { /* Opsional */
+      color: #856404;
+    }
+
+    .summary-item.color-yellow {
+      background-color: #fffde7; /* Light yellow */
+      border-left: 4px solid #fdd835; /* Yellow */
+    }
+    .summary-item.color-yellow .summary-value {
+      color: #827717; /* Darker yellow text for value */
+    }
+    .summary-item.color-yellow .summary-label { /* Opsional */
+      color: #827717;
+    }
+
+    .summary-item.color-red {
+      background-color: #ffebee; /* Light red */
+      border-left: 4px solid #e74c3c; /* Red (menggunakan var(--danger) jika ada) */
+    }
+    .summary-item.color-red .summary-value {
+      color: #721c24; /* Darker red text for value */
+    }
+    .summary-item.color-red .summary-label { /* Opsional */
+      color: #721c24;
+    }
+
+    .summary-item.color-gray {
+      background-color: #f5f5f5; /* Light gray */
+      border-left: 4px solid #757575; /* Darker gray */
+    }
+    .summary-item.color-gray .summary-value {
+      color: #424242; /* Darker gray text for value */
+    }
+    .summary-item.color-gray .summary-label { /* Opsional */
+      color: #424242;
+    }
+
+    button.btn-disabled { /* Atau bisa juga button:disabled jika ingin lebih general */
+      background-color: #ccc !important;
+      color: #666 !important;
+      cursor: not-allowed !important;
+      border: 1px solid #bbb !important;
+    }
+    button.btn-disabled:hover {
+      background-color: #ccc !important;
+      color: #666 !important;
+    }
   </style>
 </head>
 <body>
@@ -799,15 +871,30 @@
       <h3>Ubah Password</h3>
       <div class="form-group">
         <label for="currentPassword">Password Lama:</label>
-        <input type="password" id="currentPassword" style="width: calc(100% - 24px);">
+        <div class="password-wrapper">
+          <input type="password" id="currentPassword">
+          <span id="toggleCurrentPassword" class="toggle-password-icon" title="Lihat password">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </span>
+        </div>
       </div>
       <div class="form-group">
         <label for="newPassword">Password Baru:</label>
-        <input type="password" id="newPassword" style="width: calc(100% - 24px);">
+        <div class="password-wrapper">
+          <input type="password" id="newPassword">
+          <span id="toggleNewPasswordModal" class="toggle-password-icon" title="Lihat password">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </span>
+        </div>
       </div>
       <div class="form-group">
         <label for="confirmNewPassword">Konfirmasi Password Baru:</label>
-        <input type="password" id="confirmNewPassword" style="width: calc(100% - 24px);">
+        <div class="password-wrapper">
+          <input type="password" id="confirmNewPassword">
+          <span id="toggleConfirmNewPasswordModal" class="toggle-password-icon" title="Lihat password">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </span>
+        </div>
       </div>
       <div id="changePasswordError" class="error-message" style="display:none; margin-bottom:15px;"></div>
       <div class="btn-container">
@@ -888,7 +975,7 @@
   </div>
 
   <footer>
-    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v1.2</p>
+    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v1.5</p>
   </footer>
 
   <script>
@@ -1073,6 +1160,7 @@
                     console.log("Menjalankan setupFunction untuk", viewName);
                     setupFunction(dataForSetupFunction);
                 }
+                initializeAllPasswordToggles(); // <--- PANGGIL DI SINI
                 // console.log("Memperbarui visibilitas tombol Google untuk view:", viewName); // Fungsi ini sudah tidak ada
                 // updateGoogleLinkButtonVisibility(); // Fungsi ini sudah tidak ada
                 if (postRenderCallback) {
@@ -1501,13 +1589,15 @@
 
         const bulanAdminInputEl = document.getElementById('bulanAdminInput');
         if (bulanAdminInputEl) {
-            bulanAdminInputEl.value = data.adminDefinedMinMonthYearDisplay || '';
+            // Cek apakah data.adminDefinedMinMonthYearDisplay ada sebelum digunakan
+            bulanAdminInputEl.value = data && data.adminDefinedMinMonthYearDisplay ? data.adminDefinedMinMonthYearDisplay : '';
             const labelBulanAdmin = document.querySelector('label[for="bulanAdminInput"]');
             if (labelBulanAdmin) labelBulanAdmin.textContent = "Batas Bawah Periode Ceklok (A1):";
         }
-
+        
         const nextBtn = document.getElementById('btnNextCeklokGuru');
-        if(nextBtn) nextBtn.disabled = !(data.guruList && data.guruList.length > 0);
+        if(nextBtn && data && data.guruList) nextBtn.disabled = !(data.guruList && data.guruList.length > 0);
+
 
         window.scrollTo(0, 0);
         const loginHistoryTableBody = document.getElementById('loginHistoryTableBody');
@@ -1549,7 +1639,11 @@
                 }
                 showAlert(`Gagal memuat histori login: ${err.message}`, 'error');
             })
-            .getLoginHistory(); 
+            .getLoginHistory();
+
+        // === PENAMBAHAN PANGGILAN FUNGSI DI SINI ===
+        loadLockedMonthsForAdminDisplay(); // Memuat daftar bulan terkunci saat dashboard admin ditampilkan
+        // === AKHIR PENAMBAHAN ===
     }
 
     function handleAdminPilihGuru() {
@@ -1613,27 +1707,54 @@
 
     // Pastikan fungsi ini ada di dalam blok <script> di index.html Anda
 
+    // GANTI FUNGSI setupCeklokTableView YANG LAMA DENGAN YANG INI
+    // DI DALAM TAG <script> PADA FILE index.html
+
     function setupCeklokTableView(data) {
-        const { rows, options: ketLiburOptions, isUserRole, currentMonthYearForDisplay } = data;
-        const tableBody = document.getElementById('ceklokTableBody'); //
-        const guruNameEl = document.getElementById('ceklokGuruName'); //
-        const bulanTahunDisplayEl = document.getElementById('ceklokBulanTahunDisplay'); //
-        const ceklokBulanSelectEl = document.getElementById('ceklokBulanSelect'); //
-        const ceklokTahunSelectEl = document.getElementById('ceklokTahunSelect'); //
-        const btnKembaliContainer = document.getElementById('ceklokTombolKembaliContainer'); //
-
-        // --- BAGIAN BARU UNTUK MEMANGGIL DASBOR RINGKASAN ---
+        console.log("Data diterima oleh setupCeklokTableView:", data); // <-- Tambahkan ini
+        const { rows, options: ketLiburOptions, isUserRole, currentMonthYearForDisplay, isLocked } = data; // Ambil isLocked dari data
+        console.log("Status isLocked di frontend:", isLocked); // <-- Tambahkan ini
+        const tableBody = document.getElementById('ceklokTableBody');
+        const guruNameEl = document.getElementById('ceklokGuruName');
+        const bulanTahunDisplayEl = document.getElementById('ceklokBulanTahunDisplay');
+        const ceklokBulanSelectEl = document.getElementById('ceklokBulanSelect');
+        const ceklokTahunSelectEl = document.getElementById('ceklokTahunSelect');
+        const btnKembaliContainer = document.getElementById('ceklokTombolKembaliContainer');
         const summaryDashboardElement = document.getElementById('teacherDashboardSummary');
-        if (isUserRole && summaryDashboardElement) {
-            summaryDashboardElement.style.display = 'block'; // Pastikan terlihat untuk user
 
-            // Menggunakan variabel global yang sudah ada
+        // --- AWAL PENAMBAHAN LOGIKA PENGUNCIAN ---
+        const isMonthLocked = isLocked; // Status kunci dari data yang diterima
+        const btnSimpanCeklok = document.getElementById('btnSimpanCeklok'); // Pastikan tombol simpan memiliki ID ini
+        const ceklokLockMessageDiv = document.getElementById('ceklokLockMessage'); // Div untuk pesan kunci
+
+        if (btnSimpanCeklok) {
+            if (isMonthLocked) {
+                btnSimpanCeklok.disabled = true;
+                btnSimpanCeklok.classList.add('btn-disabled'); // Tambahkan kelas untuk styling disabled
+                // Anda bisa juga menambahkan style langsung: btnSimpanCeklok.style.backgroundColor = '#ccc';
+            } else {
+                btnSimpanCeklok.disabled = false;
+                btnSimpanCeklok.classList.remove('btn-disabled');
+                // btnSimpanCeklok.style.backgroundColor = ''; // Kembalikan ke style default
+            }
+        }
+
+        if (ceklokLockMessageDiv) {
+            if (isMonthLocked) {
+                ceklokLockMessageDiv.textContent = "PERHATIAN: Bulan ini telah dikunci oleh Admin dan data ceklok tidak dapat diubah.";
+                ceklokLockMessageDiv.style.display = 'block';
+            } else {
+                ceklokLockMessageDiv.style.display = 'none';
+            }
+        }
+        // --- AKHIR PENAMBAHAN LOGIKA PENGUNCIAN TOMBOL SIMPAN & PESAN ---
+
+        if (isUserRole && summaryDashboardElement) {
+            summaryDashboardElement.style.display = 'block';
             const monthForSummary = currentMonthYearForDisplay || activeCeklokMonthYear || globalServerCurrentMonthYear;
-            
-            if (namaGuru && monthForSummary) { // Menggunakan variabel global 'namaGuru'
+            if (namaGuru && monthForSummary) {
                 loadAndDisplayTeacherSummary(namaGuru, monthForSummary);
             } else {
-                // Jika namaGuru atau monthForSummary belum siap, tampilkan pesan error di dasbor
                 const summaryErrorEl = document.getElementById('summaryContentError');
                 const summaryLoadingEl = document.getElementById('summaryContentLoading');
                 const summaryDataEl = document.getElementById('summaryContentData');
@@ -1645,34 +1766,31 @@
                 }
             }
         } else if (summaryDashboardElement) {
-            // Jika bukan user role (misal admin melihat ceklok guru), sembunyikan section dasbor guru
             summaryDashboardElement.style.display = 'none';
         }
-        // --- AKHIR BAGIAN BARU ---
 
-        if (guruNameEl) guruNameEl.textContent = namaGuru; // Menggunakan variabel global 'namaGuru'
-        if (bulanTahunDisplayEl) bulanTahunDisplayEl.textContent = currentMonthYearForDisplay || activeCeklokMonthYear || "Bulan belum dipilih"; // Menggunakan variabel global
+        if (guruNameEl) guruNameEl.textContent = namaGuru;
+        if (bulanTahunDisplayEl) bulanTahunDisplayEl.textContent = currentMonthYearForDisplay || activeCeklokMonthYear || "Bulan belum dipilih";
 
         if (ceklokBulanSelectEl && ceklokTahunSelectEl) {
-            const targetMonthYear = currentMonthYearForDisplay || activeCeklokMonthYear || globalServerCurrentMonthYear; // Menggunakan variabel global
-            let defaultYear = getYearFromMMYYYY(targetMonthYear); //
-            let defaultMonth = getMonthStrFromMMYYYY(targetMonthYear); //
+            const targetMonthYear = currentMonthYearForDisplay || activeCeklokMonthYear || globalServerCurrentMonthYear;
+            let defaultYear = getYearFromMMYYYY(targetMonthYear);
+            let defaultMonth = getMonthStrFromMMYYYY(targetMonthYear);
 
-            let minAllowedYear = getYearFromMMYYYY(globalAdminMinMonthYear); // Menggunakan variabel global
-            let maxAllowedYear = getYearFromMMYYYY(globalServerCurrentMonthYear); // Menggunakan variabel global
+            let minAllowedYear = getYearFromMMYYYY(globalAdminMinMonthYear);
+            let maxAllowedYear = getYearFromMMYYYY(globalServerCurrentMonthYear);
 
-            // Fallback jika parsing gagal atau variabel global belum terisi
             if (isNaN(minAllowedYear)) minAllowedYear = new Date().getFullYear() - 5;
             if (isNaN(maxAllowedYear)) maxAllowedYear = new Date().getFullYear();
             if (isNaN(defaultYear)) defaultYear = maxAllowedYear;
             if (!defaultMonth || defaultMonth.length !== 2) defaultMonth = String(new Date().getMonth() + 1).padStart(2, '0');
 
-            populateYearSelect('ceklokTahunSelect', minAllowedYear, maxAllowedYear, defaultYear); //
+            populateYearSelect('ceklokTahunSelect', minAllowedYear, maxAllowedYear, defaultYear);
             ceklokBulanSelectEl.value = defaultMonth;
 
-            ceklokTahunSelectEl.onchange = () => validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect'); //
-            ceklokBulanSelectEl.onchange = () => validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect'); //
-            validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect'); // Panggil sekali untuk inisialisasi
+            ceklokTahunSelectEl.onchange = () => validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect');
+            ceklokBulanSelectEl.onchange = () => validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect');
+            validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect');
         }
 
         if (tableBody) {
@@ -1688,7 +1806,8 @@
                             <td colspan="3" class="libur-note" data-label="Keterangan"><span class="holiday-description">${row.keterangan || 'Hari Libur'}</span></td>
                         </tr>`;
                     } else {
-                        let ketLiburDropdownHtml = `<select id="ketLiburManual${i}" class="inline-select ket-libur-manual-dropdown" data-rowindex="${i}">`; //
+                        // Tambahkan atribut disabled pada dropdown keterangan jika bulan terkunci
+                        let ketLiburDropdownHtml = `<select id="ketLiburManual${i}" class="inline-select ket-libur-manual-dropdown" data-rowindex="${i}" ${isMonthLocked ? 'disabled' : ''}>`;
                         ketLiburDropdownHtml += '<option value="">-- Alasan Tidak Hadir --</option>';
                         if (ketLiburOptions && ketLiburOptions.length > 0) {
                             ketLiburOptions.forEach(opt => {
@@ -1697,17 +1816,21 @@
                             });
                         }
                         ketLiburDropdownHtml += '</select>';
+                        
                         const isKetLiburManualSelected = row.keteranganLiburManual && row.keteranganLiburManual.trim() !== "";
                         const jamMasukInputValue = isKetLiburManualSelected ? "" : (row.dataMasuk || "");
                         const jamPulangInputValue = isKetLiburManualSelected ? "" : (row.dataPulang || "");
+
+                        // Atribut disabled untuk input jam, mempertimbangkan status kunci bulan dan apakah keterangan libur dipilih
+                        const inputDisabledAttr = isMonthLocked ? 'disabled' : (isKetLiburManualSelected ? 'disabled' : '');
 
                         bodyHtml += `<tr>
                             <td data-label="Hari">${row.hari}</td>
                             <td data-label="Tanggal">${row.tanggal}</td>
                             <td data-label="Data Masuk" style="text-align: center;">${row.dataMasuk || '-'}</td>
                             <td data-label="Data Pulang" style="text-align: center;">${row.dataPulang || '-'}</td>
-                            <td data-label="Input Jam Masuk"><input type="text" class="inline-input" id="jamMasuk${i}" placeholder="HH.MM" value="${jamMasukInputValue}" ${isKetLiburManualSelected ? 'disabled' : ''}></td>
-                            <td data-label="Input Jam Pulang"><input type="text" class="inline-input" id="jamPulang${i}" placeholder="HH.MM" value="${jamPulangInputValue}" ${isKetLiburManualSelected ? 'disabled' : ''}></td>
+                            <td data-label="Input Jam Masuk"><input type="text" class="inline-input" id="jamMasuk${i}" placeholder="HH.MM" value="${jamMasukInputValue}" ${inputDisabledAttr}></td>
+                            <td data-label="Input Jam Pulang"><input type="text" class="inline-input" id="jamPulang${i}" placeholder="HH.MM" value="${jamPulangInputValue}" ${inputDisabledAttr}></td>
                             <td data-label="Keterangan Libur/Alasan">${ketLiburDropdownHtml}</td>
                         </tr>`;
                     }
@@ -1716,8 +1839,12 @@
                 bodyHtml = `<tr><td colspan="7" style="text-align:center;">Tidak ada data untuk periode ini atau periode belum dipilih.</td></tr>`;
             }
             tableBody.innerHTML = bodyHtml;
-            attachTimeInputValidationToCeklok(); //
-            attachKetLiburDropdownListeners(); //
+            
+            // Listener harus tetap dipasang, tetapi logika disable/enable di atas (berdasarkan isMonthLocked)
+            // akan menjadi prioritas utama saat baris HTML dirender.
+            // Listener dropdown keterangan akan menghandle disable/enable input jam HANYA JIKA bulan TIDAK terkunci.
+            attachTimeInputValidationToCeklok();
+            attachKetLiburDropdownListeners(); // Fungsi ini mungkin perlu sedikit modifikasi agar menghormati isMonthLocked
         }
 
         if (btnKembaliContainer) {
@@ -1727,7 +1854,7 @@
                 if (btnBack) btnBack.textContent = "Kembali ke Dashboard Admin";
             }
         }
-        setupLockIdAndExportClientFeatures(); //
+        setupLockIdAndExportClientFeatures();
         window.scrollTo(0, 0);
     }
 
@@ -1793,22 +1920,43 @@
 
     function attachKetLiburDropdownListeners() {
         const dropdowns = document.querySelectorAll('.ket-libur-manual-dropdown');
+        const isCurrentlyLocked = document.getElementById('ceklokLockMessage')?.style.display === 'block'; // Cara sederhana cek status lock dari UI
+
         dropdowns.forEach(dropdown => {
+            // Jika bulan terkunci, pastikan dropdown itu sendiri sudah disabled dari setupCeklokTableView.
+            // Listener ini akan tetap ada, tapi tidak akan banyak berpengaruh jika dropdownnya disabled.
+            // Namun, untuk lebih aman, kita bisa tambahkan cek di sini juga.
+            if (isCurrentlyLocked) {
+                dropdown.disabled = true; // Pastikan lagi
+            }
+
             dropdown.onchange = function() {
-                const rowIndex = this.dataset.rowindex; 
+                // Jika bulan terkunci, jangan lakukan apa-apa terkait enable/disable input jam.
+                if (isCurrentlyLocked) return; 
+
+                const rowIndex = this.dataset.rowindex;
                 const jamMasukInput = document.getElementById(`jamMasuk${rowIndex}`);
                 const jamPulangInput = document.getElementById(`jamPulang${rowIndex}`);
-                const isKeteranganSelected = this.value !== ""; 
+                const isKeteranganSelected = this.value !== "";
 
                 if (jamMasukInput) {
                     jamMasukInput.disabled = isKeteranganSelected;
-                    if (isKeteranganSelected) jamMasukInput.value = ""; 
+                    if (isKeteranganSelected) jamMasukInput.value = "";
                 }
                 if (jamPulangInput) {
                     jamPulangInput.disabled = isKeteranganSelected;
                     if (isKeteranganSelected) jamPulangInput.value = "";
                 }
             };
+            // Pemicu awal jika dropdown sudah memiliki nilai saat load (untuk kasus edit atau data yang sudah ada)
+            // Namun, ini juga harus menghormati status lock
+            if (!isCurrentlyLocked && dropdown.value !== "") {
+                const rowIndex = dropdown.dataset.rowindex;
+                const jamMasukInput = document.getElementById(`jamMasuk${rowIndex}`);
+                const jamPulangInput = document.getElementById(`jamPulang${rowIndex}`);
+                if (jamMasukInput) jamMasukInput.disabled = true;
+                if (jamPulangInput) jamPulangInput.disabled = true;
+            }
         });
     }
 
@@ -2754,6 +2902,7 @@
         if(confirmPassEl) confirmPassEl.value = '';
         const modal = document.getElementById('changePasswordModal');
         if(modal) modal.style.display = 'block';
+        initializeAllPasswordToggles(); // Inisialisasi toggle untuk modal ini
     }
 
     function closeChangePasswordModal() {
@@ -3894,6 +4043,218 @@
             })
             .getTeacherMonthlySummary(teacherName, monthYear);
     }
+
+    // PASTE ATAU GABUNGKAN FUNGSI-FUNGSI INI DENGAN JAVASCRIPT YANG SUDAH ADA
+    // DI DALAM TAG <script> PADA FILE index.html
+
+    function loadLockedMonthsForAdminDisplay() {
+        const displayDiv = document.getElementById('lockedMonthsDisplay');
+        if (!displayDiv) {
+            console.error("Elemen 'lockedMonthsDisplay' tidak ditemukan.");
+            return;
+        }
+        displayDiv.innerHTML = '<i>Memuat daftar bulan terkunci...</i>';
+
+        google.script.run
+            .withSuccessHandler(response => {
+                if (response.success) {
+                    if (response.months && response.months.length > 0) {
+                        let html = '<ul style="list-style-type:none; padding-left:0; margin-top:0;">';
+                        // Urutkan bulan: pertama berdasarkan tahun (desc), lalu bulan (desc)
+                        response.months.sort((a, b) => {
+                            const [mA, yA] = a.split('/');
+                            const [mB, yB] = b.split('/');
+                            const dateA = new Date(parseInt(yA), parseInt(mA) - 1);
+                            const dateB = new Date(parseInt(yB), parseInt(mB) - 1);
+                            return dateB - dateA; // Urutkan dari yang terbaru (descending)
+                        }).forEach(monthYear => {
+                            html += `<li style="margin-bottom:8px; padding:8px 10px; background-color: #fff; border: 1px solid #ddd; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                                      <span style="font-weight:500;">${monthYear}</span>
+                                      <button class="btn-danger" onclick="handleUnlockThisMonth('${monthYear}')" style="padding: 4px 10px; font-size:0.9em; line-height:1.2;">Buka Kunci</button>
+                                    </li>`;
+                        });
+                        html += '</ul>';
+                        displayDiv.innerHTML = html;
+                    } else {
+                        displayDiv.innerHTML = '<p style="margin-top:0;">Tidak ada bulan yang terkunci saat ini.</p>';
+                    }
+                } else {
+                    displayDiv.innerHTML = `<p style="color:red; margin-top:0;">Gagal memuat daftar: ${response.error || 'Error tidak diketahui'}</p>`;
+                    showAlert(response.error || 'Gagal memuat daftar bulan terkunci.', 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                if (displayDiv) displayDiv.innerHTML = `<p style="color:red; margin-top:0;">Error server: ${err.message}</p>`;
+                showAlert(`Error server saat memuat bulan terkunci: ${err.message}`, 'error');
+            })
+            .getLockedMonths();
+    }
+
+    function handleLockThisMonth() {
+        const monthInputEl = document.getElementById('monthToLockAdminInput');
+        if (!monthInputEl) {
+            showAlert("Elemen input bulan tidak ditemukan.", "error");
+            return;
+        }
+        const yyyy_mm = monthInputEl.value; // Format "YYYY-MM" dari input type="month"
+        if (!yyyy_mm) {
+            showAlert("Silakan pilih bulan dan tahun yang akan dikunci.", "warning");
+            return;
+        }
+        const [year, month] = yyyy_mm.split('-');
+        if (!year || !month) {
+            showAlert("Format input bulan tidak sesuai.", "error");
+            return;
+        }
+        const monthYearToLock = `${month}/${year}`; // Konversi ke "MM/YYYY"
+
+        // Validasi tambahan untuk memastikan format MM/YYYY benar
+        if (!/^(0[1-9]|1[0-2])\/(20\d{2}|21\d{2})$/.test(monthYearToLock)) {
+            showAlert("Format bulan/tahun untuk dikunci tidak valid (seharusnya MM/YYYY). Input: " + monthYearToLock, "error");
+            return;
+        }
+
+
+        showLoading("Mengunci bulan " + monthYearToLock + "...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                showAlert(response.message || response.error, response.success ? 'success' : 'error');
+                if (response.success) {
+                    loadLockedMonthsForAdminDisplay(); // Refresh daftar
+                    monthInputEl.value = ''; // Kosongkan input setelah berhasil
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                showAlert(`Gagal mengunci bulan: ${err.message}`, 'error');
+            })
+            .lockMonth(monthYearToLock);
+    }
+
+    function handleUnlockThisMonth(monthYearToUnlock) {
+        if (!monthYearToUnlock) {
+            showAlert("Bulan/Tahun untuk dibuka kuncinya tidak spesifik.", "error");
+            return;
+        }
+        if (!confirm(`Yakin ingin membuka kunci untuk bulan ${monthYearToUnlock}? Guru akan dapat mengubah data ceklok pada bulan tersebut.`)) {
+            return;
+        }
+        showLoading("Membuka kunci bulan " + monthYearToUnlock + "...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                showAlert(response.message || response.error, response.success ? 'success' : 'error');
+                if (response.success) {
+                    loadLockedMonthsForAdminDisplay(); // Refresh daftar
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                showAlert(`Gagal membuka kunci bulan: ${err.message}`, 'error');
+            })
+            .unlockMonth(monthYearToUnlock);
+    }
+
+    // Modifikasi pada fungsi setupAdminDashboardView(data)
+    // Pastikan Anda menemukan fungsi setupAdminDashboardView(data) yang sudah ada
+    // dan tambahkan baris `loadLockedMonthsForAdminDisplay();` di dalamnya.
+
+    // Tambahkan fungsi ini di dalam <script> di index.html
+
+    const svgIconShowPassword = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+    const svgIconHidePassword = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+
+    function togglePasswordVisibility(inputId, toggleButtonId) {
+        const passwordInput = document.getElementById(inputId);
+        const toggleButton = document.getElementById(toggleButtonId);
+
+        if (!passwordInput || !toggleButton) {
+            console.warn("Input password atau tombol toggle tidak ditemukan:", inputId, toggleButtonId);
+            return;
+        }
+
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleButton.innerHTML = svgIconHidePassword;
+            toggleButton.setAttribute('title', 'Sembunyikan password');
+        } else {
+            passwordInput.type = 'password';
+            toggleButton.innerHTML = svgIconShowPassword;
+            toggleButton.setAttribute('title', 'Lihat password');
+        }
+    }
+
+    // Fungsi untuk menginisialisasi semua tombol toggle password yang ada di halaman
+    function initializeAllPasswordToggles() {
+        // Untuk form login utama (jika belum dihandle spesifik)
+        const mainPasswordToggle = document.getElementById('togglePassword');
+        if (mainPasswordToggle && document.getElementById('password')) {
+            mainPasswordToggle.onclick = () => togglePasswordVisibility('password', 'togglePassword');
+        }
+
+        // Untuk form Reset Password
+        const newPasswordResetToggle = document.getElementById('toggleNewPasswordReset');
+        if (newPasswordResetToggle && document.getElementById('newPasswordResetInput')) {
+            newPasswordResetToggle.onclick = () => togglePasswordVisibility('newPasswordResetInput', 'toggleNewPasswordReset');
+        }
+        const confirmNewPasswordResetToggle = document.getElementById('toggleConfirmNewPasswordReset');
+        if (confirmNewPasswordResetToggle && document.getElementById('confirmNewPasswordResetInput')) {
+            confirmNewPasswordResetToggle.onclick = () => togglePasswordVisibility('confirmNewPasswordResetInput', 'toggleConfirmNewPasswordReset');
+        }
+        
+        // Untuk Modal Ubah Password
+        const currentPasswordToggle = document.getElementById('toggleCurrentPassword');
+        if (currentPasswordToggle && document.getElementById('currentPassword')) {
+            currentPasswordToggle.onclick = () => togglePasswordVisibility('currentPassword', 'toggleCurrentPassword');
+        }
+        const newPasswordModalToggle = document.getElementById('toggleNewPasswordModal');
+        if (newPasswordModalToggle && document.getElementById('newPassword')) {
+            newPasswordModalToggle.onclick = () => togglePasswordVisibility('newPassword', 'toggleNewPasswordModal');
+        }
+        const confirmNewPasswordModalToggle = document.getElementById('toggleConfirmNewPasswordModal');
+        if (confirmNewPasswordModalToggle && document.getElementById('confirmNewPassword')) {
+            confirmNewPasswordModalToggle.onclick = () => togglePasswordVisibility('confirmNewPassword', 'toggleConfirmNewPasswordModal');
+        }
+
+        // Untuk User Management
+        const manageUserPasswordToggle = document.getElementById('toggleManageUserPassword');
+        if (manageUserPasswordToggle && document.getElementById('manageUserPasswordInput')) {
+            manageUserPasswordToggle.onclick = () => togglePasswordVisibility('manageUserPasswordInput', 'toggleManageUserPassword');
+        }
+    }
+
+    // Panggil initializeAllPasswordToggles saat halaman dimuat atau view dirender
+    // Anda perlu memanggil ini di dalam fungsi renderView atau setup fungsi untuk view yang relevan.
+    // Misalnya, di setupLoginFormEventListeners, setupUserManagementView, dan saat modal changePassword ditampilkan.
+
+    // Modifikasi pada setupLoginFormEventListeners:
+    // Hapus atau komentari bagian toggle password yang spesifik di sana jika sudah ada,
+    // karena initializeAllPasswordToggles akan menanganinya.
+    // Atau, pastikan panggilannya tidak duplikat.
+    // Cara terbaik adalah memanggil initializeAllPasswordToggles() setelah HTML untuk form/modal tersebut dimuat.
+
+    // Contoh pemanggilan:
+    // Di dalam renderView, setelah HTML dimuat:
+    // loadHtmlContent(htmlFile, targetElementId, (dataForSetupFunction) => {
+    // if (setupFunction) {
+    // setupFunction(dataForSetupFunction);
+    // }
+    // initializeAllPasswordToggles(); // <--- Panggil di sini
+    // if (postRenderCallback) {
+    // postRenderCallback();
+    // }
+    // }, data);
+
+    // Saat menampilkan modal (misalnya di openChangePasswordModal):
+    // function openChangePasswordModal() {
+    //   // ... kode untuk menampilkan modal ...
+    //   initializeAllPasswordToggles(); // Pastikan toggle di dalam modal diinisialisasi
+    // }
+
+    // Pastikan setupLoginFormEventListeners memanggil initializeAllPasswordToggles()
+    // Atau, jika Anda memanggil initializeAllPasswordToggles() secara global setelah setiap renderView,
+    // maka Anda tidak perlu memanggilnya secara spesifik di setiap setup fungsi.
   </script>
 </body>
 </html>
