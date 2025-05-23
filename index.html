@@ -652,6 +652,117 @@
     /* Di dalam <style> di index.html */
     button.btn-info { background-color: #17a2b8; } /* Contoh warna biru info */
     button.btn-info:hover { background-color: #138496; }
+
+    /* Tambahkan ini di dalam tag <style> di index.html */
+
+    /* Styling untuk Dasbor Ringkasan Guru */
+    .dashboard-summary-section {
+      margin-bottom: 25px;
+      padding: 20px; /* Padding lebih lapang */
+      background-color: #f9f9f9;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.08); /* Bayangan lebih halus */
+      border: 1px solid #e0e0e0;
+    }
+
+    .summary-title {
+      text-align: center;
+      color: var(--primary); /* Menggunakan variabel warna primer Anda */
+      margin-top: 0;
+      margin-bottom: 18px;
+      font-size: 1.5em; /* Ukuran font judul */
+    }
+
+    .summary-loading,
+    .summary-error {
+      text-align: center;
+      padding: 15px;
+      font-style: italic;
+      color: var(--grey-text); /* Menggunakan variabel warna abu-abu Anda */
+    }
+    .summary-error {
+        color: var(--danger); /* Menggunakan variabel warna bahaya Anda */
+        font-style: normal;
+        font-weight: bold;
+    }
+
+
+    .summary-period {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 1.1em;
+      color: var(--secondary); /* Menggunakan variabel warna sekunder Anda */
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Kolom otomatis responsif */
+      gap: 15px; /* Jarak antar item */
+    }
+
+    .summary-item {
+      background-color: var(--white);
+      padding: 12px 15px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      display: grid; /* Ubah menjadi grid */
+      grid-template-columns: auto 1fr; /* Kolom pertama (label) auto, kolom kedua (value) mengisi sisa */
+      align-items: center;
+      gap: 10px; /* Jarak antara label dan value jika diperlukan */
+      font-size: 0.95em;
+      transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+
+    .summary-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 3px 6px rgba(0,0,0,0.07);
+    }
+
+    .summary-label {
+      color: var(--text);
+      /* Tidak perlu margin-right karena gap di grid container */
+      /* text-align: left; /* Default, bisa dihapus */
+    }
+
+    .summary-value {
+      font-weight: bold;
+      color: var(--primary);
+      text-align: right; /* Penting untuk meratakan angka ke kanan */
+      white-space: nowrap; /* Jaga angka dan unit tetap sebaris */
+    }
+
+    .summary-item.summary-highlight {
+      background-color: var(--accent); /* Warna aksen untuk item yang penting */
+      border-left: 4px solid var(--primary); /* Tambahkan aksen di kiri */
+    }
+
+    .summary-item.summary-highlight .summary-label,
+    .summary-item.summary-highlight .summary-value {
+      font-size: 1.05em; /* Sedikit lebih besar untuk item highlight */
+      color: var(--secondary);
+    }
+
+    /* Penyesuaian untuk layar yang lebih kecil (Mobile) */
+    @media (max-width: 600px) {
+      .dashboard-summary-section {
+        padding: 15px;
+      }
+      .summary-title {
+        font-size: 1.3em;
+      }
+      .summary-grid {
+        grid-template-columns: 1fr; /* Satu kolom penuh di mobile */
+        gap: 10px;
+      }
+      .summary-item {
+        padding: 10px 12px;
+        font-size: 0.9em;
+      }
+      .summary-item.summary-highlight .summary-label,
+      .summary-item.summary-highlight .summary-value {
+        font-size: 1em;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1500,51 +1611,68 @@
         }
     }
 
+    // Pastikan fungsi ini ada di dalam blok <script> di index.html Anda
+
     function setupCeklokTableView(data) {
         const { rows, options: ketLiburOptions, isUserRole, currentMonthYearForDisplay } = data;
-        const tableBody = document.getElementById('ceklokTableBody');
-        const guruNameEl = document.getElementById('ceklokGuruName');
-        const bulanTahunDisplayEl = document.getElementById('ceklokBulanTahunDisplay');
-        const ceklokBulanSelectEl = document.getElementById('ceklokBulanSelect'); 
-        const ceklokTahunSelectEl = document.getElementById('ceklokTahunSelect'); 
-        const btnKembaliContainer = document.getElementById('ceklokTombolKembaliContainer');
+        const tableBody = document.getElementById('ceklokTableBody'); //
+        const guruNameEl = document.getElementById('ceklokGuruName'); //
+        const bulanTahunDisplayEl = document.getElementById('ceklokBulanTahunDisplay'); //
+        const ceklokBulanSelectEl = document.getElementById('ceklokBulanSelect'); //
+        const ceklokTahunSelectEl = document.getElementById('ceklokTahunSelect'); //
+        const btnKembaliContainer = document.getElementById('ceklokTombolKembaliContainer'); //
 
-        const emailDisplayDiv = document.getElementById('currentUserEmailDisplay');
-        const emailTextSpan = document.getElementById('userPrimaryEmailText');
+        // --- BAGIAN BARU UNTUK MEMANGGIL DASBOR RINGKASAN ---
+        const summaryDashboardElement = document.getElementById('teacherDashboardSummary');
+        if (isUserRole && summaryDashboardElement) {
+            summaryDashboardElement.style.display = 'block'; // Pastikan terlihat untuk user
 
-        if (emailDisplayDiv && emailTextSpan && loggedInUser && loggedInUser.primaryEmail) {
-            emailTextSpan.textContent = loggedInUser.primaryEmail;
-            emailDisplayDiv.style.display = 'block';
-            emailDisplayDiv.onclick = function() {
-                openChangePrimaryEmailModal();
-            };
-        } else if (emailDisplayDiv) {
-            emailDisplayDiv.style.display = 'none'; 
+            // Menggunakan variabel global yang sudah ada
+            const monthForSummary = currentMonthYearForDisplay || activeCeklokMonthYear || globalServerCurrentMonthYear;
+            
+            if (namaGuru && monthForSummary) { // Menggunakan variabel global 'namaGuru'
+                loadAndDisplayTeacherSummary(namaGuru, monthForSummary);
+            } else {
+                // Jika namaGuru atau monthForSummary belum siap, tampilkan pesan error di dasbor
+                const summaryErrorEl = document.getElementById('summaryContentError');
+                const summaryLoadingEl = document.getElementById('summaryContentLoading');
+                const summaryDataEl = document.getElementById('summaryContentData');
+                if(summaryErrorEl && summaryLoadingEl && summaryDataEl){
+                    summaryLoadingEl.style.display = 'none';
+                    summaryDataEl.style.display = 'none';
+                    summaryErrorEl.textContent = "Informasi guru atau periode untuk ringkasan tidak tersedia.";
+                    summaryErrorEl.style.display = 'block';
+                }
+            }
+        } else if (summaryDashboardElement) {
+            // Jika bukan user role (misal admin melihat ceklok guru), sembunyikan section dasbor guru
+            summaryDashboardElement.style.display = 'none';
         }
+        // --- AKHIR BAGIAN BARU ---
 
-        if (guruNameEl) guruNameEl.textContent = namaGuru;
-        if (bulanTahunDisplayEl) bulanTahunDisplayEl.textContent = currentMonthYearForDisplay || activeCeklokMonthYear || "Bulan belum dipilih";
+        if (guruNameEl) guruNameEl.textContent = namaGuru; // Menggunakan variabel global 'namaGuru'
+        if (bulanTahunDisplayEl) bulanTahunDisplayEl.textContent = currentMonthYearForDisplay || activeCeklokMonthYear || "Bulan belum dipilih"; // Menggunakan variabel global
 
         if (ceklokBulanSelectEl && ceklokTahunSelectEl) {
-            const targetMonthYear = currentMonthYearForDisplay || activeCeklokMonthYear || globalServerCurrentMonthYear;
-            let defaultYear = getYearFromMMYYYY(targetMonthYear);
-            let defaultMonth = getMonthStrFromMMYYYY(targetMonthYear);
+            const targetMonthYear = currentMonthYearForDisplay || activeCeklokMonthYear || globalServerCurrentMonthYear; // Menggunakan variabel global
+            let defaultYear = getYearFromMMYYYY(targetMonthYear); //
+            let defaultMonth = getMonthStrFromMMYYYY(targetMonthYear); //
 
-            let minAllowedYear = getYearFromMMYYYY(globalAdminMinMonthYear);
-            let maxAllowedYear = getYearFromMMYYYY(globalServerCurrentMonthYear);
+            let minAllowedYear = getYearFromMMYYYY(globalAdminMinMonthYear); // Menggunakan variabel global
+            let maxAllowedYear = getYearFromMMYYYY(globalServerCurrentMonthYear); // Menggunakan variabel global
 
-            if (isNaN(minAllowedYear)) minAllowedYear = new Date().getFullYear() - 5; 
-            if (isNaN(maxAllowedYear)) maxAllowedYear = new Date().getFullYear();    
+            // Fallback jika parsing gagal atau variabel global belum terisi
+            if (isNaN(minAllowedYear)) minAllowedYear = new Date().getFullYear() - 5;
+            if (isNaN(maxAllowedYear)) maxAllowedYear = new Date().getFullYear();
             if (isNaN(defaultYear)) defaultYear = maxAllowedYear;
             if (!defaultMonth || defaultMonth.length !== 2) defaultMonth = String(new Date().getMonth() + 1).padStart(2, '0');
 
-
-            populateYearSelect('ceklokTahunSelect', minAllowedYear, maxAllowedYear, defaultYear);
+            populateYearSelect('ceklokTahunSelect', minAllowedYear, maxAllowedYear, defaultYear); //
             ceklokBulanSelectEl.value = defaultMonth;
 
-            ceklokTahunSelectEl.onchange = () => validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect');
-            ceklokBulanSelectEl.onchange = () => validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect'); 
-            validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect'); 
+            ceklokTahunSelectEl.onchange = () => validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect'); //
+            ceklokBulanSelectEl.onchange = () => validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect'); //
+            validateMonthRange('ceklokBulanSelect', 'ceklokTahunSelect'); // Panggil sekali untuk inisialisasi
         }
 
         if (tableBody) {
@@ -1560,7 +1688,7 @@
                             <td colspan="3" class="libur-note" data-label="Keterangan"><span class="holiday-description">${row.keterangan || 'Hari Libur'}</span></td>
                         </tr>`;
                     } else {
-                        let ketLiburDropdownHtml = `<select id="ketLiburManual${i}" class="inline-select ket-libur-manual-dropdown" data-rowindex="${i}">`;
+                        let ketLiburDropdownHtml = `<select id="ketLiburManual${i}" class="inline-select ket-libur-manual-dropdown" data-rowindex="${i}">`; //
                         ketLiburDropdownHtml += '<option value="">-- Alasan Tidak Hadir --</option>';
                         if (ketLiburOptions && ketLiburOptions.length > 0) {
                             ketLiburOptions.forEach(opt => {
@@ -1585,11 +1713,11 @@
                     }
                 });
             } else {
-                 bodyHtml = `<tr><td colspan="7" style="text-align:center;">Tidak ada data untuk periode ini atau periode belum dipilih.</td></tr>`;
+                bodyHtml = `<tr><td colspan="7" style="text-align:center;">Tidak ada data untuk periode ini atau periode belum dipilih.</td></tr>`;
             }
             tableBody.innerHTML = bodyHtml;
-            attachTimeInputValidationToCeklok();
-            attachKetLiburDropdownListeners();
+            attachTimeInputValidationToCeklok(); //
+            attachKetLiburDropdownListeners(); //
         }
 
         if (btnKembaliContainer) {
@@ -1599,7 +1727,7 @@
                 if (btnBack) btnBack.textContent = "Kembali ke Dashboard Admin";
             }
         }
-        setupLockIdAndExportClientFeatures();
+        setupLockIdAndExportClientFeatures(); //
         window.scrollTo(0, 0);
     }
 
@@ -3719,6 +3847,52 @@
                 logout();
             }
         }
+    }
+
+    // Di dalam file index.html, dalam blok <script>
+
+    function loadAndDisplayTeacherSummary(teacherName, monthYear) {
+        const summaryContainer = document.getElementById('teacherDashboardSummary');
+        const summaryLoadingEl = document.getElementById('summaryContentLoading');
+        const summaryDataEl = document.getElementById('summaryContentData');
+        const summaryErrorEl = document.getElementById('summaryContentError');
+
+        if (!summaryContainer || !summaryLoadingEl || !summaryDataEl || !summaryErrorEl) {
+            return;
+        }
+
+        summaryLoadingEl.style.display = 'block';
+        summaryDataEl.style.display = 'none';
+        summaryErrorEl.style.display = 'none';
+        summaryErrorEl.textContent = '';
+
+        google.script.run
+            .withSuccessHandler(response => {
+                summaryLoadingEl.style.display = 'none';
+                if (response.success && response.summary) {
+                    const summary = response.summary;
+                    document.getElementById('summaryMonthYear').textContent = summary.monthYear;
+                    document.getElementById('summaryTotalWorkingDays').textContent = summary.totalWorkingDaysInMonth;
+                    document.getElementById('summaryDaysPassed').textContent = summary.effectiveWorkingDaysPassed;
+                    document.getElementById('summaryCompletedChecklok').textContent = summary.completedChecklok; // <-- TAMBAHKAN INI
+                    document.getElementById('summaryPresent').textContent = summary.present;
+                    document.getElementById('summarySchoolHoliday').textContent = summary.schoolHoliday;
+                    document.getElementById('summaryOtherValidReason').textContent = summary.otherValidReason;
+                    document.getElementById('summaryAbsent').textContent = summary.absent;
+                    document.getElementById('summaryIncomplete').textContent = summary.incomplete;
+                    document.getElementById('summaryAttendancePercentage').textContent = summary.attendancePercentage;
+                    summaryDataEl.style.display = 'block';
+                } else {
+                    summaryErrorEl.textContent = response.error || "Gagal memuat ringkasan kehadiran.";
+                    summaryErrorEl.style.display = 'block';
+                }
+            })
+            .withFailureHandler(err => {
+                summaryLoadingEl.style.display = 'none';
+                summaryErrorEl.textContent = `Error server saat memuat ringkasan: ${err.message}`;
+                summaryErrorEl.style.display = 'block';
+            })
+            .getTeacherMonthlySummary(teacherName, monthYear);
     }
   </script>
 </body>
