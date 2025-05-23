@@ -24,6 +24,8 @@ const PASSWORD_RESET_OTP_EXPIRY_MINUTES_GS = 10; // Jika Anda juga menggunakan i
 const REMINDER_LOG_SHEET_NAME = "Reminder_Log"; // Untuk melacak notifikasi yang sudah dikirim
 const EMAIL_SENDER_NAME = "Admin Ceklok MTS Tanuntung"; // Nama pengirim email
 
+const LOCKED_MONTHS_SHEET_NAME = "Locked_Months";
+
 function doGet(e) {
   return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('Ceklok Guru MTS TANUNTUNG')
@@ -232,17 +234,15 @@ function getInitialData() { // Untuk Admin Dashboard
   }
 }
 
-// Fungsi getBulanTahunSetting() yang lama tidak lagi dipanggil langsung dari user view.
-// Sebagai gantinya, getCeklokInputSettings() digunakan.
+// GANTI FUNGSI getCeklokData YANG LAMA DENGAN YANG INI
+// DI DALAM FILE code.gs.html
 
 function getCeklokData(nama, bulanTahun) {
   try {
     // Validasi input bulanTahun terhadap batasan (opsional tapi direkomendasikan di backend)
     const settings = getCeklokInputSettings(); // Panggil fungsi yang sudah ada
     if (settings.error) {
-      // Jika gagal mendapatkan settings, mungkin log error tapi biarkan proses getCeklokData berlanjut
-      // atau return error jika settings dianggap krusial untuk validasi di sini.
-      Logger.log(`Peringatan di getCeklokData: Tidak dapat memuat settings untuk validasi bulan - ${settings.error}`);
+      Logger.log(`getCeklokData: Peringatan - Tidak dapat memuat settings untuk validasi bulan - ${settings.error}`);
     } else {
       // Parse helper
       const parseMonthYearToDate = (myStr) => {
@@ -253,31 +253,39 @@ function getCeklokData(nama, bulanTahun) {
       };
 
       const requestedDateObj = parseMonthYearToDate(bulanTahun);
-      const minDateObj = parseMonthYearToDate(settings.adminDefinedMinMonthYear);
-      const maxDateObj = parseMonthYearToDate(settings.serverCurrentMonthYear);
+      const minDateObj = parseMonthYearToDate(settings.adminDefinedMinMonthYear); //
+      const maxDateObj = parseMonthYearToDate(settings.serverCurrentMonthYear); //
 
       if (requestedDateObj && minDateObj && requestedDateObj < minDateObj) {
+        Logger.log(`getCeklokData: Periode ${bulanTahun} tidak diizinkan. Batas minimum: ${settings.adminDefinedMinMonthYear}.`);
         return { error: `Periode ${bulanTahun} tidak diizinkan. Batas minimum adalah ${settings.adminDefinedMinMonthYear}.` };
       }
       if (requestedDateObj && maxDateObj && requestedDateObj > maxDateObj) {
+        Logger.log(`getCeklokData: Periode ${bulanTahun} tidak diizinkan. Batas maksimum: ${settings.serverCurrentMonthYear}.`);
         return { error: `Periode ${bulanTahun} tidak diizinkan. Batas maksimum adalah ${settings.serverCurrentMonthYear}.` };
       }
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
-    const liburSheet = ss.getSheetByName(KALENDER_SHEET_NAME);
-    const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME);
+    const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME); //
+    const liburSheet = ss.getSheetByName(KALENDER_SHEET_NAME); //
+    const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME); //
 
-    if (!sheet) return { error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` };
-    if (!liburSheet) return { error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` };
+    if (!sheet) {
+      Logger.log("getCeklokData: Sheet 'Ceklok_Manual' tidak ditemukan.");
+      return { error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` }; //
+    }
+    if (!liburSheet) {
+      Logger.log("getCeklokData: Sheet 'Kalender_Pendidikan' tidak ditemukan.");
+      return { error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` }; //
+    }
 
     let ketLiburOptions = [];
     if (opsiKetLiburSheet && opsiKetLiburSheet.getLastRow() > 1) {
       ketLiburOptions = opsiKetLiburSheet.getRange(2, 1, opsiKetLiburSheet.getLastRow() - 1, 1)
                                 .getValues().flat().filter(String).map(o => String(o).trim());
     } else {
-      Logger.log(`Sheet '${OPSIKETLIBUR_SHEET_NAME}' tidak ada atau kosong.`);
+      Logger.log(`getCeklokData: Sheet '${OPSIKETLIBUR_SHEET_NAME}' tidak ada atau kosong.`); //
     }
 
     const liburRows = liburSheet.getLastRow() > 1 ? liburSheet.getRange(2, 1, liburSheet.getLastRow() - 1, 2).getDisplayValues() : [];
@@ -286,11 +294,17 @@ function getCeklokData(nama, bulanTahun) {
       if (tglText && tglText.trim()) liburMap[tglText.trim()] = ket;
     });
 
-    if (!bulanTahun || !/^\d{2}\/\d{4}$/.test(bulanTahun)) return { error: "Format bulanTahun tidak valid (mm/yyyy)." };
+    if (!bulanTahun || !/^\d{2}\/\d{4}$/.test(bulanTahun)) {
+      Logger.log(`getCeklokData: Format bulanTahun tidak valid: ${bulanTahun}`);
+      return { error: "Format bulanTahun tidak valid (mm/yyyy)." };
+    }
     const [mmStr, yyyyStr] = bulanTahun.split("/");
     const mm = parseInt(mmStr, 10);
     const yyyy = parseInt(yyyyStr, 10);
-    if (isNaN(mm) || isNaN(yyyy) || mm < 1 || mm > 12) return { error: "Bulan/Tahun tidak valid." };
+    if (isNaN(mm) || isNaN(yyyy) || mm < 1 || mm > 12) {
+      Logger.log(`getCeklokData: Nilai Bulan/Tahun tidak valid: ${bulanTahun}`);
+      return { error: "Bulan/Tahun tidak valid." };
+    }
 
     const lastDay = new Date(yyyy, mm, 0).getDate();
     const allData = sheet.getDataRange().getValues();
@@ -308,6 +322,7 @@ function getCeklokData(nama, bulanTahun) {
       if (masukColIdx === -1) missingHeaders.push("Jam_Masuk");
       if (pulangColIdx === -1) missingHeaders.push("Jam_Pulang");
       if (ketLiburManualColIdx === -1) missingHeaders.push("Ket_Libur_Manual");
+      Logger.log(`getCeklokData: Header di 'Ceklok_Manual' tidak lengkap. Hilang: ${missingHeaders.join(', ')}`);
       return { error: `Header di 'Ceklok_Manual' tidak lengkap. Kolom yang hilang: ${missingHeaders.join(', ')}.` };
     }
 
@@ -320,11 +335,11 @@ function getCeklokData(nama, bulanTahun) {
       const hari = namaHariIndonesia[dateObj.getDay()];
 
       const keteranganKalender = liburMap[dateStr] || '';
-      const isLiburKalender = (dateObj.getDay() === 0) || (keteranganKalender !== '');
+      const isLiburKalender = (dateObj.getDay() === 0) || (keteranganKalender !== ''); // Minggu atau libur kalender
 
       const dataRow = allData.find(r =>
         String(r[namaColIdx]).trim() === nama &&
-        r[tanggalColIdx] instanceof Date &&
+        r[tanggalColIdx] instanceof Date && // Pastikan ini objek Date
         Utilities.formatDate(new Date(r[tanggalColIdx]), Session.getScriptTimeZone(), "dd/MM/yyyy") === dateStr
       );
 
@@ -334,22 +349,73 @@ function getCeklokData(nama, bulanTahun) {
         dataMasuk: dataRow && dataRow[masukColIdx] !== undefined ? String(dataRow[masukColIdx]) : '',
         dataPulang: dataRow && dataRow[pulangColIdx] !== undefined ? String(dataRow[pulangColIdx]) : '',
         isLibur: isLiburKalender,
-        keterangan: keteranganKalender,
-        keteranganLiburManual: dataRow && dataRow[ketLiburManualColIdx] !== undefined ? String(dataRow[ketLiburManualColIdx]) : ''
+        keterangan: keteranganKalender, // Keterangan dari Kalender_Pendidikan
+        keteranganLiburManual: dataRow && dataRow[ketLiburManualColIdx] !== undefined ? String(dataRow[ketLiburManualColIdx]) : '' // Keterangan dari Ceklok_Manual
       });
     }
-    return { data: resultData, optionsKeteranganLibur: ketLiburOptions };
+
+    // Ambil daftar bulan yang terkunci
+    const lockStatusResult = getLockedMonths(); // Memanggil fungsi yang sudah dibuat
+    let isMonthCurrentlyLocked = false;
+    if (lockStatusResult.success) {
+      isMonthCurrentlyLocked = (lockStatusResult.months || []).includes(bulanTahun);
+      Logger.log(`getCeklokData: Untuk bulan ${bulanTahun}, status terkunci: ${isMonthCurrentlyLocked}. Daftar terkunci: ${(lockStatusResult.months || []).join(', ')}`);
+    } else {
+      Logger.log(`getCeklokData: Peringatan - Gagal memeriksa status kunci bulan ${bulanTahun} - ${lockStatusResult.error}`);
+      // Jika gagal memeriksa status kunci, Anda bisa memutuskan apakah defaultnya terkunci atau tidak.
+      // Untuk keamanan, bisa diasumsikan terkunci jika gagal cek, atau biarkan false dan log error.
+      // isMonthCurrentlyLocked = true; // Contoh jika ingin default terkunci saat gagal cek
+    }
+
+    return { 
+      data: resultData, 
+      optionsKeteranganLibur: ketLiburOptions, 
+      isLocked: isMonthCurrentlyLocked // Menyertakan status kunci bulan
+    };
   } catch (e) {
-    Logger.log(`Error in getCeklokData: ${e.toString()}; Input Nama: ${nama}, BulanTahun: ${bulanTahun}`);
+    Logger.log(`Error in getCeklokData (Nama: ${nama}, BulanTahun: ${bulanTahun}): ${e.toString()}\nStack: ${e.stack}`);
     return { error: `Gagal mengambil data ceklok: ${e.message}` };
   }
 }
 
 function simpanData(nama, dataInput) {
   try {
+    // --- AWAL PENAMBAHAN PROTEKSI ---
+    if (!dataInput || dataInput.length === 0 || !dataInput[0].tanggal) {
+      Logger.log("simpanData dipanggil dengan dataInput tidak valid.");
+      return "Error: Data input tidak valid untuk disimpan.";
+    }
+    // Ambil bulanTahun dari data pertama (asumsi semua data dalam satu bulan)
+    const tanggalPertama = dataInput[0].tanggal; // Format "dd/MM/yyyy"
+    const parts = tanggalPertama.split("/");
+    if (parts.length !== 3) {
+      Logger.log(`simpanData: Format tanggalPertama tidak valid: ${tanggalPertama}`);
+      return "Error: Format tanggal pada data input tidak valid.";
+    }
+    const bulanTahunSimpan = `${parts[1]}/${parts[2]}`; // Format "MM/YYYY"
+    Logger.log(`simpanData: Mencoba menyimpan untuk bulan ${bulanTahunSimpan}. Nama Guru: ${nama}`);
+
+    const lockStatusResult = getLockedMonths();
+    Logger.log(`simpanData: Hasil getLockedMonths: ${JSON.stringify(lockStatusResult)}`);
+
+    if (lockStatusResult.success && (lockStatusResult.months || []).includes(bulanTahunSimpan)) {
+      Logger.log(`simpanData: PENYIMPANAN DITOLAK. Bulan ${bulanTahunSimpan} terkunci. Daftar terkunci: ${(lockStatusResult.months || []).join(', ')}`);
+      return `Error: Bulan ${bulanTahunSimpan} telah dikunci oleh Admin dan tidak dapat diubah.`;
+    } else if (!lockStatusResult.success) {
+      Logger.log(`simpanData: Peringatan - Gagal memeriksa status kunci bulan - ${lockStatusResult.error}. Penyimpanan dilanjutkan (KEBIJAKAN SAAT INI).`);
+      // Anda bisa mengubah ini untuk return error jika pengecekan gagal:
+      // return `Error: Gagal memverifikasi status penguncian bulan. Silakan coba lagi.`;
+    } else {
+      Logger.log(`simpanData: Bulan ${bulanTahunSimpan} tidak terkunci. Daftar terkunci: ${(lockStatusResult.months || []).join(', ')}. Penyimpanan dilanjutkan.`);
+    }
+    // --- AKHIR PENAMBAHAN PROTEKSI ---
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
-    if (!sheet) return "Error: Sheet 'Ceklok_Manual' tidak ditemukan.";
+    const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME); //
+    if (!sheet) {
+      Logger.log("simpanData: Sheet 'Ceklok_Manual' tidak ditemukan.");
+      return "Error: Sheet 'Ceklok_Manual' tidak ditemukan.";
+    }
 
     const dataRange = sheet.getDataRange();
     const data = dataRange.getValues();
@@ -367,11 +433,12 @@ function simpanData(nama, dataInput) {
       if (masukColIdx === -1) missingHeaders.push("Jam_Masuk");
       if (pulangColIdx === -1) missingHeaders.push("Jam_Pulang");
       if (ketLiburManualColIdx === -1) missingHeaders.push("Ket_Libur_Manual");
+      Logger.log(`simpanData: Header di 'Ceklok_Manual' tidak lengkap. Hilang: ${missingHeaders.join(', ')}`);
       return `Error: Header di 'Ceklok_Manual' tidak lengkap. Kolom yang hilang: ${missingHeaders.join(', ')}.`;
     }
 
     dataInput.forEach(row => {
-      if (!row || !row.tanggal) return;
+      if (!row || !row.tanggal) return; // Lewati jika baris tidak valid
       const { tanggal, jamMasuk, jamPulang, keteranganLiburManual } = row;
 
       let jm = jamMasuk || "";
@@ -396,28 +463,35 @@ function simpanData(nama, dataInput) {
         sheet.getRange(existingRowIndex, masukColIdx + 1).setValue(jm);
         sheet.getRange(existingRowIndex, pulangColIdx + 1).setValue(jp);
         sheet.getRange(existingRowIndex, ketLiburManualColIdx + 1).setValue(ketLiburTrimmed);
-      } else if (jm || jp || ketLiburTrimmed !== "") {
+      } else if (jm || jp || ketLiburTrimmed !== "") { // Hanya append jika ada data yang diisi
         const dateParts = tanggal.split("/");
-        const dateObject = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]));
-        let newRowValues = new Array(headers.length).fill('');
-        newRowValues[namaColIdx] = nama;
-        newRowValues[tanggalColIdx] = dateObject;
-        newRowValues[masukColIdx] = jm;
-        newRowValues[pulangColIdx] = jp;
-        newRowValues[ketLiburManualColIdx] = ketLiburTrimmed;
-        sheet.appendRow(newRowValues);
+        // Pastikan dateParts valid sebelum membuat objek Date
+        if (dateParts.length === 3) {
+            const dateObject = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]));
+            let newRowValues = new Array(headers.length).fill('');
+            newRowValues[namaColIdx] = nama;
+            newRowValues[tanggalColIdx] = dateObject;
+            newRowValues[masukColIdx] = jm;
+            newRowValues[pulangColIdx] = jp;
+            newRowValues[ketLiburManualColIdx] = ketLiburTrimmed;
+            sheet.appendRow(newRowValues);
+        } else {
+            Logger.log(`simpanData: Format tanggal tidak valid saat appendRow untuk tanggal ${tanggal}`);
+        }
       }
     });
 
     if (sheet.getLastRow() > 1) {
       const lastDataRow = sheet.getLastRow();
-      if (masukColIdx > -1) sheet.getRange(2, masukColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
-      if (pulangColIdx > -1) sheet.getRange(2, pulangColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
-      if (ketLiburManualColIdx > -1) sheet.getRange(2, ketLiburManualColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
+      // Pastikan kolom ada sebelum setNumberFormat
+      if (masukColIdx > -1 && lastDataRow > 1) sheet.getRange(2, masukColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
+      if (pulangColIdx > -1 && lastDataRow > 1) sheet.getRange(2, pulangColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
+      if (ketLiburManualColIdx > -1 && lastDataRow > 1) sheet.getRange(2, ketLiburManualColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
     }
+    Logger.log(`simpanData: Data berhasil disimpan untuk guru ${nama}, bulan ${bulanTahunSimpan}.`);
     return "Data berhasil disimpan.";
   } catch (e) {
-    Logger.log(`Error in simpanData: ${e.toString()}; Nama: ${nama}, DataInput: ${JSON.stringify(dataInput)}`);
+    Logger.log(`Error in simpanData (Nama: ${nama}, DataInput: ${JSON.stringify(dataInput)}): ${e.toString()}\nStack: ${e.stack}`);
     return `Error saat menyimpan: ${e.message}`;
   }
 }
@@ -3463,8 +3537,8 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
     const kalenderSheet = ss.getSheetByName(KALENDER_SHEET_NAME); //
     const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME); //
 
-    if (!ceklokManualSheet) return { success: false, error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` };
-    if (!kalenderSheet) return { success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` };
+    if (!ceklokManualSheet) return { success: false, error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` }; //
+    if (!kalenderSheet) return { success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` }; //
 
     const [mmStr, yyyyStr] = monthYear.split("/");
     const mm = parseInt(mmStr, 10);
@@ -3499,7 +3573,7 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
     const idxKetManual = ceklokHeaders.indexOf("ket_libur_manual");
 
     if ([idxNama, idxTanggal, idxMasuk, idxPulang, idxKetManual].includes(-1)) {
-      return { success: false, error: "Header kolom di 'Ceklok_Manual' tidak lengkap." };
+      return { success: false, error: "Header kolom di 'Ceklok_Manual' tidak lengkap." }; //
     }
 
     let summary = {
@@ -3523,17 +3597,13 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
       const dayOfWeek = currentDate.getDay();
 
       let isWorkingDay = true;
-      // Keterangan libur dari Kalender_Pendidikan tidak mempengaruhi completedChecklok secara langsung,
-      // tapi mempengaruhi apakah suatu hari dianggap hari kerja untuk statistik present/absent.
       if (dayOfWeek === 0) { // Minggu
         isWorkingDay = false;
       } else if (liburMap[dateStr]) { // Libur Nasional/Sekolah dari Kalender_Pendidikan
         isWorkingDay = false;
       }
 
-      // Cek entri di Ceklok_Manual untuk hari ini (baik hari kerja maupun bukan)
-      // untuk menghitung kategori present, schoolHoliday (dari guru), otherValidReason, dan incomplete.
-      let entryProcessedForDay = false; // Untuk memastikan satu hari hanya dihitung sekali untuk statistik
+      let entryProcessedForDay = false; 
       for (let k = 1; k < allCeklokData.length; k++) {
           const row = allCeklokData[k];
           if (String(row[idxNama]).trim() === teacherName &&
@@ -3545,7 +3615,7 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
               const ketManual = String(row[idxKetManual] || "").trim();
 
               if (jamMasuk && jamPulang) {
-                  if(isWorkingDay) summary.present++; // Hadir hanya dihitung jika hari kerja
+                  if(isWorkingDay) summary.present++; 
               } else if (ketManual) {
                   const ketManualLower = ketManual.toLowerCase();
                   if (ketManualLower.includes("hari libur sekolah") || ketManualLower.includes("libur sekolah")) {
@@ -3554,14 +3624,14 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
                       if (!(ketManualLower.includes("hari libur sekolah") || ketManualLower.includes("libur sekolah"))) {
                           summary.otherValidReason++;
                       }
-                  } else { // Keterangan tidak valid
+                  } else { 
                        if (isWorkingDay && currentDate < today) {
                           summary.absent++;
                        }
                   }
               } else if ((jamMasuk && !jamPulang) || (!jamMasuk && jamPulang)) {
-                  if(isWorkingDay) summary.incomplete++; // Incomplete hanya dihitung jika hari kerja
-              } else { // Tidak ada jam, tidak ada keterangan
+                  if(isWorkingDay) summary.incomplete++; 
+              } else { 
                   if (isWorkingDay && currentDate < today) {
                       summary.absent++;
                   }
@@ -3576,7 +3646,6 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
         let dayHasPassedOrIsToday = currentDate <= today;
         if (dayHasPassedOrIsToday) {
             summary.effectiveWorkingDaysPassed++;
-            // Jika tidak ada entri sama sekali di Ceklok_Manual untuk hari kerja yang sudah lewat
             if (!entryProcessedForDay && currentDate < today) {
                 summary.absent++;
             }
@@ -3585,15 +3654,14 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
     }
 
     // --- HITUNG completedChecklok DARI STATISTIK YANG SUDAH ADA ---
-    summary.completedChecklok = summary.present + summary.schoolHoliday + summary.otherValidReason;
-    // Anda bisa memilih apakah 'incomplete' juga dihitung sebagai 'completed' atau tidak.
-    // Saat ini, berdasarkan permintaan Anda, 'incomplete' tidak termasuk.
+    summary.completedChecklok = summary.present + summary.schoolHoliday + summary.otherValidReason; //
     // --- AKHIR PERHITUNGAN completedChecklok ---
 
-    if (summary.effectiveWorkingDaysPassed > 0) {
-      summary.attendancePercentage = parseFloat(((summary.present / summary.effectiveWorkingDaysPassed) * 100).toFixed(2));
-    } else if (summary.totalWorkingDaysInMonth > 0 && summary.effectiveWorkingDaysPassed === 0) {
-      summary.attendancePercentage = 0;
+    // Kalkulasi Persentase Pengisian Ceklok BARU
+    if (summary.totalWorkingDaysInMonth > 0) {
+      summary.attendancePercentage = parseFloat(((summary.completedChecklok / summary.totalWorkingDaysInMonth) * 100).toFixed(2));
+    } else {
+      summary.attendancePercentage = 0; // Jika tidak ada hari kerja dalam sebulan, persentase 0
     }
 
     return { success: true, summary: summary };
@@ -3601,5 +3669,110 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
   } catch (e) {
     Logger.log(`Error in getTeacherMonthlySummary (teacher: ${teacherName}, month: ${monthYear}): ${e.toString()}\nStack: ${e.stack}`);
     return { success: false, error: `Gagal mengambil ringkasan: ${e.message}` };
+  }
+}
+
+
+// GANTI FUNGSI getLockedMonths YANG ADA DENGAN VERSI INI
+// DI DALAM FILE code.gs.html
+
+/**
+ * Mengambil daftar semua bulan yang terkunci.
+ * @return {object} Objek dengan properti 'months' (array string "MM/YYYY") atau 'error'.
+ */
+function getLockedMonths() {
+  try {
+    const sheet = ensureSheet(LOCKED_MONTHS_SHEET_NAME, ["LockedMonthYear"]); // Pastikan sheet ada
+    if (sheet.getLastRow() < 2) {
+      return { success: true, months: [] }; // Tidak ada bulan terkunci jika hanya header atau kosong
+    }
+    // GUNAKAN .getDisplayValues() di sini agar mendapatkan format string "MM/YYYY"
+    const lockedMonths = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1)
+                                .getDisplayValues() // <--- PERUBAHAN UTAMA DI SINI
+                                .flat()
+                                .filter(String) // Menghilangkan baris kosong jika ada
+                                .map(m => String(m).trim()); // Pastikan tetap string dan di-trim
+    
+    Logger.log(`getLockedMonths (setelah perbaikan): Ditemukan bulan terkunci: ${JSON.stringify(lockedMonths)}`);
+    return { success: true, months: lockedMonths };
+  } catch (e) {
+    Logger.log(`Error in getLockedMonths: ${e.toString()}`);
+    return { success: false, error: `Gagal mengambil daftar bulan terkunci: ${e.message}` };
+  }
+}
+
+/**
+ * Mengunci sebuah bulan.
+ * @param {string} monthYearToLock Bulan yang akan dikunci (format "MM/YYYY").
+ * @return {object} Hasil operasi {success: boolean, message/error: string}.
+ */
+function lockMonth(monthYearToLock) {
+  try {
+    if (!monthYearToLock || !/^\d{2}\/\d{4}$/.test(monthYearToLock)) {
+      return { success: false, error: "Format Bulan/Tahun tidak valid (MM/YYYY)." };
+    }
+
+    const sheet = ensureSheet(LOCKED_MONTHS_SHEET_NAME, ["LockedMonthYear"]);
+    const currentLocked = getLockedMonths().months || [];
+
+    if (currentLocked.includes(monthYearToLock)) {
+      return { success: false, error: `Bulan ${monthYearToLock} sudah terkunci.` };
+    }
+
+    sheet.appendRow([monthYearToLock]);
+    SpreadsheetApp.flush();
+    return { success: true, message: `Bulan ${monthYearToLock} berhasil dikunci.` };
+  } catch (e) {
+    Logger.log(`Error in lockMonth (${monthYearToLock}): ${e.toString()}`);
+    return { success: false, error: `Gagal mengunci bulan: ${e.message}` };
+  }
+}
+
+// Di dalam file code.gs.html
+
+/**
+ * Membuka kunci sebuah bulan.
+ * @param {string} monthYearToUnlock Bulan yang akan dibuka kuncinya (format "MM/YYYY").
+ * @return {object} Hasil operasi {success: boolean, message/error: string}.
+ */
+function unlockMonth(monthYearToUnlock) {
+  try {
+    if (!monthYearToUnlock || !/^\d{2}\/\d{4}$/.test(monthYearToUnlock)) {
+      Logger.log(`unlockMonth: Format monthYearToUnlock tidak valid: ${monthYearToUnlock}`);
+      return { success: false, error: "Format Bulan/Tahun yang akan dibuka kuncinya tidak valid (MM/YYYY)." };
+    }
+    Logger.log(`unlockMonth: Mencoba membuka kunci untuk bulan: ${monthYearToUnlock}`);
+
+    const sheet = ensureSheet(LOCKED_MONTHS_SHEET_NAME, ["LockedMonthYear"]);
+    // Gunakan getDisplayValues() untuk konsistensi dengan bagaimana getLockedMonths() membaca
+    // dan bagaimana bulanTahun disimpan (sebagai string "MM/YYYY").
+    const data = sheet.getDataRange().getDisplayValues(); // <--- Pastikan menggunakan getDisplayValues()
+    let rowIndexToDelete = -1;
+
+    Logger.log(`unlockMonth: Data mentah dari sheet Locked_Months: ${JSON.stringify(data)}`);
+
+    // Iterasi dimulai dari i = 1 karena baris pertama (indeks 0) adalah header.
+    for (let i = 1; i < data.length; i++) {
+      const lockedMonthInSheet = String(data[i][0]).trim(); // Kolom pertama (indeks 0) berisi LockedMonthYear
+      Logger.log(`unlockMonth: Membandingkan '${monthYearToUnlock}' dengan '${lockedMonthInSheet}' di baris sheet ${i + 1}`);
+      if (lockedMonthInSheet === monthYearToUnlock) {
+        rowIndexToDelete = i + 1; // Nomor baris di sheet (1-based) untuk deleteRow()
+        Logger.log(`unlockMonth: Bulan ${monthYearToUnlock} ditemukan di baris sheet ${rowIndexToDelete}. Akan dihapus.`);
+        break;
+      }
+    }
+
+    if (rowIndexToDelete !== -1) {
+      sheet.deleteRow(rowIndexToDelete);
+      SpreadsheetApp.flush(); // Pastikan perubahan langsung diterapkan
+      Logger.log(`unlockMonth: Kunci untuk bulan ${monthYearToUnlock} berhasil dibuka.`);
+      return { success: true, message: `Kunci untuk bulan ${monthYearToUnlock} berhasil dibuka.` };
+    } else {
+      Logger.log(`unlockMonth: Bulan ${monthYearToUnlock} tidak ditemukan dalam daftar terkunci untuk dihapus.`);
+      return { success: false, error: `Bulan ${monthYearToUnlock} tidak ditemukan dalam daftar terkunci.` };
+    }
+  } catch (e) {
+    Logger.log(`Error in unlockMonth (${monthYearToUnlock}): ${e.toString()}\nStack: ${e.stack}`);
+    return { success: false, error: `Gagal membuka kunci bulan: ${e.message}` };
   }
 }
