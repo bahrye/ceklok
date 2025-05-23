@@ -3438,3 +3438,168 @@ function ensureSheet(sheetName, headers = []) {
 //   createOrEnsureCleanupTrigger(); // Jika Anda punya fungsi cleanup lain
 //   createTriggerForCleanupIfNotExists(); // Jika Anda punya fungsi cleanup lain
 // }
+
+// Di dalam file code.gs.html
+
+// Variabel global untuk nama sheet (pastikan sudah ada atau tambahkan jika belum)
+// const CEKLOK_MANUAL_SHEET_NAME = "Ceklok_Manual";
+// const KALENDER_SHEET_NAME = "Kalender_Pendidikan";
+// const OPSIKETLIBUR_SHEET_NAME = "Opsi_Keterangan_Libur";
+
+/**
+ * Mengambil ringkasan kehadiran bulanan untuk seorang guru.
+ * @param {string} teacherName Nama guru.
+ * @param {string} monthYear Periode bulan dan tahun (format "MM/YYYY").
+ * @return {object} Objek yang berisi statistik ringkasan atau error.
+ */
+function getTeacherMonthlySummary(teacherName, monthYear) {
+  try {
+    if (!teacherName || !monthYear || !/^\d{2}\/\d{4}$/.test(monthYear)) {
+      return { success: false, error: "Nama guru dan periode (MM/YYYY) harus valid." };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ceklokManualSheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME); //
+    const kalenderSheet = ss.getSheetByName(KALENDER_SHEET_NAME); //
+    const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME); //
+
+    if (!ceklokManualSheet) return { success: false, error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` };
+    if (!kalenderSheet) return { success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` };
+
+    const [mmStr, yyyyStr] = monthYear.split("/");
+    const mm = parseInt(mmStr, 10);
+    const yyyy = parseInt(yyyyStr, 10);
+
+    const lastDayOfMonth = new Date(yyyy, mm, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const liburMap = {};
+    if (kalenderSheet.getLastRow() > 1) {
+      const kalenderData = kalenderSheet.getRange(2, 1, kalenderSheet.getLastRow() - 1, 2).getDisplayValues(); //
+      kalenderData.forEach(row => {
+        if (row[0] && String(row[0]).trim() !== "") {
+          liburMap[String(row[0]).trim()] = String(row[1]).trim() || "Hari Libur Nasional";
+        }
+      });
+    }
+
+    let allValidReasonsFromSheet = [];
+    if (opsiKetLiburSheet && opsiKetLiburSheet.getLastRow() > 1) {
+      allValidReasonsFromSheet = opsiKetLiburSheet.getRange(2, 1, opsiKetLiburSheet.getLastRow() - 1, 1)
+                                      .getValues().flat().filter(String).map(o => String(o).trim().toLowerCase()); //
+    }
+
+    const allCeklokData = ceklokManualSheet.getDataRange().getValues(); //
+    const ceklokHeaders = allCeklokData[0].map(h => String(h).trim().toLowerCase());
+    const idxNama = ceklokHeaders.indexOf("nama_guru");
+    const idxTanggal = ceklokHeaders.indexOf("tanggal");
+    const idxMasuk = ceklokHeaders.indexOf("jam_masuk");
+    const idxPulang = ceklokHeaders.indexOf("jam_pulang");
+    const idxKetManual = ceklokHeaders.indexOf("ket_libur_manual");
+
+    if ([idxNama, idxTanggal, idxMasuk, idxPulang, idxKetManual].includes(-1)) {
+      return { success: false, error: "Header kolom di 'Ceklok_Manual' tidak lengkap." };
+    }
+
+    let summary = {
+      teacherName: teacherName,
+      monthYear: monthYear,
+      totalWorkingDaysInMonth: 0,
+      effectiveWorkingDaysPassed: 0,
+      completedChecklok: 0, // Akan dihitung nanti dari penjumlahan
+      present: 0,
+      schoolHoliday: 0,
+      otherValidReason: 0,
+      absent: 0,
+      incomplete: 0,
+      attendancePercentage: 0
+    };
+
+    for (let day = 1; day <= lastDayOfMonth; day++) {
+      const currentDate = new Date(yyyy, mm - 1, day);
+      currentDate.setHours(0,0,0,0);
+      const dateStr = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), "dd/MM/yyyy");
+      const dayOfWeek = currentDate.getDay();
+
+      let isWorkingDay = true;
+      // Keterangan libur dari Kalender_Pendidikan tidak mempengaruhi completedChecklok secara langsung,
+      // tapi mempengaruhi apakah suatu hari dianggap hari kerja untuk statistik present/absent.
+      if (dayOfWeek === 0) { // Minggu
+        isWorkingDay = false;
+      } else if (liburMap[dateStr]) { // Libur Nasional/Sekolah dari Kalender_Pendidikan
+        isWorkingDay = false;
+      }
+
+      // Cek entri di Ceklok_Manual untuk hari ini (baik hari kerja maupun bukan)
+      // untuk menghitung kategori present, schoolHoliday (dari guru), otherValidReason, dan incomplete.
+      let entryProcessedForDay = false; // Untuk memastikan satu hari hanya dihitung sekali untuk statistik
+      for (let k = 1; k < allCeklokData.length; k++) {
+          const row = allCeklokData[k];
+          if (String(row[idxNama]).trim() === teacherName &&
+              row[idxTanggal] instanceof Date &&
+              Utilities.formatDate(new Date(row[idxTanggal]), Session.getScriptTimeZone(), "dd/MM/yyyy") === dateStr) {
+
+              const jamMasuk = String(row[idxMasuk] || "").trim();
+              const jamPulang = String(row[idxPulang] || "").trim();
+              const ketManual = String(row[idxKetManual] || "").trim();
+
+              if (jamMasuk && jamPulang) {
+                  if(isWorkingDay) summary.present++; // Hadir hanya dihitung jika hari kerja
+              } else if (ketManual) {
+                  const ketManualLower = ketManual.toLowerCase();
+                  if (ketManualLower.includes("hari libur sekolah") || ketManualLower.includes("libur sekolah")) {
+                      summary.schoolHoliday++;
+                  } else if (allValidReasonsFromSheet.includes(ketManualLower)) {
+                      if (!(ketManualLower.includes("hari libur sekolah") || ketManualLower.includes("libur sekolah"))) {
+                          summary.otherValidReason++;
+                      }
+                  } else { // Keterangan tidak valid
+                       if (isWorkingDay && currentDate < today) {
+                          summary.absent++;
+                       }
+                  }
+              } else if ((jamMasuk && !jamPulang) || (!jamMasuk && jamPulang)) {
+                  if(isWorkingDay) summary.incomplete++; // Incomplete hanya dihitung jika hari kerja
+              } else { // Tidak ada jam, tidak ada keterangan
+                  if (isWorkingDay && currentDate < today) {
+                      summary.absent++;
+                  }
+              }
+              entryProcessedForDay = true;
+              break;
+          }
+      }
+
+      if (isWorkingDay) {
+        summary.totalWorkingDaysInMonth++;
+        let dayHasPassedOrIsToday = currentDate <= today;
+        if (dayHasPassedOrIsToday) {
+            summary.effectiveWorkingDaysPassed++;
+            // Jika tidak ada entri sama sekali di Ceklok_Manual untuk hari kerja yang sudah lewat
+            if (!entryProcessedForDay && currentDate < today) {
+                summary.absent++;
+            }
+        }
+      }
+    }
+
+    // --- HITUNG completedChecklok DARI STATISTIK YANG SUDAH ADA ---
+    summary.completedChecklok = summary.present + summary.schoolHoliday + summary.otherValidReason;
+    // Anda bisa memilih apakah 'incomplete' juga dihitung sebagai 'completed' atau tidak.
+    // Saat ini, berdasarkan permintaan Anda, 'incomplete' tidak termasuk.
+    // --- AKHIR PERHITUNGAN completedChecklok ---
+
+    if (summary.effectiveWorkingDaysPassed > 0) {
+      summary.attendancePercentage = parseFloat(((summary.present / summary.effectiveWorkingDaysPassed) * 100).toFixed(2));
+    } else if (summary.totalWorkingDaysInMonth > 0 && summary.effectiveWorkingDaysPassed === 0) {
+      summary.attendancePercentage = 0;
+    }
+
+    return { success: true, summary: summary };
+
+  } catch (e) {
+    Logger.log(`Error in getTeacherMonthlySummary (teacher: ${teacherName}, month: ${monthYear}): ${e.toString()}\nStack: ${e.stack}`);
+    return { success: false, error: `Gagal mengambil ringkasan: ${e.message}` };
+  }
+}
