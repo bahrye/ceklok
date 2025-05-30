@@ -13,18 +13,26 @@ const OPSIKETLIBUR_SHEET_NAME = "Opsi_Keterangan_Libur";
 const LOCK_ID_SHEET_NAME = "LOCK_ID";
 const TEMPLATE_SHEET_FOR_BACKUP = "Worksheet";
 const BACKUP_SHEET_PREFIX = "Worksheet_";
-const WORKSHEET_NAME = "Worksheet"; // Pastikan ini konsisten dengan penggunaan di requestExcelExport
-const TEMP_SHEET_PREFIX = "CetakSementara_"; // Awalan untuk sheet sementara
-const CETAK_TEMPLATE_SHEET_NAME = "CETAK"; // Ganti jika nama template Anda berbeda
+const WORKSHEET_NAME = "Worksheet";
+const TEMP_SHEET_PREFIX = "CetakSementara_";
+const CETAK_TEMPLATE_SHEET_NAME = "CETAK";
 
-const PRIMARY_EMAIL_OTP_EXPIRY_MINUTES = 10; 
-const CHANGE_EMAIL_OTP_EXPIRY_MINUTES_GS = 10; // Jika Anda juga menggunakan ini di GS untuk fitur ganti email
-const PASSWORD_RESET_OTP_EXPIRY_MINUTES_GS = 10; // Jika Anda juga menggunakan ini di GS untuk fitur reset password
+const PRIMARY_EMAIL_OTP_EXPIRY_MINUTES = 10;
+const CHANGE_EMAIL_OTP_EXPIRY_MINUTES_GS = 10;
+const PASSWORD_RESET_OTP_EXPIRY_MINUTES_GS = 10;
 
-const REMINDER_LOG_SHEET_NAME = "Reminder_Log"; // Untuk melacak notifikasi yang sudah dikirim
-const EMAIL_SENDER_NAME = "Admin Ceklok MTS Tanuntung"; // Nama pengirim email
+const REMINDER_LOG_SHEET_NAME = "Reminder_Log";
+const EMAIL_SENDER_NAME = "Admin Ceklok MTS Tanuntung";
 
 const LOCKED_MONTHS_SHEET_NAME = "Locked_Months";
+
+// Konstanta untuk Peran Pengguna
+const ROLE_SUPERADMIN = "superadmin";
+const ROLE_ADMIN = "admin";
+const ROLE_USER = "user";
+
+const ACTIVITY_LOG_SHEET_NAME = "Activity_Log"; // Nama untuk sheet log baru
+
 
 function doGet(e) {
   return HtmlService.createHtmlOutputFromFile('index')
@@ -41,10 +49,6 @@ function getHtmlContent(filename) {
   }
 }
 
-/**
- * Mengambil pengaturan bulan/tahun yang relevan untuk input ceklok.
- * Termasuk batas bawah dari admin (dari Setting A1) dan bulan/tahun server saat ini.
- */
 function getCeklokInputSettings() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -58,7 +62,6 @@ function getCeklokInputSettings() {
     }
 
     const now = new Date();
-    // Format ke MM/YYYY sesuai kebutuhan frontend
     const serverCurrentMonthYear = Utilities.formatDate(now, Session.getScriptTimeZone(), "MM/yyyy");
 
     return {
@@ -73,34 +76,38 @@ function getCeklokInputSettings() {
 }
 
 
-function setBulanTahunSetting(newBulanTahun) {
+function setBulanTahunSetting(newBulanTahun, actingUserUsername, actingUserRole) {
   try {
     if (!newBulanTahun || typeof newBulanTahun !== 'string' || !/^\d{2}\/\d{4}$/.test(newBulanTahun)) {
+      logUserActivity(actingUserUsername, actingUserRole, "SET_GLOBAL_MONTH_FAIL", newBulanTahun, "Format Bulan/Tahun tidak valid (mm/yyyy)", "FAIL");
       return { success: false, error: "Format Bulan/Tahun tidak valid. Harap gunakan format mm/yyyy (contoh: 05/2025)." };
     }
     const [mmStr, yyyyStr] = newBulanTahun.split("/");
     const mm = parseInt(mmStr, 10);
     const yyyy = parseInt(yyyyStr, 10);
 
-    if (isNaN(mm) || isNaN(yyyy) || mm < 1 || mm > 12 || yyyy < 2000 || yyyy > 2199) { // Batas tahun disesuaikan jika perlu
+    if (isNaN(mm) || isNaN(yyyy) || mm < 1 || mm > 12 || yyyy < 2000 || yyyy > 2199) {
+      logUserActivity(actingUserUsername, actingUserRole, "SET_GLOBAL_MONTH_FAIL", newBulanTahun, "Nilai Bulan/Tahun tidak valid (range)", "FAIL");
       return { success: false, error: "Nilai Bulan/Tahun tidak valid. Gunakan mm/yyyy (tahun 2000-2199)." };
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const settingSheet = ss.getSheetByName(SETTING_SHEET_NAME);
     if (!settingSheet) {
+      logUserActivity(actingUserUsername, actingUserRole, "SET_GLOBAL_MONTH_ERROR", newBulanTahun, `Sheet '${SETTING_SHEET_NAME}' tidak ditemukan`, "ERROR");
       return { success: false, error: `Sheet '${SETTING_SHEET_NAME}' tidak ditemukan.` };
     }
     settingSheet.getRange('A1').setValue(newBulanTahun);
+    logUserActivity(actingUserUsername, actingUserRole, "SET_GLOBAL_MONTH_SUCCESS", newBulanTahun, `Nilai lama: ${oldValue}, Nilai baru: ${newBulanTahun}`, "SUCCESS");
     return { success: true, message: `Batas Bawah Periode Ceklok berhasil diubah menjadi ${newBulanTahun}.`, newBulanTahun: newBulanTahun };
   } catch (e) {
     Logger.log(`Error di setBulanTahunSetting: ${e.toString()}; Input: ${newBulanTahun}`);
+    logUserActivity(actingUserUsername, actingUserRole, "SET_GLOBAL_MONTH_ERROR", newBulanTahun, e.message, "ERROR");
     return { success: false, error: `Gagal mengubah Batas Bawah Periode Ceklok: ${e.message}` };
   }
 }
 
-// Di dalam code.gs.html
-function verifyLogin(usernameFromInput, password) { // Mengganti nama parameter 'username' menjadi 'usernameFromInput' agar lebih jelas
+function verifyLogin(usernameFromInput, password) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
@@ -115,7 +122,7 @@ function verifyLogin(usernameFromInput, password) { // Mengganti nama parameter 
     const googleEmailColIdx = headers.indexOf("googleemail");
     const primaryEmailColIdx = headers.indexOf("primaryemail");
 
-    if (usernameColIdx === -1 || passwordColIdx === -1 || roleColIdx === -1 || primaryEmailColIdx === -1) { // Pastikan primaryEmailColIdx juga ada
+    if (usernameColIdx === -1 || passwordColIdx === -1 || roleColIdx === -1 || primaryEmailColIdx === -1) {
         let missingCols = [];
         if (usernameColIdx === -1) missingCols.push("Username");
         if (passwordColIdx === -1) missingCols.push("Password");
@@ -135,49 +142,45 @@ function verifyLogin(usernameFromInput, password) { // Mengganti nama parameter 
 
       let match = false;
       if (inputIsEmailFormat) {
-        // Jika input adalah format email, cek PrimaryEmail dulu, lalu Username
         if (sheetPrimaryEmail.toLowerCase() === usernameFromInput.toLowerCase()) {
           match = true;
         } else if (sheetUsername.toLowerCase() === usernameFromInput.toLowerCase()) {
-          // Bisa jadi username lamanya adalah email, atau PrimaryEmail belum diisi tapi username sudah email
           match = true;
         }
       } else {
-        // Jika input bukan format email, hanya cek kolom Username
         if (sheetUsername.toLowerCase() === usernameFromInput.toLowerCase()) {
           match = true;
         }
       }
 
       if (match && sheetPassword === password) {
-        userRowData = currentRow; // Simpan seluruh baris data pengguna yang cocok
-        break; 
+        userRowData = currentRow;
+        break;
       }
     }
 
     if (userRowData) {
-      const actualUsername = String(userRowData[usernameColIdx]).trim(); // Username asli dari kolom Username
+      const actualUsername = String(userRowData[usernameColIdx]).trim();
       const role = String(userRowData[roleColIdx]).trim();
       const actualTeacherName = (teacherNameColIdx > -1 && userRowData[teacherNameColIdx]) ? String(userRowData[teacherNameColIdx]).trim() : "";
       const googleEmail = (googleEmailColIdx > -1 && userRowData[googleEmailColIdx]) ? String(userRowData[googleEmailColIdx]).trim() : null;
       const primaryEmail = (primaryEmailColIdx > -1 && userRowData[primaryEmailColIdx]) ? String(userRowData[primaryEmailColIdx]).trim() : null;
 
       let effectiveTeacherName = null;
-      if (role === "user") {
+      if (role === ROLE_USER) { // Menggunakan konstanta
         if (!actualTeacherName) {
+          logUserActivity(actualUsername, role, "LOGIN_PASSWORD_WARN", actualUsername, "Nama_Guru_Asli kosong", "WARN");
           return { success: false, error: `Login berhasil untuk '${actualUsername}', tetapi 'Nama_Guru_Asli' kosong. Hubungi admin.` };
         }
         effectiveTeacherName = actualTeacherName;
-        // Validasi Nama_Guru_Asli terhadap sheet Nama_Guru (kode ini seharusnya sudah ada)
         const sheetGuru = ss.getSheetByName(NAMA_GURU_SHEET_NAME);
         if (sheetGuru) {
             const guruList = sheetGuru.getRange(1, 1, sheetGuru.getLastRow(), 1).getValues().flat().filter(String).map(g => String(g).trim());
             if (!guruList.includes(effectiveTeacherName)) {
+              logUserActivity(actualUsername, role, "LOGIN_PASSWORD_WARN", actualUsername, `Nama Guru Asli '${effectiveTeacherName}' tidak valid`, "WARN");
             return { success: false, error: `Nama Guru Asli '${effectiveTeacherName}' (user: ${actualUsername}) tidak ada di sheet '${NAMA_GURU_SHEET_NAME}'.` };
             }
         } else {
-            // Mungkin tidak kritis jika sheet nama guru hanya untuk dropdown admin,
-            // tapi konsistensi data penting.
             Logger.log(`Peringatan: Sheet '${NAMA_GURU_SHEET_NAME}' tidak ditemukan saat validasi login user.`);
         }
       }
@@ -185,40 +188,46 @@ function verifyLogin(usernameFromInput, password) { // Mengganti nama parameter 
       try {
           let loginHistorySheet = ensureSheet(LOGIN_HISTORY_SHEET_NAME, ["Username", "Login_Timestamp", "Nama_Guru", "Metode_Login"]);
           const timestamp = new Date();
-          // Catat username asli, bukan input login (jika berbeda)
           loginHistorySheet.appendRow([actualUsername, timestamp, effectiveTeacherName || '', "Password"]);
+          logUserActivity(actualUsername, role, "LOGIN_PASSWORD_SUCCESS", actualUsername, `Role: ${role}`, "SUCCESS");
       } catch (logError) {
           Logger.log(`Gagal mencatat histori login untuk ${actualUsername}: ${logError.toString()}`);
       }
       
       return {
           success: true,
-          username: actualUsername, // Selalu kembalikan username asli dari kolom "Username"
+          username: actualUsername,
           role: role,
           teacherName: effectiveTeacherName,
           googleEmail: googleEmail,
           primaryEmail: primaryEmail
       };
+    } else {
+      // === BARU: Log ke Activity_Log untuk login GAGAL ===
+      // Kita log username yang dicoba oleh pengguna
+      logUserActivity(usernameFromInput, "ANONYMOUS", "LOGIN_PASSWORD_FAIL", usernameFromInput, "Username/Password salah", "FAIL");
+      // ===================================================
+      return { success: false, error: "Username/Email atau password salah." };
     }
-
-    return { success: false, error: "Username/Email atau password salah." }; // Pesan error lebih generik
   } catch (e) {
     Logger.log(`Error in verifyLogin: ${e.toString()}; Input: ${usernameFromInput}`);
+    // === BARU: Log error sistem saat proses login ===
+    logUserActivity(usernameFromInput || "ANONYMOUS", "ANONYMOUS", "LOGIN_SYSTEM_ERROR", usernameFromInput, e.message, "ERROR");
+    // ================================================
     return { success: false, error: `Error server saat login: ${e.message}` };
   }
 }
 
-function getInitialData() { // Untuk Admin Dashboard
+function getInitialData() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheetGuru = ss.getSheetByName(NAMA_GURU_SHEET_NAME);
-    const settingSheet = ss.getSheetByName(SETTING_SHEET_NAME); // Ini tetap dibaca
+    const settingSheet = ss.getSheetByName(SETTING_SHEET_NAME);
 
     if (!sheetGuru) return { error: `Sheet '${NAMA_GURU_SHEET_NAME}' tidak ditemukan.` };
     if (!settingSheet) return { error: `Sheet '${SETTING_SHEET_NAME}' (A1: mm/yyyy) tidak ditemukan.` };
 
     const guruList = sheetGuru.getRange(1, 1, sheetGuru.getLastRow(), 1).getValues().flat().filter(String).map(g => String(g).trim());
-    // adminMinMonthYear adalah nilai dari Setting A1
     const adminMinMonthYear = settingSheet.getRange('A1').getDisplayValue();
 
     if (!adminMinMonthYear || !/^\d{2}\/\d{4}$/.test(adminMinMonthYear)) {
@@ -227,34 +236,29 @@ function getInitialData() { // Untuk Admin Dashboard
     
     ensureSheet(KALENDER_SHEET_NAME, ["Tanggal (dd/mm/yyyy)", "Keterangan"]);
 
-    return { guruList, adminDefinedMinMonthYear: adminMinMonthYear }; // Ganti nama field agar lebih jelas
+    return { guruList, adminDefinedMinMonthYear: adminMinMonthYear };
   } catch (e) {
       Logger.log(`Error in getInitialData: ${e.toString()}`);
       return { error: `Gagal memuat data awal admin: ${e.message}`};
   }
 }
 
-// GANTI FUNGSI getCeklokData YANG LAMA DENGAN YANG INI
-// DI DALAM FILE code.gs.html
-
 function getCeklokData(nama, bulanTahun) {
   try {
-    // Validasi input bulanTahun terhadap batasan (opsional tapi direkomendasikan di backend)
-    const settings = getCeklokInputSettings(); // Panggil fungsi yang sudah ada
+    const settings = getCeklokInputSettings();
     if (settings.error) {
       Logger.log(`getCeklokData: Peringatan - Tidak dapat memuat settings untuk validasi bulan - ${settings.error}`);
     } else {
-      // Parse helper
       const parseMonthYearToDate = (myStr) => {
         if (!myStr || !myStr.includes('/')) return null;
         const [m, y] = myStr.split('/').map(Number);
         if (isNaN(m) || isNaN(y)) return null;
-        return new Date(y, m - 1, 1); // Hari ke-1 untuk perbandingan bulan
+        return new Date(y, m - 1, 1);
       };
 
       const requestedDateObj = parseMonthYearToDate(bulanTahun);
-      const minDateObj = parseMonthYearToDate(settings.adminDefinedMinMonthYear); //
-      const maxDateObj = parseMonthYearToDate(settings.serverCurrentMonthYear); //
+      const minDateObj = parseMonthYearToDate(settings.adminDefinedMinMonthYear);
+      const maxDateObj = parseMonthYearToDate(settings.serverCurrentMonthYear);
 
       if (requestedDateObj && minDateObj && requestedDateObj < minDateObj) {
         Logger.log(`getCeklokData: Periode ${bulanTahun} tidak diizinkan. Batas minimum: ${settings.adminDefinedMinMonthYear}.`);
@@ -267,17 +271,17 @@ function getCeklokData(nama, bulanTahun) {
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME); //
-    const liburSheet = ss.getSheetByName(KALENDER_SHEET_NAME); //
-    const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME); //
+    const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
+    const liburSheet = ss.getSheetByName(KALENDER_SHEET_NAME);
+    const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME);
 
     if (!sheet) {
       Logger.log("getCeklokData: Sheet 'Ceklok_Manual' tidak ditemukan.");
-      return { error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` }; //
+      return { error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` };
     }
     if (!liburSheet) {
       Logger.log("getCeklokData: Sheet 'Kalender_Pendidikan' tidak ditemukan.");
-      return { error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` }; //
+      return { error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` };
     }
 
     let ketLiburOptions = [];
@@ -285,7 +289,7 @@ function getCeklokData(nama, bulanTahun) {
       ketLiburOptions = opsiKetLiburSheet.getRange(2, 1, opsiKetLiburSheet.getLastRow() - 1, 1)
                                 .getValues().flat().filter(String).map(o => String(o).trim());
     } else {
-      Logger.log(`getCeklokData: Sheet '${OPSIKETLIBUR_SHEET_NAME}' tidak ada atau kosong.`); //
+      Logger.log(`getCeklokData: Sheet '${OPSIKETLIBUR_SHEET_NAME}' tidak ada atau kosong.`);
     }
 
     const liburRows = liburSheet.getLastRow() > 1 ? liburSheet.getRange(2, 1, liburSheet.getLastRow() - 1, 2).getDisplayValues() : [];
@@ -335,11 +339,11 @@ function getCeklokData(nama, bulanTahun) {
       const hari = namaHariIndonesia[dateObj.getDay()];
 
       const keteranganKalender = liburMap[dateStr] || '';
-      const isLiburKalender = (dateObj.getDay() === 0) || (keteranganKalender !== ''); // Minggu atau libur kalender
+      const isLiburKalender = (dateObj.getDay() === 0) || (keteranganKalender !== '');
 
       const dataRow = allData.find(r =>
         String(r[namaColIdx]).trim() === nama &&
-        r[tanggalColIdx] instanceof Date && // Pastikan ini objek Date
+        r[tanggalColIdx] instanceof Date &&
         Utilities.formatDate(new Date(r[tanggalColIdx]), Session.getScriptTimeZone(), "dd/MM/yyyy") === dateStr
       );
 
@@ -349,28 +353,24 @@ function getCeklokData(nama, bulanTahun) {
         dataMasuk: dataRow && dataRow[masukColIdx] !== undefined ? String(dataRow[masukColIdx]) : '',
         dataPulang: dataRow && dataRow[pulangColIdx] !== undefined ? String(dataRow[pulangColIdx]) : '',
         isLibur: isLiburKalender,
-        keterangan: keteranganKalender, // Keterangan dari Kalender_Pendidikan
-        keteranganLiburManual: dataRow && dataRow[ketLiburManualColIdx] !== undefined ? String(dataRow[ketLiburManualColIdx]) : '' // Keterangan dari Ceklok_Manual
+        keterangan: keteranganKalender,
+        keteranganLiburManual: dataRow && dataRow[ketLiburManualColIdx] !== undefined ? String(dataRow[ketLiburManualColIdx]) : ''
       });
     }
 
-    // Ambil daftar bulan yang terkunci
-    const lockStatusResult = getLockedMonths(); // Memanggil fungsi yang sudah dibuat
+    const lockStatusResult = getLockedMonths();
     let isMonthCurrentlyLocked = false;
     if (lockStatusResult.success) {
       isMonthCurrentlyLocked = (lockStatusResult.months || []).includes(bulanTahun);
       Logger.log(`getCeklokData: Untuk bulan ${bulanTahun}, status terkunci: ${isMonthCurrentlyLocked}. Daftar terkunci: ${(lockStatusResult.months || []).join(', ')}`);
     } else {
       Logger.log(`getCeklokData: Peringatan - Gagal memeriksa status kunci bulan ${bulanTahun} - ${lockStatusResult.error}`);
-      // Jika gagal memeriksa status kunci, Anda bisa memutuskan apakah defaultnya terkunci atau tidak.
-      // Untuk keamanan, bisa diasumsikan terkunci jika gagal cek, atau biarkan false dan log error.
-      // isMonthCurrentlyLocked = true; // Contoh jika ingin default terkunci saat gagal cek
     }
 
     return { 
       data: resultData, 
       optionsKeteranganLibur: ketLiburOptions, 
-      isLocked: isMonthCurrentlyLocked // Menyertakan status kunci bulan
+      isLocked: isMonthCurrentlyLocked
     };
   } catch (e) {
     Logger.log(`Error in getCeklokData (Nama: ${nama}, BulanTahun: ${bulanTahun}): ${e.toString()}\nStack: ${e.stack}`);
@@ -378,21 +378,21 @@ function getCeklokData(nama, bulanTahun) {
   }
 }
 
-function simpanData(nama, dataInput) {
+function simpanData(nama, dataInput, actorUsername, actorRole) {
   try {
-    // --- AWAL PENAMBAHAN PROTEKSI ---
     if (!dataInput || dataInput.length === 0 || !dataInput[0].tanggal) {
       Logger.log("simpanData dipanggil dengan dataInput tidak valid.");
+      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, "Data input tidak valid", "FAIL");
       return "Error: Data input tidak valid untuk disimpan.";
     }
-    // Ambil bulanTahun dari data pertama (asumsi semua data dalam satu bulan)
-    const tanggalPertama = dataInput[0].tanggal; // Format "dd/MM/yyyy"
+    const tanggalPertama = dataInput[0].tanggal;
     const parts = tanggalPertama.split("/");
     if (parts.length !== 3) {
       Logger.log(`simpanData: Format tanggalPertama tidak valid: ${tanggalPertama}`);
+      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, `Format tanggal tidak valid: ${tanggalPertama}`, "FAIL");
       return "Error: Format tanggal pada data input tidak valid.";
     }
-    const bulanTahunSimpan = `${parts[1]}/${parts[2]}`; // Format "MM/YYYY"
+    const bulanTahunSimpan = `${parts[1]}/${parts[2]}`;
     Logger.log(`simpanData: Mencoba menyimpan untuk bulan ${bulanTahunSimpan}. Nama Guru: ${nama}`);
 
     const lockStatusResult = getLockedMonths();
@@ -400,20 +400,20 @@ function simpanData(nama, dataInput) {
 
     if (lockStatusResult.success && (lockStatusResult.months || []).includes(bulanTahunSimpan)) {
       Logger.log(`simpanData: PENYIMPANAN DITOLAK. Bulan ${bulanTahunSimpan} terkunci. Daftar terkunci: ${(lockStatusResult.months || []).join(', ')}`);
+      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, `Bulan ${bulanTahunSimpan} terkunci`, "FAIL");
       return `Error: Bulan ${bulanTahunSimpan} telah dikunci oleh Admin dan tidak dapat diubah.`;
     } else if (!lockStatusResult.success) {
       Logger.log(`simpanData: Peringatan - Gagal memeriksa status kunci bulan - ${lockStatusResult.error}. Penyimpanan dilanjutkan (KEBIJAKAN SAAT INI).`);
-      // Anda bisa mengubah ini untuk return error jika pengecekan gagal:
-      // return `Error: Gagal memverifikasi status penguncian bulan. Silakan coba lagi.`;
+      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_WARN", nama, `Gagal cek status kunci (${bulanTahunSimpan}): ${lockStatusResult.error}. Simpan dilanjutkan.`, "WARN");
     } else {
       Logger.log(`simpanData: Bulan ${bulanTahunSimpan} tidak terkunci. Daftar terkunci: ${(lockStatusResult.months || []).join(', ')}. Penyimpanan dilanjutkan.`);
     }
-    // --- AKHIR PENAMBAHAN PROTEKSI ---
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME); //
+    const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
     if (!sheet) {
       Logger.log("simpanData: Sheet 'Ceklok_Manual' tidak ditemukan.");
+      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_ERROR", nama, `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan`, "ERROR");
       return "Error: Sheet 'Ceklok_Manual' tidak ditemukan.";
     }
 
@@ -438,7 +438,7 @@ function simpanData(nama, dataInput) {
     }
 
     dataInput.forEach(row => {
-      if (!row || !row.tanggal) return; // Lewati jika baris tidak valid
+      if (!row || !row.tanggal) return;
       const { tanggal, jamMasuk, jamPulang, keteranganLiburManual } = row;
 
       let jm = jamMasuk || "";
@@ -463,9 +463,8 @@ function simpanData(nama, dataInput) {
         sheet.getRange(existingRowIndex, masukColIdx + 1).setValue(jm);
         sheet.getRange(existingRowIndex, pulangColIdx + 1).setValue(jp);
         sheet.getRange(existingRowIndex, ketLiburManualColIdx + 1).setValue(ketLiburTrimmed);
-      } else if (jm || jp || ketLiburTrimmed !== "") { // Hanya append jika ada data yang diisi
+      } else if (jm || jp || ketLiburTrimmed !== "") {
         const dateParts = tanggal.split("/");
-        // Pastikan dateParts valid sebelum membuat objek Date
         if (dateParts.length === 3) {
             const dateObject = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]));
             let newRowValues = new Array(headers.length).fill('');
@@ -483,42 +482,21 @@ function simpanData(nama, dataInput) {
 
     if (sheet.getLastRow() > 1) {
       const lastDataRow = sheet.getLastRow();
-      // Pastikan kolom ada sebelum setNumberFormat
       if (masukColIdx > -1 && lastDataRow > 1) sheet.getRange(2, masukColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
       if (pulangColIdx > -1 && lastDataRow > 1) sheet.getRange(2, pulangColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
       if (ketLiburManualColIdx > -1 && lastDataRow > 1) sheet.getRange(2, ketLiburManualColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
     }
+
+    const detailLog = `Periode: ${bulanTahunSimpan}, Jml entri: ${dataInput.length}`;
+    logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_SUCCESS", nama, detailLog, "SUCCESS");
     Logger.log(`simpanData: Data berhasil disimpan untuk guru ${nama}, bulan ${bulanTahunSimpan}.`);
     return "Data berhasil disimpan.";
   } catch (e) {
     Logger.log(`Error in simpanData (Nama: ${nama}, DataInput: ${JSON.stringify(dataInput)}): ${e.toString()}\nStack: ${e.stack}`);
+    logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_ERROR", nama || "N/A", e.message, "ERROR");
     return `Error saat menyimpan: ${e.message}`;
   }
 }
-
-// FILE: code.gs.html
-
-// ... (fungsi-fungsi lain, termasuk getCeklokInputSettings, NAMA_GURU_SHEET_NAME, CETAK_SHEET_NAME, dll.) ...
-// Pastikan fungsi formatTimeToHHMM_or_Empty sudah ada seperti di respons sebelumnya:
-/*
-function formatTimeToHHMM_or_Empty(timeStr) {
-  if (!timeStr || String(timeStr).trim() === "" || String(timeStr).trim() === "-") {
-    return "";
-  }
-  const parts = String(timeStr).trim().split(/[.:]/);
-  if (parts.length === 2) {
-    const h = String(parts[0]).padStart(2, '0');
-    const m = String(parts[1]).padStart(2, '0');
-    if (!isNaN(parseInt(h, 10)) && !isNaN(parseInt(m, 10)) &&
-        parseInt(h, 10) >= 0 && parseInt(h, 10) < 24 &&
-        parseInt(m, 10) >= 0 && parseInt(m, 10) < 60) {
-      return `${h}.${m}`;
-    }
-  }
-  Logger.log("Format jam tidak valid, dikembalikan kosong: " + timeStr);
-  return "";
-}
-*/
 
 /**
  * Menyiapkan data rekapitulasi kehadiran untuk dicetak ke sheet CETAK (template)
@@ -783,51 +761,82 @@ function getKalenderPendidikanEntries() {
 
 function addKalenderPendidikanEntry(entryData) {
   try {
-    if (!entryData || !entryData.date || !entryData.description) return {success: false, error: "Data tidak lengkap. Tanggal dan Keterangan wajib."};
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(entryData.date)) return {success: false, error: "Format Tanggal salah (dd/mm/yyyy)."};
+    if (!entryData || !entryData.date || !entryData.description) {
+      logUserActivity(actingUserUsername, actingUserRole, "ADD_CALENDAR_ENTRY_FAIL", entryData.date || "N/A", "Data tidak lengkap (tanggal/deskripsi)", "FAIL");
+      return {success: false, error: "Data tidak lengkap. Tanggal dan Keterangan wajib."};
+    }
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(entryData.date)) {
+      logUserActivity(actingUserUsername, actingUserRole, "ADD_CALENDAR_ENTRY_FAIL", entryData.date, "Format Tanggal salah (seharusnya dd/MM/yyyy)", "FAIL");
+      return {success: false, error: "Format Tanggal salah (dd/mm/yyyy)."};
+    }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(KALENDER_SHEET_NAME);
-    if (!sheet) return {success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.`};
+    if (!sheet) {
+      logUserActivity(actingUserUsername, actingUserRole, "ADD_CALENDAR_ENTRY_ERROR", entryData.date, `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan`, "ERROR");
+      return {success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.`};
+    }
 
     sheet.appendRow([entryData.date, entryData.description]);
+    logUserActivity(actingUserUsername, actingUserRole, "ADD_CALENDAR_ENTRY_SUCCESS", entryData.date, `Keterangan: ${entryData.description}`, "SUCCESS");
     return {success: true, message: "Entri Kalender berhasil ditambahkan."};
   } catch (e) {
     Logger.log(`Error di addKalenderPendidikanEntry: ${e.toString()}`);
+    logUserActivity(actingUserUsername, actingUserRole, "ADD_CALENDAR_ENTRY_ERROR", entryData.date || "N/A", e.message, "ERROR");
     return {success: false, error: `Gagal menambah entri kalender: ${e.message}`};
   }
 }
 
-function deleteKalenderPendidikanEntry(sheetRow) {
+function deleteKalenderPendidikanEntry(sheetRow, actingUserUsername, actingUserRole) {
+  let entryDateForLog = `Baris: ${sheetRow}`; // Fallback jika detail tidak bisa diambil
+  let entryDescForLog = "";
   try {
-    if (!sheetRow || typeof sheetRow !== 'number' || sheetRow < 2) return {success: false, error: "Nomor baris tidak valid."};
+    if (!sheetRow || typeof sheetRow !== 'number' || sheetRow < 2) {
+      logUserActivity(actingUserUsername, actingUserRole, "DELETE_CALENDAR_ENTRY_FAIL", `Baris: ${sheetRow}`, "Nomor baris tidak valid", "FAIL");
+      return {success: false, error: "Nomor baris tidak valid."};
+    }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(KALENDER_SHEET_NAME);
-    if (!sheet) return {success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.`};
-    if (sheetRow > sheet.getLastRow()) return {success: false, error: "Baris sudah dihapus atau tidak ada."};
+    if (!sheet) {
+      logUserActivity(actingUserUsername, actingUserRole, "DELETE_CALENDAR_ENTRY_ERROR", `Baris: ${sheetRow}`, `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan`, "ERROR");
+      return {success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.`};
+    }
+    if (sheetRow > sheet.getLastRow()) {
+      logUserActivity(actingUserUsername, actingUserRole, "DELETE_CALENDAR_ENTRY_FAIL", `Baris: ${sheetRow}`, "Baris sudah dihapus atau tidak ada", "FAIL");
+      return {success: false, error: "Baris sudah dihapus atau tidak ada."};
+    }
+
+    // Ambil detail entri sebelum dihapus untuk logging yang lebih baik
+    try {
+        const entryDetails = sheet.getRange(sheetRow, 1, 1, 2).getDisplayValues()[0];
+        entryDateForLog = entryDetails[0] || `Baris: ${sheetRow}`;
+        entryDescForLog = entryDetails[1] || "";
+    } catch (detailError) {
+        Logger.log(`Gagal mengambil detail entri kalender untuk log: ${detailError.toString()}`);
+    }
 
     sheet.deleteRow(sheetRow);
+    logUserActivity(actingUserUsername, actingUserRole, "DELETE_CALENDAR_ENTRY_SUCCESS", entryDateForLog, `Keterangan: ${entryDescForLog}`, "SUCCESS");
     return {success: true, message: "Entri Kalender berhasil dihapus."};
   } catch (e) {
     Logger.log(`Error di deleteKalenderPendidikanEntry: ${e.toString()}`);
+    logUserActivity(actingUserUsername, actingUserRole, "DELETE_CALENDAR_ENTRY_ERROR", entryDateForLog, `Error: ${e.message}, Detail Asli: ${entryDescForLog}`, "ERROR");
     return {success: false, error: `Gagal menghapus entri kalender: ${e.message}`};
   }
 }
 
-function getUsersForAdmin() {
+function getUsersForAdmin() { // Tidak ada perubahan signifikan di sini, UI client akan handle pembatasan tampilan
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
     if (!usersSheet) return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
 
     if (usersSheet.getLastRow() < 2) return { success: true, users: [] };
-    // Baca hingga kolom ke-4 (Username, Password, Role, Nama_Guru_Asli)
-    // Jika ada kolom GoogleEmail, itu akan diabaikan di sini, tapi diambil saat login.
     const data = usersSheet.getRange(2, 1, usersSheet.getLastRow() - 1, Math.min(4, usersSheet.getLastColumn())).getValues();
     const users = data.map(row => ({
       username: String(row[0]).trim(),
       role: String(row[2]).trim(),
-      teacherName: (row.length > 3 && row[3]) ? String(row[3]).trim() : "" // Kolom ke-4 (index 3)
+      teacherName: (row.length > 3 && row[3]) ? String(row[3]).trim() : ""
     })).filter(user => user.username);
     return { success: true, users: users };
   } catch (e) {
@@ -836,128 +845,271 @@ function getUsersForAdmin() {
   }
 }
 
-function addNewUser(userData) {
+// Modifikasi addNewUser
+function addNewUser(userData, actingUserRole) { // Tambahkan actingUserRole
   try {
     if (!userData.username || !userData.password || !userData.role) {
+      logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_FAIL", userData.username || "N/A", "Data tidak lengkap (username/password/role)", "FAIL");
       return { success: false, error: "Username, password, dan role harus diisi." };
     }
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
-    if (!usersSheet) return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
-
-    // Pastikan header ada, jika tidak, buat default
-    if (usersSheet.getLastRow() === 0) {
-      usersSheet.appendRow(["Username", "Password", "Role", "Nama_Guru_Asli", "GoogleEmail"]);
-      usersSheet.getRange("A1:E1").setFontWeight("bold");
+    // Tambahan: Validasi peran yang ditambahkan oleh admin
+    if (actingUserRole === ROLE_ADMIN && userData.role === ROLE_SUPERADMIN) {
+      logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_FAIL", userData.username, "Admin mencoba membuat Superadmin", "FAIL");
+      return { success: false, error: "Admin tidak dapat menambahkan pengguna dengan peran Superadmin." };
+    }
+    if (userData.role !== ROLE_USER && userData.role !== ROLE_ADMIN && userData.role !== ROLE_SUPERADMIN) {
+        logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_FAIL", userData.username, `Peran tidak valid: ${userData.role}`, "FAIL");
+        return { success: false, error: `Peran '${userData.role}' tidak valid.`};
     }
 
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
+    if (!usersSheet) {
+        logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_ERROR", userData.username, `Sheet '${USERS_SHEET_NAME}' tidak ditemukan`, "ERROR");
+        return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    }
+
+    if (usersSheet.getLastRow() === 0) {
+      usersSheet.appendRow(["Username", "Password", "Role", "Nama_Guru_Asli", "GoogleEmail", "PrimaryEmail"]); // Pastikan PrimaryEmail ada jika belum
+      usersSheet.getRange("A1:F1").setFontWeight("bold");
+    }
 
     const usernames = usersSheet.getRange(2, 1, usersSheet.getLastRow() > 1 ? usersSheet.getLastRow() - 1 : 1, 1)
                                 .getValues().flat().map(u => String(u).trim());
     if (usernames.includes(userData.username.trim())) {
+      logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_FAIL", userData.username.trim(), "Username sudah ada", "FAIL");
       return { success: false, error: `Username '${userData.username}' sudah ada.` };
     }
 
     let teacherNameToSave = "";
-    if (userData.role === 'user') {
-      if (!userData.teacherName) return { success: false, error: "Nama Guru Asli wajib untuk role 'user'." };
+    if (userData.role === ROLE_USER) {
+      if (!userData.teacherName) {
+        logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_FAIL", userData.username, "Nama Guru Asli wajib untuk role user", "FAIL");
+        return { success: false, error: "Nama Guru Asli wajib untuk role 'user'." };
+      }
       const namaGuruSheet = ss.getSheetByName(NAMA_GURU_SHEET_NAME);
       if (namaGuruSheet) {
         const guruList = namaGuruSheet.getRange(1, 1, namaGuruSheet.getLastRow(), 1).getValues().flat().filter(String).map(g => String(g).trim());
         if (!guruList.includes(userData.teacherName.trim())) {
+             logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_FAIL", userData.username, `Nama Guru '${userData.teacherName}' tidak ada di daftar`, "FAIL");
              return { success: false, error: `Nama Guru '${userData.teacherName}' tidak ada di daftar. Tambahkan dulu.` };
         }
         teacherNameToSave = userData.teacherName.trim();
       } else {
+        logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_ERROR", userData.username, `Sheet '${NAMA_GURU_SHEET_NAME}' tidak ditemukan`, "ERROR");
         return { success: false, error: `Sheet '${NAMA_GURU_SHEET_NAME}' tidak ditemukan.` };
       }
     }
-    // Kolom GoogleEmail akan default kosong saat user baru dibuat via form ini
-    usersSheet.appendRow([userData.username.trim(), userData.password, userData.role.trim(), teacherNameToSave, ""]);
+    // Kolom GoogleEmail dan PrimaryEmail akan default kosong saat user baru dibuat via form ini
+    usersSheet.appendRow([userData.username.trim(), userData.password, userData.role.trim(), teacherNameToSave, "", ""]);
+    logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_SUCCESS", userData.username.trim(), `Role: ${userData.role.trim()}, NamaGuru: ${teacherNameToSave || 'N/A'}`, "SUCCESS");
     return { success: true, message: "Pengguna baru berhasil ditambahkan." };
   } catch (e) {
     Logger.log(`Error in addNewUser: ${e.toString()}`);
+    logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_ERROR", userData.username || "N/A", e.message, "ERROR");
     return { success: false, error: `Gagal menambah pengguna: ${e.message}` };
   }
 }
 
-function updateUserByUsername(username, userDataToUpdate) {
+// Modifikasi updateUserByUsername
+function updateUserByUsername(usernameToUpdate, userDataToUpdate, actingUserRole) { // Tambahkan actingUserRole
   try {
-    if (!username || !userDataToUpdate || !userDataToUpdate.newRole) {
+    if (!usernameToUpdate || !userDataToUpdate || !userDataToUpdate.newRole) {
+      logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_FAIL", usernameToUpdate, "Data tidak lengkap (username/newRole)", "FAIL");
       return { success: false, error: "Username dan role baru wajib." };
     }
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
-    if (!usersSheet) return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    if (!usersSheet) {
+        logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_ERROR", usernameToUpdate, `Sheet '${USERS_SHEET_NAME}' tidak ditemukan`, "ERROR");
+        return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    }
 
     const data = usersSheet.getDataRange().getValues();
-    let rowIndex = -1;
+    let targetUserRowIndex = -1;
+    let currentTargetRole = "";
+    let oldPassword = ""; // Untuk mencatat jika password diubah
+    let oldTeacherName = ""; // Untuk mencatat jika nama guru diubah
+
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim() === username) {
-        rowIndex = i + 1; break;
+      if (String(data[i][0]).trim() === usernameToUpdate) {
+        targetUserRowIndex = i + 1;
+        oldPassword = String(data[i][1]); // Password ada di kolom B (indeks 1)
+        currentTargetRole = String(data[i][2]).trim(); // Role ada di kolom C (indeks 2)
+        oldTeacherName = String(data[i][3] || "").trim(); // Nama_Guru_Asli di kolom D (indeks 3)
+        break;
       }
     }
-    if (rowIndex === -1) return { success: false, error: `Pengguna '${username}' tidak ditemukan.` };
-
-    usersSheet.getRange(rowIndex, 3).setValue(userDataToUpdate.newRole.trim()); // Update Role (kolom C)
-    if (userDataToUpdate.newPassword) {
-      usersSheet.getRange(rowIndex, 2).setValue(userDataToUpdate.newPassword); // Update Password (kolom B)
+    if (targetUserRowIndex === -1) {
+        logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_FAIL", usernameToUpdate, "Pengguna target tidak ditemukan", "FAIL");
+        return { success: false, error: `Pengguna '${usernameToUpdate}' tidak ditemukan.` };
     }
 
-    let teacherNameToSave = "";
-    if (userDataToUpdate.newRole === 'user') {
-      if (!userDataToUpdate.newTeacherName) return { success: false, error: "Nama Guru Asli baru wajib untuk role 'user'." };
+    // --- Logika Otorisasi ---
+    if (actingUserRole === ROLE_ADMIN) {
+      if (currentTargetRole === ROLE_SUPERADMIN) {
+        logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_FAIL", usernameToUpdate, "Admin mencoba memodifikasi Superadmin", "FAIL");
+        return { success: false, error: "Admin tidak dapat memodifikasi akun Superadmin." };
+      }
+      if (userDataToUpdate.newRole === ROLE_SUPERADMIN) {
+        logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_FAIL", usernameToUpdate, "Admin mencoba mempromosikan ke Superadmin", "FAIL");
+        return { success: false, error: "Admin tidak dapat mempromosikan pengguna menjadi Superadmin." };
+      }
+    }
+
+    if (actingUserRole === ROLE_SUPERADMIN || actingUserRole === ROLE_ADMIN) { // Superadmin bisa mengubah siapa saja, admin dengan batasan
+        // Cek jika superadmin mencoba mengubah peran superadmin terakhir
+        if (currentTargetRole === ROLE_SUPERADMIN && userDataToUpdate.newRole !== ROLE_SUPERADMIN) {
+            let superadminCount = 0;
+            for (let i = 1; i < data.length; i++) {
+                if (String(data[i][2]).trim() === ROLE_SUPERADMIN) superadminCount++;
+            }
+            if (superadminCount <= 1) {
+                logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_FAIL", usernameToUpdate, "Mencoba mengubah peran Superadmin terakhir", "FAIL");
+                return { success: false, error: "Tidak dapat mengubah peran Superadmin terakhir." };
+            }
+        }
+    } else { // Jika bukan admin atau superadmin (misal, user biasa mencoba akses fungsi ini)
+        return { success: false, error: "Anda tidak memiliki hak untuk mengubah data pengguna." };
+    }
+    // --- Akhir Logika Otorisasi ---
+
+    let changesMadeDetails = [];
+
+    // Update Role jika berubah
+    if (currentTargetRole !== userDataToUpdate.newRole.trim()) {
+        usersSheet.getRange(targetUserRowIndex, 3).setValue(userDataToUpdate.newRole.trim());
+        changesMadeDetails.push(`Role: ${currentTargetRole} -> ${userDataToUpdate.newRole.trim()}`);
+    }
+
+    // Update Password jika ada password baru
+    if (userDataToUpdate.newPassword) {
+      usersSheet.getRange(targetUserRowIndex, 2).setValue(userDataToUpdate.newPassword);
+      changesMadeDetails.push("Password diubah");
+    }
+
+    let teacherNameToSave = oldTeacherName;
+    if (userDataToUpdate.newRole === ROLE_USER) {
+      if (!userDataToUpdate.newTeacherName) {
+        logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_FAIL", usernameToUpdate, "Nama Guru Asli baru wajib untuk role 'user'", "FAIL");
+        return { success: false, error: "Nama Guru Asli baru wajib untuk role 'user'." };
+      }
       const namaGuruSheet = ss.getSheetByName(NAMA_GURU_SHEET_NAME);
       if (namaGuruSheet) {
         const guruList = namaGuruSheet.getRange(1, 1, namaGuruSheet.getLastRow(), 1).getValues().flat().filter(String).map(g => String(g).trim());
         if (!guruList.includes(userDataToUpdate.newTeacherName.trim())) {
+             logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_FAIL", usernameToUpdate, `Nama Guru baru '${userDataToUpdate.newTeacherName}' tidak valid`, "FAIL");
              return { success: false, error: `Nama Guru '${userDataToUpdate.newTeacherName}' tidak ada di daftar.` };
         }
         teacherNameToSave = userDataToUpdate.newTeacherName.trim();
       } else {
+        logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_ERROR", usernameToUpdate, `Sheet '${NAMA_GURU_SHEET_NAME}' tidak ditemukan`, "ERROR");
         return { success: false, error: `Sheet '${NAMA_GURU_SHEET_NAME}' tidak ditemukan.` };
       }
+    } else { // Jika peran baru bukan user, nama guru dikosongkan
+        teacherNameToSave = "";
     }
-    usersSheet.getRange(rowIndex, 4).setValue(teacherNameToSave); // Update Nama_Guru_Asli (kolom D)
-    return { success: true, message: `Pengguna '${username}' berhasil diperbarui.` };
+
+    if (oldTeacherName !== teacherNameToSave) {
+        usersSheet.getRange(targetUserRowIndex, 4).setValue(teacherNameToSave);
+        changesMadeDetails.push(`NamaGuru: ${oldTeacherName || 'N/A'} -> ${teacherNameToSave || 'N/A'}`);
+    }
+
+
+    if (changesMadeDetails.length > 0) {
+        // === BARU: Log aktivitas pembaruan pengguna berhasil ===
+        logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_SUCCESS", usernameToUpdate, changesMadeDetails.join("; "), "SUCCESS");
+        // ======================================================
+    } else {
+        logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_INFO", usernameToUpdate, "Tidak ada perubahan data terdeteksi", "INFO");
+    }
+    return { success: true, message: `Pengguna '${usernameToUpdate}' berhasil diperbarui.` + (changesMadeDetails.length > 0 ? "" : " (Tidak ada perubahan data)") };
   } catch (e) {
     Logger.log(`Error in updateUserByUsername: ${e.toString()}`);
+    // === BARU: Log error sistem saat update pengguna ===
+    logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_ERROR", usernameToUpdate, e.message, "ERROR");
+    // =================================================
     return { success: false, error: `Gagal memperbarui pengguna: ${e.message}` };
   }
 }
 
-function deleteUserByUsername(username) {
+// Modifikasi deleteUserByUsername
+function deleteUserByUsername(usernameToDelete, actingUserRole) { // Tambahkan actingUserRole
   try {
-    if (!username) return { success: false, error: "Username wajib." };
+    if (!usernameToDelete) {
+        logUserActivity(actingUserUsername, actingUserRole, "DELETE_USER_FAIL", "N/A", "Username target tidak diberikan", "FAIL");
+        return { success: false, error: "Username wajib." };
+    }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
-    if (!usersSheet) return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    if (!usersSheet) {
+        logUserActivity(actingUserUsername, actingUserRole, "DELETE_USER_ERROR", usernameToDelete, `Sheet '${USERS_SHEET_NAME}' tidak ditemukan`, "ERROR");
+        return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    }
 
     const data = usersSheet.getDataRange().getValues();
-    let rowIndex = -1;
+    let targetUserRowIndex = -1;
     let roleToDelete = '';
+
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim() === username) {
-        rowIndex = i + 1;
-        roleToDelete = String(data[i][2]).trim().toLowerCase();
+      if (String(data[i][0]).trim() === usernameToDelete) {
+        targetUserRowIndex = i + 1;
+        roleToDelete = String(data[i][2]).trim(); // Kolom C adalah Role
         break;
       }
     }
-    if (rowIndex === -1) return { success: false, error: `Pengguna '${username}' tidak ditemukan.` };
+    if (targetUserRowIndex === -1) {
+        logUserActivity(actingUserUsername, actingUserRole, "DELETE_USER_FAIL", usernameToDelete, "Pengguna target tidak ditemukan", "FAIL");
+        return { success: false, error: `Pengguna '${usernameToDelete}' tidak ditemukan.` };
+    }
 
-    if (roleToDelete === 'admin') {
+    // --- Logika Otorisasi dan Pencegahan ---
+    if (actingUserRole === ROLE_ADMIN && roleToDelete === ROLE_SUPERADMIN) {
+      logUserActivity(actingUserUsername, actingUserRole, "DELETE_USER_FAIL", usernameToDelete, "Admin mencoba menghapus Superadmin", "FAIL");
+      return { success: false, error: `Admin tidak dapat menghapus akun Superadmin.` };
+    }
+
+    if (roleToDelete === ROLE_SUPERADMIN) {
+      let superadminCount = 0;
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][2]).trim() === ROLE_SUPERADMIN) superadminCount++;
+      }
+      if (superadminCount <= 1) {
+        logUserActivity(actingUserUsername, actingUserRole, "DELETE_USER_FAIL", usernameToDelete, "Mencoba menghapus Superadmin terakhir", "FAIL");
+        return { success: false, error: `Tidak dapat menghapus satu-satunya akun Superadmin.` };
+      }
+    }
+    
+    if (roleToDelete === ROLE_ADMIN && actingUserRole !== ROLE_SUPERADMIN) { // Jika admin mencoba menghapus admin lain
         let adminCount = 0;
+        let superAdminExists = false;
         for (let i = 1; i < data.length; i++) {
-            if(String(data[i][2]).trim().toLowerCase() === 'admin') adminCount++;
+            const userRole = String(data[i][2]).trim();
+            if(userRole === ROLE_ADMIN) adminCount++;
+            if(userRole === ROLE_SUPERADMIN) superAdminExists = true;
         }
-        if(adminCount <= 1 && rowIndex !== -1) {
-            return { success: false, error: `Tidak dapat menghapus satu-satunya akun admin.` };
+        let currentAdminsAfterDelete = 0;
+        for (let i=1; i < data.length; i++) {
+            if (String(data[i][0]).trim() !== usernameToDelete && String(data[i][2]).trim() === ROLE_ADMIN) {
+                currentAdminsAfterDelete++;
+            }
+        }
+        if (currentAdminsAfterDelete < 1 && !superAdminExists) {
+            logUserActivity(actingUserUsername, actingUserRole, "DELETE_USER_FAIL", usernameToDelete, "Mencoba menghapus Admin terakhir tanpa Superadmin pengganti", "FAIL");
+            return { success: false, error: `Tidak dapat menghapus satu-satunya akun Admin jika tidak ada Superadmin.` };
         }
     }
-    usersSheet.deleteRow(rowIndex);
-    return { success: true, message: `Pengguna '${username}' berhasil dihapus.` };
+    // Seorang superadmin dapat menghapus admin biasa meskipun itu admin terakhir, karena superadmin masih ada.
+    // Seorang admin tidak bisa menghapus dirinya sendiri jika ia adalah satu-satunya admin dan tidak ada superadmin (perlu penanganan di client atau jika usernameToDelete === actingUsername)
+
+    // --- Akhir Logika Otorisasi ---
+    usersSheet.deleteRow(targetUserRowIndex);
+    logUserActivity(actingUserUsername, actingUserRole, "DELETE_USER_SUCCESS", usernameToDelete, `Role dihapus: ${roleToDelete}`, "SUCCESS");
+    return { success: true, message: `Pengguna '${usernameToDelete}' berhasil dihapus.` };
   } catch (e) {
     Logger.log(`Error in deleteUserByUsername: ${e.toString()}`);
+    logUserActivity(actingUserUsername, actingUserRole, "DELETE_USER_ERROR", usernameToDelete, e.message, "ERROR");
     return { success: false, error: `Gagal menghapus pengguna: ${e.message}` };
   }
 }
@@ -1073,7 +1225,7 @@ function deleteTeacherByName(teacherName) {
   }
 }
 
-function getLoginHistory(limit = 20) {
+function getLoginHistory(actingUserRole, limit = 20) { // Tambahkan parameter actingUserRole
     try {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const historySheet = ss.getSheetByName(LOGIN_HISTORY_SHEET_NAME);
@@ -1088,32 +1240,83 @@ function getLoginHistory(limit = 20) {
         const lastRow = historySheet.getLastRow();
         const headerRows = 1;
         const dataRowsCount = lastRow - headerRows;
-        const rowsToFetch = Math.min(dataRowsCount, limit);
 
-        if (rowsToFetch <= 0) {
+        // Jika admin yang meminta, kita mungkin perlu mengambil lebih banyak data awal
+        // untuk di-filter, lalu ambil `limit` teratas.
+        // Heuristik: ambil 5x lipat dari limit jika admin, untuk memberi ruang filter.
+        const initialFetchCount = (actingUserRole === ROLE_ADMIN) ? Math.min(dataRowsCount, limit * 5) : Math.min(dataRowsCount, limit);
+
+        if (initialFetchCount <= 0) {
             return { success: true, history: [] };
         }
 
         // Baca 3 kolom: Username, Timestamp, Nama_Guru
-        // Metode_Login adalah kolom ke-4 jika ada.
         const numColsToRead = Math.min(3, historySheet.getLastColumn());
-        const range = historySheet.getRange(lastRow - rowsToFetch + 1, 1, rowsToFetch, numColsToRead);
+        // Ambil dari baris terakhir ke atas sejumlah initialFetchCount
+        const range = historySheet.getRange(lastRow - initialFetchCount + 1, 1, initialFetchCount, numColsToRead);
         const values = range.getDisplayValues();
 
-        const historyEntries = values.map(row => {
+        // Proses menjadi objek dan balik urutannya agar yang terbaru di awal
+        let historyEntries = values.map(row => {
             return {
                 username: row[0] || '-',
                 timestamp: row[1] || '-',
                 teacherName: (numColsToRead > 2 && row[2]) ? row[2] : '-'
+                // Peran akan dicari jika diperlukan
             };
-        });
-        return { success: true, history: historyEntries.reverse() };
+        }).reverse(); // Data terbaru sekarang ada di awal array
+
+        if (actingUserRole === ROLE_ADMIN) {
+            const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
+            if (!usersSheet) {
+                Logger.log("getLoginHistory: Sheet Users tidak ditemukan untuk lookup peran.");
+                return { success: false, error: "Tidak dapat memfilter histori login: sheet pengguna tidak ditemukan."};
+            }
+            const usersData = usersSheet.getDataRange().getValues();
+            const userHeaders = usersData[0].map(h => String(h).trim().toLowerCase());
+            const usernameColIdx = userHeaders.indexOf("username");
+            const roleColIdx = userHeaders.indexOf("role");
+
+            if (usernameColIdx === -1 || roleColIdx === -1) {
+                 Logger.log("getLoginHistory: Kolom Username/Role tidak ditemukan di sheet Users.");
+                 return { success: false, error: "Tidak dapat memfilter histori login: konfigurasi sheet pengguna salah."};
+            }
+
+            // Buat map untuk lookup peran pengguna dengan cepat
+            const userRolesMap = {};
+            for (let i = 1; i < usersData.length; i++) {
+                if(usersData[i][usernameColIdx]) {
+                    userRolesMap[String(usersData[i][usernameColIdx]).trim()] = String(usersData[i][roleColIdx]).trim();
+                }
+            }
+
+            const filteredHistory = [];
+            for (const entry of historyEntries) {
+                if (filteredHistory.length >= limit) { // Jika sudah mencapai batas 'limit' setelah filter
+                    break;
+                }
+                const roleOfLoggedUser = userRolesMap[entry.username];
+                // Hanya tambahkan jika peran pengguna yang login BUKAN superadmin
+                if (roleOfLoggedUser !== ROLE_SUPERADMIN) {
+                    filteredHistory.push(entry);
+                }
+            }
+            historyEntries = filteredHistory; // Gunakan hasil filter
+        } else { // Untuk superadmin atau peran lain (jika ada), ambil 'limit' teratas
+            if (historyEntries.length > limit) {
+                historyEntries = historyEntries.slice(0, limit);
+            }
+        }
+        
+        return { success: true, history: historyEntries };
+
     } catch (e) {
-        Logger.log(`Error di getLoginHistory: ${e.toString()}`);
+        Logger.log(`Error di getLoginHistory (Peran Aktor: ${actingUserRole}): ${e.toString()}`);
         return { success: false, error: `Gagal mengambil histori login: ${e.message}` };
     }
 }
 
+// Pastikan fungsi ini sudah ada di code.gs Anda
 function ensureSheet(sheetName, headers = []) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(sheetName);
@@ -1122,10 +1325,21 @@ function ensureSheet(sheetName, headers = []) {
     if (headers.length > 0) {
       sheet.appendRow(headers);
       sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setHorizontalAlignment("center");
+      // Opsional: Sesuaikan lebar kolom untuk sheet log jika baru dibuat
+      if (sheetName === ACTIVITY_LOG_SHEET_NAME && headers.length >= 7) {
+        sheet.setColumnWidth(1, 170); // Timestamp
+        sheet.setColumnWidth(2, 150); // ActorUsername
+        sheet.setColumnWidth(3, 100); // ActorRole
+        sheet.setColumnWidth(4, 180); // ActionType
+        sheet.setColumnWidth(5, 150); // TargetEntity
+        sheet.setColumnWidth(6, 250); // Details
+        sheet.setColumnWidth(7, 100); // Status
+      }
     }
   } else if (sheet.getLastRow() === 0 && headers.length > 0) { // Sheet ada tapi kosong
       sheet.appendRow(headers);
       sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setHorizontalAlignment("center");
+      // (Anda bisa tambahkan penyesuaian kolom di sini juga jika sheet kosong)
   }
   return sheet;
 }
@@ -1351,7 +1565,7 @@ function exportBackupSheetToExcel(backupSheetName, teacherName, bulanTahun, lock
     }
     const blob = httpResponse.getBlob();
     const bulanTahunFormattedForFilename = bulanTahun.replace('/', '-');
-    const dynamicFileName = `Backup_${teacherName}_${bulanTahunFormattedForFilename}_LOCK${lockId}.xlsx`;
+    const dynamicFileName = `Template_${teacherName}_${bulanTahunFormattedForFilename}_LOCK${lockId}.xlsx`;
     const base64Data = Utilities.base64Encode(blob.getBytes());
     const mimeType = blob.getContentType() || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -1542,12 +1756,16 @@ function loginViaLinkedGoogleAccount() {
     const activeUserGoogleEmail = Session.getActiveUser().getEmail();
     if (!activeUserGoogleEmail) {
       Logger.log("Tidak dapat mengambil email Google pengguna aktif.");
+      logUserActivity("ANONYMOUS", "ANONYMOUS", "LOGIN_GOOGLE_FAIL", "N/A", "Tidak dapat mengambil email Google pengguna aktif.", "FAIL");
       return { success: false, error: "Tidak dapat mengakses akun Google Anda." };
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
-    if (!usersSheet) return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    if (!usersSheet) {
+        // logUserActivity("SYSTEM", "N/A", "LOGIN_ERROR", "Sheet Users (Google Login)", "Sheet Users tidak ditemukan", "ERROR");
+        return { success: false, error: `Sheet '${USERS_SHEET_NAME}' tidak ditemukan.` };
+    }
 
     const data = usersSheet.getDataRange().getValues();
     const headers = data[0].map(h => String(h).trim().toLowerCase());
@@ -1570,8 +1788,9 @@ function loginViaLinkedGoogleAccount() {
 
       if (linkedGoogleEmailInSheet && linkedGoogleEmailInSheet.toLowerCase() === activeUserGoogleEmail.toLowerCase()) {
         let effectiveTeacherName = null;
-        if (rowRole === "user") {
+        if (rowRole === ROLE_USER) {
           if (!rowActualTeacherName) {
+            logUserActivity(rowCustomUsername, rowRole, "LOGIN_GOOGLE_WARN", rowCustomUsername, "Nama_Guru_Asli kosong", "WARN");
             return { success: false, error: `Login Google berhasil untuk '${activeUserGoogleEmail}', tetapi 'Nama_Guru_Asli' untuk akun '${rowCustomUsername}' kosong. Hubungi admin.` };
           }
           effectiveTeacherName = rowActualTeacherName;
@@ -1580,9 +1799,11 @@ function loginViaLinkedGoogleAccount() {
             if (sheetGuru) {
                 const guruList = sheetGuru.getRange(1, 1, sheetGuru.getLastRow(), 1).getValues().flat().filter(String).map(g => String(g).trim());
                 if (!guruList.includes(effectiveTeacherName)) {
+                  logUserActivity(rowCustomUsername, rowRole, "LOGIN_GOOGLE_WARN", rowCustomUsername, `Nama Guru Asli '${effectiveTeacherName}' tidak valid`, "WARN");
                 return { success: false, error: `Nama Guru Asli '${effectiveTeacherName}' (akun: ${rowCustomUsername}) tidak ada di sheet '${NAMA_GURU_SHEET_NAME}'.` };
                 }
             } else {
+                  logUserActivity(rowCustomUsername, rowRole, "LOGIN_GOOGLE_ERROR", rowCustomUsername, `Sheet Nama_Guru tidak ditemukan`, "ERROR");
                 return { success: false, error: `Konfigurasi error: Sheet '${NAMA_GURU_SHEET_NAME}' tidak ditemukan.` };
             }
         }
@@ -1591,6 +1812,7 @@ function loginViaLinkedGoogleAccount() {
           let loginHistorySheet = ensureSheet(LOGIN_HISTORY_SHEET_NAME, ["Username", "Login_Timestamp", "Nama_Guru", "Metode_Login"]);
           const timestamp = new Date();
           loginHistorySheet.appendRow([rowCustomUsername, timestamp, effectiveTeacherName || '', "Google"]);
+          logUserActivity(rowCustomUsername, rowRole, "LOGIN_GOOGLE_SUCCESS", rowCustomUsername, `Role: ${rowRole}, EmailGoogle: ${activeUserGoogleEmail}`, "SUCCESS");
         } catch (logError) {
           Logger.log(`Gagal mencatat histori login Google untuk ${rowCustomUsername}: ${logError.toString()}`);
         }
@@ -1604,9 +1826,12 @@ function loginViaLinkedGoogleAccount() {
         };
       }
     }
+    logUserActivity(activeUserGoogleEmail, "ANONYMOUS", "LOGIN_GOOGLE_FAIL", activeUserGoogleEmail, "Akun Google tidak tertaut", "FAIL");
     return { success: false, error: `Akun Google Anda (${activeUserGoogleEmail}) tidak tertaut dengan akun manapun di sistem ini.` };
   } catch (e) {
     Logger.log(`Error in loginViaLinkedGoogleAccount: ${e.toString()}`);
+    const userEmailForLog = typeof activeUserGoogleEmail !== 'undefined' ? activeUserGoogleEmail : "ANONYMOUS_GOOGLE_ERROR";
+    logUserActivity(userEmailForLog, "ANONYMOUS", "LOGIN_GOOGLE_SYSTEM_ERROR", userEmailForLog, e.message, "ERROR");
     return { success: false, error: `Error server saat login Google: ${e.message}` };
   }
 }
@@ -3318,7 +3543,7 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
         let body = `Yth. ${teacher.name},\n\n`;
         body += `Sistem kami mengingatkan bahwa Anda belum mengisi data absensi Ceklok setidaknya untuk tanggal ${targetEmptyDateStr}.\n`;
         body += `Tanggal absensi terakhir Anda yang tercatat adalah ${actualLastFilledDateStr}.\n\n`;
-        body += `Mohon untuk segera mengisi data absensi Anda melalui aplikasi Ceklok di link : https://tiny.cc/ceklok-mts.\n\nTerima kasih.\n${EMAIL_SENDER_NAME}`;
+        body += `Mohon untuk segera mengisi data absensi Anda melalui aplikasi Ceklok di link : https://shorten.is/ceklok-mtstanuntung.\n\nTerima kasih.\n${EMAIL_SENDER_NAME}`;
         try {
             MailApp.sendEmail({
             to: teacher.email,
@@ -3706,9 +3931,10 @@ function getLockedMonths() {
  * @param {string} monthYearToLock Bulan yang akan dikunci (format "MM/YYYY").
  * @return {object} Hasil operasi {success: boolean, message/error: string}.
  */
-function lockMonth(monthYearToLock) {
+function lockMonth(monthYearToLock, actingUserUsername, actingUserRole) {
   try {
     if (!monthYearToLock || !/^\d{2}\/\d{4}$/.test(monthYearToLock)) {
+      logUserActivity(actingUserUsername, actingUserRole, "LOCK_MONTH_FAIL", monthYearToLock, "Format Bulan/Tahun tidak valid", "FAIL");
       return { success: false, error: "Format Bulan/Tahun tidak valid (MM/YYYY)." };
     }
 
@@ -3716,14 +3942,17 @@ function lockMonth(monthYearToLock) {
     const currentLocked = getLockedMonths().months || [];
 
     if (currentLocked.includes(monthYearToLock)) {
+      logUserActivity(actingUserUsername, actingUserRole, "LOCK_MONTH_FAIL", monthYearToLock, "Bulan sudah terkunci", "FAIL");
       return { success: false, error: `Bulan ${monthYearToLock} sudah terkunci.` };
     }
 
     sheet.appendRow([monthYearToLock]);
     SpreadsheetApp.flush();
+    logUserActivity(actingUserUsername, actingUserRole, "LOCK_MONTH_SUCCESS", monthYearToLock, "", "SUCCESS");
     return { success: true, message: `Bulan ${monthYearToLock} berhasil dikunci.` };
   } catch (e) {
     Logger.log(`Error in lockMonth (${monthYearToLock}): ${e.toString()}`);
+    logUserActivity(actingUserUsername, actingUserRole, "LOCK_MONTH_ERROR", monthYearToLock, e.message, "ERROR");
     return { success: false, error: `Gagal mengunci bulan: ${e.message}` };
   }
 }
@@ -3739,6 +3968,7 @@ function unlockMonth(monthYearToUnlock) {
   try {
     if (!monthYearToUnlock || !/^\d{2}\/\d{4}$/.test(monthYearToUnlock)) {
       Logger.log(`unlockMonth: Format monthYearToUnlock tidak valid: ${monthYearToUnlock}`);
+      logUserActivity(actingUserUsername, actingUserRole, "UNLOCK_MONTH_FAIL", monthYearToUnlock, "Format Bulan/Tahun tidak valid", "FAIL");
       return { success: false, error: "Format Bulan/Tahun yang akan dibuka kuncinya tidak valid (MM/YYYY)." };
     }
     Logger.log(`unlockMonth: Mencoba membuka kunci untuk bulan: ${monthYearToUnlock}`);
@@ -3748,6 +3978,7 @@ function unlockMonth(monthYearToUnlock) {
     // dan bagaimana bulanTahun disimpan (sebagai string "MM/YYYY").
     const data = sheet.getDataRange().getDisplayValues(); // <--- Pastikan menggunakan getDisplayValues()
     let rowIndexToDelete = -1;
+    let monthFound = false;
 
     Logger.log(`unlockMonth: Data mentah dari sheet Locked_Months: ${JSON.stringify(data)}`);
 
@@ -3771,8 +4002,184 @@ function unlockMonth(monthYearToUnlock) {
       Logger.log(`unlockMonth: Bulan ${monthYearToUnlock} tidak ditemukan dalam daftar terkunci untuk dihapus.`);
       return { success: false, error: `Bulan ${monthYearToUnlock} tidak ditemukan dalam daftar terkunci.` };
     }
+
+    if (monthFound) {
+      sheet.deleteRow(rowIndexToDelete);
+      SpreadsheetApp.flush();
+      logUserActivity(actingUserUsername, actingUserRole, "UNLOCK_MONTH_SUCCESS", monthYearToUnlock, "", "SUCCESS");
+      return { success: true, message: `Kunci untuk bulan ${monthYearToUnlock} berhasil dibuka.` };
+    } else {
+      logUserActivity(actingUserUsername, actingUserRole, "UNLOCK_MONTH_FAIL", monthYearToUnlock, "Bulan tidak ditemukan dalam daftar terkunci", "FAIL");
+      return { success: false, error: `Bulan ${monthYearToUnlock} tidak ditemukan dalam daftar terkunci.` };
+    }
+
   } catch (e) {
     Logger.log(`Error in unlockMonth (${monthYearToUnlock}): ${e.toString()}\nStack: ${e.stack}`);
+    logUserActivity(actingUserUsername, actingUserRole, "UNLOCK_MONTH_ERROR", monthYearToUnlock, e.message, "ERROR");
     return { success: false, error: `Gagal membuka kunci bulan: ${e.message}` };
+  }
+}
+
+// Tambahkan fungsi baru ini di code.gs
+
+/**
+ * Mencatat aktivitas pengguna ke dalam sheet Activity_Log.
+ * @param {string} actorUsername Username pengguna yang melakukan aksi. Bisa "SYSTEM" atau "ANONYMOUS".
+ * @param {string} actorRole Peran pengguna yang melakukan aksi. Bisa "N/A".
+ * @param {string} actionType Deskripsi jenis aksi (e.g., "LOGIN_SUCCESS", "CREATE_USER").
+ * @param {string} [targetEntity=null] Entitas utama yang dipengaruhi (e.g., username yang diubah).
+ * @param {string} [details=""] Detail tambahan tentang aksi tersebut.
+ * @param {string} [status="INFO"] Status aksi (e.g., "SUCCESS", "FAIL", "INFO").
+ */
+function logUserActivity(actorUsername, actorRole, actionType, targetEntity, details, status) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    // Pastikan sheet log ada dan memiliki header yang benar
+    const logSheet = ensureSheet(ACTIVITY_LOG_SHEET_NAME, [
+      "Timestamp",          // Kolom 1
+      "ActorUsername",      // Kolom 2
+      "ActorRole",          // Kolom 3
+      "ActionType",         // Kolom 4
+      "TargetEntity",       // Kolom 5
+      "Details",            // Kolom 6
+      "Status"              // Kolom 7
+    ]);
+
+    const timestamp = new Date(); // Waktu saat ini
+
+    logSheet.appendRow([
+      timestamp,
+      actorUsername || "N/A",
+      actorRole || "N/A",
+      actionType || "UNDEFINED_ACTION",
+      targetEntity || "", // Default ke string kosong jika null atau undefined
+      details || "",      // Default ke string kosong
+      status || "INFO"    // Default status
+    ]);
+  } catch (e) {
+    // Catat error jika gagal menulis log, agar tidak mengganggu fungsi utama
+    Logger.log(`GAGAL MENCATAT LOG AKTIVITAS PENGGUNA: ${e.toString()}. ` +
+               `Aktor: ${actorUsername}, Peran: ${actorRole}, Aksi: ${actionType}, ` +
+               `Target: ${targetEntity}, Detail: ${details}, Status: ${status}`);
+    // Pertimbangkan untuk tidak menampilkan error ini ke pengguna,
+    // kecuali jika proses logging ini sangat kritikal.
+  }
+}
+
+// Di dalam file code.gs
+// Pastikan konstanta peran (ROLE_SUPERADMIN) dan ACTIVITY_LOG_SHEET_NAME sudah ada
+
+/**
+ * Mengambil data log aktivitas dengan opsi filter dan paginasi.
+ * Hanya bisa diakses oleh Superadmin.
+ * @param {string} actingUserRole Peran pengguna yang meminta data.
+ * @param {object} [options={}] Opsi untuk filter dan paginasi.
+ * @param {number} [options.limit=50] Jumlah maksimum entri yang diambil per halaman.
+ * @param {number} [options.offset=0] Offset (jumlah data yang dilewati) untuk paginasi.
+ * @param {string} [options.filterUsername=""] Filter berdasarkan username aktor (case-insensitive contains).
+ * @param {string} [options.filterActionType=""] Filter berdasarkan jenis aksi (case-insensitive contains).
+ * @param {string} [options.filterStartDate=null] Filter tanggal mulai (format ISO string YYYY-MM-DDTHH:mm:ss.sssZ atau YYYY-MM-DD).
+ * @param {string} [options.filterEndDate=null] Filter tanggal akhir (format ISO string YYYY-MM-DDTHH:mm:ss.sssZ atau YYYY-MM-DD).
+ * @return {object} Objek berisi { success: boolean, logs: array, totalFilteredLogs?: number, error?: string }.
+ */
+// Di dalam file code.gs
+// Fungsi getActivityLogData yang sudah dimodifikasi
+
+function getActivityLogData(actingUserRole, options = {}) {
+  if (actingUserRole !== ROLE_SUPERADMIN) {
+    return { success: false, error: "Akses ditolak. Hanya Superadmin yang dapat melihat log aktivitas." };
+  }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const logSheet = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+
+    if (!logSheet) {
+      return { success: false, error: `Sheet log aktivitas '${ACTIVITY_LOG_SHEET_NAME}' tidak ditemukan.` };
+    }
+    if (logSheet.getLastRow() < 2) {
+      return { success: true, logs: [], totalFilteredLogs: 0, message: "Belum ada aktivitas yang tercatat." };
+    }
+
+    const allLogValues = logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 7).getDisplayValues();
+    let filteredLogs = allLogValues.map(row => ({
+      timestamp: row[0], // Ini adalah string tanggal dari sheet
+      actorUsername: row[1],
+      actorRole: row[2],
+      actionType: row[3],
+      targetEntity: row[4],
+      details: row[5],
+      status: row[6]
+    }));
+
+    Logger.log("Jumlah log mentah sebelum filter: " + filteredLogs.length);
+    if (filteredLogs.length > 0) {
+        Logger.log("Contoh timestamp log mentah dari sheet: " + filteredLogs[0].timestamp);
+    }
+    // --- Implementasi Filter ---
+    // Ambil string tanggal langsung dari options, jangan ubah dulu di klien
+    const { filterUsername, filterActionType, filterStartDateString, filterEndDateString } = options;
+
+    if (filterUsername && filterUsername.trim() !== "") {
+      const searchTerm = filterUsername.trim().toLowerCase();
+      filteredLogs = filteredLogs.filter(log => log.actorUsername.toLowerCase().includes(searchTerm));
+    }
+    if (filterActionType && filterActionType.trim() !== "") {
+      const searchTerm = filterActionType.trim().toLowerCase();
+      filteredLogs = filteredLogs.filter(log => log.actionType.toLowerCase().includes(searchTerm));
+    }
+
+    // Penanganan filter tanggal yang lebih hati-hati
+    if (filterStartDateString) { // filterStartDateString diharapkan "YYYY-MM-DD"
+      try {
+        const [year, month, day] = filterStartDateString.split('-').map(Number);
+        // Buat tanggal di awal hari (00:00:00) di zona waktu skrip
+        const startDate = new Date(year, month - 1, day, 0, 0, 0, 0); 
+        Logger.log(`Filter - StartDate (dari YYYY-MM-DD "${filterStartDateString}") dikonversi menjadi objek Date server: <span class="math-inline">\{startDate\.toISOString\(\)\} \(</span>{startDate.toString()})`); // Log ISO dan string lokal server
+        
+        filteredLogs = filteredLogs.filter(log => {
+          try {
+            // Konversi timestamp log (string) ke objek Date untuk perbandingan
+            return new Date(log.timestamp) >= startDate;
+          } catch (dateParseErr) { return false; /* Abaikan log dengan timestamp tidak valid */ }
+        });
+        Logger.log("Jumlah log setelah filter StartDate: " + filteredLogs.length);
+      } catch (e) { 
+        Logger.log(`Error memproses filterStartDateString "${filterStartDateString}": ${e.message}`); 
+      }
+    }
+
+    if (filterEndDateString) { // filterEndDateString diharapkan "YYYY-MM-DD"
+      try {
+        const [year, month, day] = filterEndDateString.split('-').map(Number);
+        // Buat tanggal di akhir hari (23:59:59.999) di zona waktu skrip
+        const endDate = new Date(year, month - 1, day, 23, 59, 59, 999); 
+        Logger.log(`Filter - EndDate (dari YYYY-MM-DD "${filterEndDateString}") dikonversi menjadi objek Date server: <span class="math-inline">\{endDate\.toISOString\(\)\} \(</span>{endDate.toString()})`);
+
+        filteredLogs = filteredLogs.filter(log => {
+          try {
+            return new Date(log.timestamp) <= endDate;
+          } catch (dateParseErr) { return false; }
+        });
+        Logger.log("Jumlah log setelah filter EndDate: " + filteredLogs.length);
+      } catch (e) { 
+        Logger.log(`Error memproses filterEndDateString "${filterEndDateString}": ${e.message}`); 
+      }
+    }
+    // --- Akhir Implementasi Filter ---
+
+    filteredLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    const totalFilteredLogs = filteredLogs.length;
+    const limit = parseInt(options.limit, 10) || 50;
+    const offset = parseInt(options.offset, 10) || 0;
+    const paginatedLogs = filteredLogs.slice(offset, offset + limit);
+
+    return { success: true, logs: paginatedLogs, totalFilteredLogs: totalFilteredLogs };
+
+  } catch (e) {
+    Logger.log(`Error di getActivityLogData (options: ${JSON.stringify(options)}): ${e.toString()}`);
+    logUserActivity("SYSTEM", "N/A", "GET_ACTIVITY_LOG_ERROR", "", `Options: ${JSON.stringify(options)}, Error: ${e.message}`, "ERROR");
+    return { success: false, error: `Gagal mengambil log aktivitas: ${e.message}` };
   }
 }
