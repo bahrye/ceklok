@@ -975,7 +975,7 @@
   </div>
 
   <footer>
-    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v1.5</p>
+    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v1.2</p>
   </footer>
 
   <script>
@@ -1007,6 +1007,58 @@
     let primaryEmailOtpTimerInterval = null;
     let emailForPrimaryVerification = null; // Untuk menyimpan email yang sedang diverifikasi
     const PRIMARY_EMAIL_OTP_EXPIRY_MINUTES = 10;
+
+    const ROLE_SUPERADMIN = "superadmin";
+    const ROLE_ADMIN = "admin";
+    const ROLE_USER = "user";
+
+    // Tambahkan fungsi helper ini di dalam blok <script> di index.html
+    function populateRoleDropdown(selectElementId, forEditingRole) {
+        const roleSelect = document.getElementById(selectElementId);
+        if (!roleSelect) return;
+
+        roleSelect.innerHTML = ''; // Kosongkan opsi yang ada
+
+        const optionUser = document.createElement('option');
+        optionUser.value = ROLE_USER;
+        optionUser.textContent = 'User';
+        roleSelect.appendChild(optionUser);
+
+        const optionAdmin = document.createElement('option');
+        optionAdmin.value = ROLE_ADMIN;
+        optionAdmin.textContent = 'Admin';
+        roleSelect.appendChild(optionAdmin);
+
+        if (loggedInUser && loggedInUser.role === ROLE_SUPERADMIN) {
+            const optionSuperAdmin = document.createElement('option');
+            optionSuperAdmin.value = ROLE_SUPERADMIN;
+            optionSuperAdmin.textContent = 'Superadmin';
+            roleSelect.appendChild(optionSuperAdmin);
+        }
+
+        if (forEditingRole) {
+            // Jika sedang mengedit, set nilai dropdown ke peran pengguna yang diedit
+            // Pastikan peran tersebut valid untuk ditampilkan berdasarkan pengguna yang login
+            if (roleSelect.querySelector(`option[value="${forEditingRole}"]`)) {
+                roleSelect.value = forEditingRole;
+            } else if (forEditingRole === ROLE_SUPERADMIN && loggedInUser.role !== ROLE_SUPERADMIN) {
+                // Jika admin mencoba mengedit user yang (seharusnya tidak mungkin) adalah superadmin
+                // atau jika ada data tidak konsisten. Default ke user.
+                roleSelect.value = ROLE_USER;
+                showAlert("Peran pengguna yang diedit tidak dapat ditampilkan/diubah oleh level akses Anda.", "warning");
+            } else {
+                // Fallback jika peran yang diedit tidak ada di opsi (misal, peran lama dihapus)
+                roleSelect.value = ROLE_USER;
+            }
+        } else {
+            // Untuk pengguna baru, default ke 'user'
+            roleSelect.value = ROLE_USER;
+        }
+        // Pastikan toggle nama guru dipanggil setelah nilai dropdown diatur
+        if (typeof toggleManageTeacherNameInput === "function") {
+            toggleManageTeacherNameInput(roleSelect.value);
+        }
+    }
 
     function showAlert(message, type = 'info', duration = 3500) {
         const alertBox = document.getElementById('customAlert');
@@ -1141,6 +1193,10 @@
             case 'tutorial': // TAMBAHKAN CASE INI
                 htmlFile = 'tutorial_content.html';
                 setupFunction = setupTutorialView; // Akan kita buat di bawah
+                break;
+            case 'activity_log':
+                htmlFile = 'activity_log_content.html';
+                setupFunction = setupActivityLogView;
                 break;
             default:
                 console.error("Tampilan tidak dikenal:", viewName);
@@ -1433,80 +1489,113 @@
         window.removeEventListener('touchstart', resetIdleTimer);
     }
 
+    // Pastikan konstanta peran ini sudah ada di bagian atas script Anda
+    // const ROLE_SUPERADMIN = "superadmin";
+    // const ROLE_ADMIN = "admin";
+    // const ROLE_USER = "user";
+
     function proceedAfterLogin() {
         if (!loggedInUser) {
             renderView('login');
             return;
         }
-        setupIdleTimer();
+        setupIdleTimer(); // Pastikan timer idle diatur
+
         const profileMenuContainer = document.getElementById('profileMenuContainer');
-        const dropdownUsernameDisplayEl = document.getElementById('dropdownUsernameDisplay'); // Ganti ke elemen baru
+        const dropdownUsernameDisplayEl = document.getElementById('dropdownUsernameDisplay');
         if (profileMenuContainer) {
-            profileMenuContainer.style.display = 'block'; 
+            profileMenuContainer.style.display = 'block';
         }
+
+        // Logika untuk menampilkan nama di menu profil
         if (dropdownUsernameDisplayEl && loggedInUser) {
-            if (loggedInUser.role === 'user' && loggedInUser.teacherName) {
-                dropdownUsernameDisplayEl.textContent = loggedInUser.teacherName; // Tampilkan Nama Guru untuk role 'user'
-            } else if (loggedInUser.username) {
-                dropdownUsernameDisplayEl.textContent = loggedInUser.username; // Tampilkan Username untuk peran lain (misal admin) atau jika teacherName kosong
+            if ((loggedInUser.role === ROLE_ADMIN || loggedInUser.role === ROLE_SUPERADMIN) && loggedInUser.username) {
+                // Untuk admin dan superadmin, tampilkan username mereka
+                dropdownUsernameDisplayEl.textContent = loggedInUser.username;
+            } else if (loggedInUser.role === ROLE_USER && loggedInUser.teacherName) {
+                dropdownUsernameDisplayEl.textContent = loggedInUser.teacherName;
+            } else if (loggedInUser.username) { // Fallback jika kondisi di atas tidak terpenuhi tapi username ada
+                dropdownUsernameDisplayEl.textContent = loggedInUser.username;
             } else {
-                dropdownUsernameDisplayEl.textContent = "Pengguna"; // Fallback jika tidak ada info
+                dropdownUsernameDisplayEl.textContent = "Pengguna"; // Default jika tidak ada info
             }
         }
 
-        setupProfileMenuEventListeners(); // Panggil fungsi setup listener (akan dibuat di bawah)
-        // Listener untuk klik di luar dan Escape key sebaiknya di-setup sekali saja global, misal di window.onload
-        
         setupProfileMenuEventListeners();
-        closeProfileDropdownOnClickOutside(); // Panggil setup untuk menutup dropdown
+        closeProfileDropdownOnClickOutside();
         closeProfileDropdownOnEscape();
 
         showLoading("Memuat data aplikasi...");
         google.script.run
             .withSuccessHandler(settingsResponse => {
-                 if (settingsResponse.error || !settingsResponse.success) {
-                    hideLoading(); 
+                if (settingsResponse.error || !settingsResponse.success) {
+                    hideLoading();
                     showAlert(`Error pengaturan tanggal: ${settingsResponse.error || 'Data tidak valid.'}`, 'error');
-                    logout(); 
+                    logout();
                     return;
                 }
                 globalAdminMinMonthYear = settingsResponse.adminDefinedMinMonthYear;
                 globalServerCurrentMonthYear = settingsResponse.serverCurrentMonthYear;
-                activeCeklokMonthYear = globalServerCurrentMonthYear; 
+                activeCeklokMonthYear = globalServerCurrentMonthYear; // Default periode ceklok
 
-                if (loggedInUser.role === "admin") {
+                // --- PERUBAHAN UTAMA ADA DI SINI ---
+                if (loggedInUser.role === ROLE_ADMIN || loggedInUser.role === ROLE_SUPERADMIN) {
+                    // Admin dan Superadmin akan diarahkan ke logika yang sama untuk memuat dashboard admin
                     google.script.run
-                        .withSuccessHandler(response => { 
-                            hideLoading(); 
-                            if (response.error) { showAlert(`Error Inisialisasi Admin: ${response.error}`, 'error'); logout(); return; }
+                        .withSuccessHandler(response => {
+                            hideLoading();
+                            if (response.error) {
+                                showAlert(`Error Inisialisasi Admin: ${response.error}`, 'error');
+                                logout();
+                                return;
+                            }
                             allTeachersList = response.guruList || [];
                             renderView('admin_dashboard', {
                                 guruList: allTeachersList,
                                 adminDefinedMinMonthYearDisplay: response.adminDefinedMinMonthYear
-                            }, () => { 
-                                if (!loggedInUser.primaryEmail) { openPrimaryEmailModal(); }
+                            }, () => {
+                                // Pengecekan email utama setelah view dirender
+                                // Berlaku untuk semua peran yang seharusnya memiliki email utama
+                                if (!loggedInUser.primaryEmail &&
+                                    (loggedInUser.role === ROLE_ADMIN || loggedInUser.role === ROLE_SUPERADMIN || loggedInUser.role === ROLE_USER)) {
+                                    openPrimaryEmailModal();
+                                }
                             });
                         })
-                        .withFailureHandler(err => { hideLoading(); showAlert(`Gagal memuat data awal admin: ${err.message}`, 'error'); logout(); })
-                        .getInitialData();
-                } else if (loggedInUser.role === "user" && loggedInUser.teacherName) {
+                        .withFailureHandler(err => {
+                            hideLoading();
+                            showAlert(`Gagal memuat data awal admin: ${err.message}`, 'error');
+                            logout();
+                        })
+                        .getInitialData(); // Fungsi ini mengambil data yang dibutuhkan admin/superadmin dashboard
+
+                } else if (loggedInUser.role === ROLE_USER && loggedInUser.teacherName) {
                     namaGuru = loggedInUser.teacherName;
+                    // Pengguna (guru) akan diarahkan ke halaman input ceklok
                     loadCeklokDataFromServer(namaGuru, activeCeklokMonthYear, true, () => {
-                        if (!loggedInUser.primaryEmail) { openPrimaryEmailModal(); }
+                        if (!loggedInUser.primaryEmail) {
+                            openPrimaryEmailModal();
+                        }
                     });
                 } else {
+                    // Jika peran tidak dikenali atau data tidak lengkap (misalnya, user tapi tidak ada teacherName)
                     hideLoading();
-                    showAlert("Peran pengguna tidak valid atau data guru tidak lengkap.", 'error');
-                    logout();
+                    let errorMessage = "Peran pengguna tidak valid atau data pendukung tidak lengkap.";
+                    if (loggedInUser.role === ROLE_USER && !loggedInUser.teacherName) {
+                        errorMessage = `Data Nama Guru untuk pengguna '${loggedInUser.username}' tidak ditemukan. Silakan hubungi admin.`;
+                    } else if (![ROLE_ADMIN, ROLE_SUPERADMIN, ROLE_USER].includes(loggedInUser.role)) {
+                        errorMessage = `Peran pengguna '${loggedInUser.role}' tidak dikenal oleh sistem.`;
+                    }
+                    showAlert(errorMessage, 'error');
+                    logout(); // Logout jika peran tidak sesuai atau data krusial hilang
                 }
-                // updateGoogleLinkButtonVisibility(); // Fungsi ini sudah tidak ada
             })
             .withFailureHandler(err => {
                 hideLoading();
                 showAlert(`Gagal mengambil pengaturan tanggal server: ${err.message}`, 'error');
                 logout();
             })
-            .getCeklokInputSettings();
+            .getCeklokInputSettings(); // Mengambil setting tanggal global
     }
 
     function loadCeklokDataFromServer(teacherName, monthYearToLoad, isUserRoleView, postRenderCallback) { 
@@ -1577,73 +1666,122 @@
         });
     }
 
+    // Di dalam file index.html, dalam blok <script>
+
     function setupAdminDashboardView(data) {
+        // data yang diterima berisi: { guruList: response.guruList, adminDefinedMinMonthYearDisplay: response.adminDefinedMinMonthYear }
+        // dari pemanggilan getInitialData() saat admin/superadmin login.
+
         const namaSelect = document.getElementById('namaAdminSelect');
         if (namaSelect) {
-            let guruOptionsHtml = data.guruList && data.guruList.length > 0 ?
-                data.guruList.map(n => `<option value="${n}">${n}</option>`).join('') :
-                '<option value="" disabled>Tidak ada data guru</option>';
-            namaSelect.innerHTML = `<option disabled selected value="">-- Pilih Nama Guru --</option>${guruOptionsHtml}`;
-            namaSelect.disabled = !(data.guruList && data.guruList.length > 0);
+            let guruOptionsHtml = '';
+            if (data && data.guruList && data.guruList.length > 0) {
+                // Simpan juga ke variabel global jika belum
+                allTeachersList = data.guruList;
+                guruOptionsHtml = data.guruList.map(n => `<option value="${n}">${n}</option>`).join('');
+                namaSelect.innerHTML = `<option disabled selected value="">-- Pilih Nama Guru --</option>${guruOptionsHtml}`;
+                namaSelect.disabled = false;
+            } else {
+                allTeachersList = []; // Pastikan kosong jika tidak ada data
+                namaSelect.innerHTML = '<option value="" disabled selected>Tidak ada data guru</option>';
+                namaSelect.disabled = true;
+            }
         }
 
         const bulanAdminInputEl = document.getElementById('bulanAdminInput');
         if (bulanAdminInputEl) {
-            // Cek apakah data.adminDefinedMinMonthYearDisplay ada sebelum digunakan
-            bulanAdminInputEl.value = data && data.adminDefinedMinMonthYearDisplay ? data.adminDefinedMinMonthYearDisplay : '';
+            // Set nilai dari data yang diterima saat setup view
+            bulanAdminInputEl.value = (data && data.adminDefinedMinMonthYearDisplay) ? data.adminDefinedMinMonthYearDisplay : '';
             const labelBulanAdmin = document.querySelector('label[for="bulanAdminInput"]');
-            if (labelBulanAdmin) labelBulanAdmin.textContent = "Batas Bawah Periode Ceklok (A1):";
+            if (labelBulanAdmin) {
+                // Teks label ini bisa diatur statis di HTML atau di sini jika perlu dinamis
+                labelBulanAdmin.textContent = "Batas Bawah Periode Ceklok (A1):";
+            }
         }
-        
+
         const nextBtn = document.getElementById('btnNextCeklokGuru');
-        if(nextBtn && data && data.guruList) nextBtn.disabled = !(data.guruList && data.guruList.length > 0);
+        if (nextBtn) {
+            nextBtn.disabled = !(data && data.guruList && data.guruList.length > 0);
+        }
 
-
+        // Scroll ke atas halaman
         window.scrollTo(0, 0);
+
+        // Memuat dan menampilkan histori login
         const loginHistoryTableBody = document.getElementById('loginHistoryTableBody');
         if (loginHistoryTableBody) {
             loginHistoryTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px;">Memuat histori login...</td></tr>`;
         }
 
-        google.script.run
-            .withSuccessHandler(historyResponse => {
-                if (!loginHistoryTableBody) return;
+        // Pastikan loggedInUser dan loggedInUser.role sudah ada dan valid
+        if (loggedInUser && loggedInUser.role) {
+            google.script.run
+                .withSuccessHandler(historyResponse => {
+                    if (!loginHistoryTableBody) return; // Cek lagi jika elemen hilang
 
-                if (historyResponse.success) {
-                    const historyEntries = historyResponse.history;
-                    if (historyEntries && historyEntries.length > 0) {
-                        let tableHtml = '';
-                        historyEntries.forEach(entry => {
-                            tableHtml += `<tr>
-                                <td data-label="Waktu Login">${entry.timestamp || '-'}</td>
-                                <td data-label="Pengguna">${entry.username || '-'}</td>
-                                <td data-label="Nama Guru">${entry.teacherName || '-'}</td>
-                            </tr>`;
-                        });
-                        loginHistoryTableBody.innerHTML = tableHtml;
-                    } else if (historyResponse.message) { 
-                        loginHistoryTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px;">${historyResponse.message}</td></tr>`;
-                    } 
-                    else {
-                        loginHistoryTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px;">Tidak ada histori login untuk ditampilkan.</td></tr>`;
+                    if (historyResponse.success) {
+                        const historyEntries = historyResponse.history;
+                        if (historyEntries && historyEntries.length > 0) {
+                            let tableHtml = '';
+                            historyEntries.forEach(entry => {
+                                tableHtml += `<tr>
+                                    <td data-label="Waktu Login">${entry.timestamp || '-'}</td>
+                                    <td data-label="Pengguna">${entry.username || '-'}</td>
+                                    <td data-label="Nama Guru">${entry.teacherName || '-'}</td>
+                                </tr>`;
+                            });
+                            loginHistoryTableBody.innerHTML = tableHtml;
+                        } else if (historyResponse.message) {
+                            loginHistoryTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px;">${historyResponse.message}</td></tr>`;
+                        } else {
+                            loginHistoryTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px;">Tidak ada histori login untuk ditampilkan.</td></tr>`;
+                        }
+                    } else {
+                        const errorMsg = historyResponse.error || "Gagal memuat histori login.";
+                        loginHistoryTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px; color:red;">${errorMsg}</td></tr>`;
+                        // Anda bisa tambahkan showAlert di sini jika ingin notifikasi error lebih menonjol
+                        // showAlert(errorMsg, 'error');
                     }
-                } else {
-                    const errorMsg = historyResponse.error || "Gagal memuat histori login.";
-                    loginHistoryTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px; color:red;">${errorMsg}</td></tr>`;
-                    showAlert(errorMsg, 'error');
-                }
-            })
-            .withFailureHandler(err => {
-                if (loginHistoryTableBody) {
-                    loginHistoryTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px; color:red;">Error server: ${err.message}</td></tr>`;
-                }
-                showAlert(`Gagal memuat histori login: ${err.message}`, 'error');
-            })
-            .getLoginHistory();
+                })
+                .withFailureHandler(err => {
+                    if (loginHistoryTableBody) {
+                        loginHistoryTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px; color:red;">Error server: ${err.message}</td></tr>`;
+                    }
+                    // showAlert(`Gagal memuat histori login: ${err.message}`, 'error');
+                })
+                .getLoginHistory(loggedInUser.role, 20); // Mengirim peran pengguna yang login
+        } else {
+            // Jika loggedInUser atau loggedInUser.role tidak ada (seharusnya tidak terjadi jika sudah login)
+            if (loginHistoryTableBody) {
+                loginHistoryTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px; color:red;">Tidak dapat memuat histori login: informasi sesi pengguna tidak valid.</td></tr>`;
+            }
+            console.error("Informasi loggedInUser tidak lengkap untuk memuat histori login.");
+        }
 
-        // === PENAMBAHAN PANGGILAN FUNGSI DI SINI ===
-        loadLockedMonthsForAdminDisplay(); // Memuat daftar bulan terkunci saat dashboard admin ditampilkan
-        // === AKHIR PENAMBAHAN ===
+        // Memuat daftar bulan yang terkunci untuk ditampilkan di dashboard admin
+        if (typeof loadLockedMonthsForAdminDisplay === "function") {
+            loadLockedMonthsForAdminDisplay();
+        } else {
+            console.error("Fungsi loadLockedMonthsForAdminDisplay tidak ditemukan.");
+            const lockedDisplayDiv = document.getElementById('lockedMonthsDisplay');
+            if(lockedDisplayDiv) lockedDisplayDiv.innerHTML = '<p style="color:red;">Error: Komponen tampilan bulan terkunci gagal dimuat.</p>';
+        }
+
+        // === BARU: Tambahkan Tombol Lihat Log Aktivitas untuk Superadmin ===
+        if (loggedInUser && loggedInUser.role === ROLE_SUPERADMIN) {
+            const menuButtonContainer = document.querySelector('#adminDashboardContainer .form-column .btn-container[style*="flex-direction: column"]');
+            if (menuButtonContainer) {
+                if (!document.getElementById('btnViewActivityLog')) {
+                    const activityLogButton = document.createElement('button');
+                    activityLogButton.id = "btnViewActivityLog";
+                    activityLogButton.textContent = "Lihat Log Aktivitas Pengguna";
+                    activityLogButton.onclick = navigateToActivityLog;
+                    activityLogButton.classList.add('btn-info');
+                    // activityLogButton.style.marginTop = "10px"; // Jika ada style, pastikan valid
+                    menuButtonContainer.appendChild(activityLogButton);
+                }
+            } // ELSE INI MUNGKIN HILANG ATAU SALAH TEMPAT
+        }
     }
 
     function handleAdminPilihGuru() {
@@ -1679,29 +1817,93 @@
                 } else { showAlert(response.error || "Gagal update.", 'error'); }
             })
             .withFailureHandler(err => { hideLoading(); showAlert(`Error server update: ${err.message}`, 'error'); })
-            .setBulanTahunSetting(newBulanTahunValue);
+            .setBulanTahunSetting(newBulanTahunValue, loggedInUser.username, loggedInUser.role);
     }
 
+    // Di dalam file index.html, dalam blok <script>
+
+    // Pastikan konstanta peran ini sudah didefinisikan secara global di skrip Anda
+    // const ROLE_SUPERADMIN = "superadmin";
+    // const ROLE_ADMIN = "admin";
+    // const ROLE_USER = "user";
+
     function goBackToAdminDashboard() {
-        if (loggedInUser && loggedInUser.role === 'admin') {
-             google.script.run
+        // Periksa apakah pengguna yang login adalah ADMIN atau SUPERADMIN
+        if (loggedInUser && (loggedInUser.role === ROLE_ADMIN || loggedInUser.role === ROLE_SUPERADMIN)) {
+            showLoading("Kembali ke Dashboard Admin..."); // Tambahkan indikator loading
+
+            // Ambil setting tanggal terbaru sebelum merender dashboard admin
+            google.script.run
                 .withSuccessHandler(settingsResponse => {
-                    if (settingsResponse.error || !settingsResponse.success) { showAlert(`Gagal memuat setting: ${settingsResponse.error || 'Error'}`, 'error'); return; }
+                    if (settingsResponse.error || !settingsResponse.success) {
+                        hideLoading(); // Sembunyikan loading jika ada error
+                        showAlert(`Gagal memuat pengaturan tanggal: ${settingsResponse.error || 'Data tidak valid.'}`, 'error');
+                        // Pertimbangkan untuk tidak logout di sini, biarkan pengguna di halaman saat ini dengan pesan error
+                        return;
+                    }
                     globalAdminMinMonthYear = settingsResponse.adminDefinedMinMonthYear;
                     globalServerCurrentMonthYear = settingsResponse.serverCurrentMonthYear;
+                    // activeCeklokMonthYear juga bisa direset di sini jika perlu,
+                    // atau biarkan menggunakan nilai dari settingsResponse.serverCurrentMonthYear saat dashboard admin dimuat
+
+                    // Setelah mendapatkan setting, ambil data awal untuk dashboard admin
                     google.script.run
                         .withSuccessHandler(response => {
+                            // hideLoading() akan dipanggil oleh renderView atau callbacknya
+                            if (response.error) {
+                                hideLoading();
+                                showAlert(`Error memuat data awal admin: ${response.error}`, 'error');
+                                return;
+                            }
                             allTeachersList = response.guruList || [];
                             renderView('admin_dashboard', {
                                 guruList: allTeachersList,
-                                adminDefinedMinMonthYearDisplay: response.adminDefinedMinMonthYear
-                            });
+                                adminDefinedMinMonthYearDisplay: response.adminDefinedMinMonthYear // Kirim nilai terbaru
+                            }
+                            // , () => { // Callback opsional setelah renderView, jika ada pengecekan email utama
+                            //     if (!loggedInUser.primaryEmail) {
+                            //         openPrimaryEmailModal();
+                            //     }
+                            // }
+                            );
+                        })
+                        .withFailureHandler(err => {
+                            hideLoading();
+                            showAlert(`Gagal memuat data awal admin: ${err.message}`, 'error');
                         })
                         .getInitialData();
                 })
+                .withFailureHandler(err => {
+                    hideLoading();
+                    showAlert(`Gagal memuat pengaturan tanggal: ${err.message}`, 'error');
+                })
                 .getCeklokInputSettings();
-        } else {
-            logout(); 
+        } else if (loggedInUser && loggedInUser.role === ROLE_USER) {
+            // Jika pengguna biasa (guru) secara tidak sengaja memanggil fungsi ini,
+            // arahkan mereka kembali ke tampilan ceklok mereka atau logout jika data tidak lengkap.
+            hideLoading(); // Pastikan loading disembunyikan
+            showAlert("Navigasi tidak sesuai untuk peran Anda. Kembali ke halaman ceklok.", "info");
+            if (loggedInUser.teacherName) {
+                const monthToLoad = activeCeklokMonthYear || globalServerCurrentMonthYear;
+                if (monthToLoad) {
+                    loadCeklokDataFromServer(loggedInUser.teacherName, monthToLoad, true);
+                } else {
+                    // Jika tidak ada periode aktif, coba muat dengan periode server
+                    if (globalServerCurrentMonthYear) {
+                        loadCeklokDataFromServer(loggedInUser.teacherName, globalServerCurrentMonthYear, true);
+                    } else {
+                        // Jika semua gagal, logout
+                        logout();
+                    }
+                }
+            } else {
+                logout(); // Jika nama guru tidak ada
+            }
+        }
+        else {
+            // Jika pengguna tidak login atau peran tidak dikenali, lakukan logout
+            hideLoading(); // Pastikan loading disembunyikan
+            logout();
         }
     }
 
@@ -2000,10 +2202,12 @@
                 hideLoading();
                 const isError = String(msg).toLowerCase().startsWith("error:");
                 showAlert(msg, isError ? 'error' : 'success');
-                loadCeklokDataFromServer(namaGuru, activeCeklokMonthYear, loggedInUser.role === 'user');
+                if (namaGuru && activeCeklokMonthYear) {
+                    loadCeklokDataFromServer(namaGuru, activeCeklokMonthYear, loggedInUser.role === 'user');
+                }
             })
             .withFailureHandler(err => { hideLoading(); showAlert(`Gagal menyimpan: ${err.message}`, 'error'); })
-            .simpanData(namaGuru, dataToSave); 
+            .simpanData(namaGuru, dataToSave, loggedInUser.username, loggedInUser.role);
     }
 
     function navigateToHasilCeklok() {
@@ -2218,19 +2422,62 @@
             .getDynamicMonthlyRekap(selectedMonthYear);
     }
 
-    function backToPreviousCeklokView() { 
+    // Di dalam file index.html, dalam blok <script>
+
+    // Pastikan konstanta peran ini sudah didefinisikan secara global di skrip Anda
+    // const ROLE_SUPERADMIN = "superadmin";
+    // const ROLE_ADMIN = "admin";
+    // const ROLE_USER = "user";
+
+    function backToPreviousCeklokView() {
+        if (!loggedInUser) { // Jika tidak ada sesi pengguna
+            logout();
+            return;
+        }
+
+        // Skenario utama: kembali dari halaman 'Hasil Ceklok' atau 'Kalender Pendidikan'
+        // (Tambahkan 'tutorial' jika goBackFromTutorial() juga bisa memanggil ini atau memiliki logika serupa)
         if (currentView === 'hasil_ceklok' || currentView === 'kalender_pendidikan') {
-            if (loggedInUser.role === 'user' || (loggedInUser.role === 'admin' && namaGuru)) {
-                loadCeklokDataFromServer(namaGuru, activeCeklokMonthYear || globalServerCurrentMonthYear, loggedInUser.role === 'user');
-            } else if (loggedInUser.role === 'admin') {
+            if (loggedInUser.role === ROLE_USER) {
+                // Jika pengguna adalah GURU, kembali ke tampilan input cekloknya.
+                const monthToLoad = activeCeklokMonthYear || globalServerCurrentMonthYear;
+                if (loggedInUser.teacherName && monthToLoad) {
+                    loadCeklokDataFromServer(loggedInUser.teacherName, monthToLoad, true); // true untuk isUserRoleView
+                } else {
+                    showAlert("Data guru atau periode tidak lengkap untuk kembali.", "warning");
+                    logout(); // Fallback jika data penting tidak ada
+                }
+            } else if (loggedInUser.role === ROLE_ADMIN || loggedInUser.role === ROLE_SUPERADMIN) {
+                // Jika pengguna adalah ADMIN atau SUPERADMIN:
+                // Cek apakah ada konteks 'namaGuru' yang aktif (misalnya, admin/superadmin sedang melihat detail ceklok guru tertentu
+                // sebelum pindah ke Hasil Ceklok atau Kalender).
+                // Variabel global 'namaGuru' dan 'activeCeklokMonthYear' digunakan untuk ini.
+                if (namaGuru && activeCeklokMonthYear) {
+                    // Kembali ke tampilan input ceklok untuk guru yang sedang aktif dilihat (tampilan admin/superadmin)
+                    loadCeklokDataFromServer(namaGuru, activeCeklokMonthYear, false); // false untuk isUserRoleView
+                } else {
+                    // Jika tidak ada konteks guru spesifik, kembali ke Dashboard Admin utama.
+                    goBackToAdminDashboard();
+                }
+            } else {
+                // Jika peran tidak dikenali (seharusnya tidak terjadi jika sudah login)
+                logout();
+            }
+        }
+        // Skenario fallback jika fungsi ini dipanggil dari view lain (kurang umum untuk fungsi bernama ini)
+        else {
+            if (loggedInUser.role === ROLE_ADMIN || loggedInUser.role === ROLE_SUPERADMIN) {
                 goBackToAdminDashboard();
+            } else if (loggedInUser.role === ROLE_USER) {
+                const monthToLoad = activeCeklokMonthYear || globalServerCurrentMonthYear;
+                if (loggedInUser.teacherName && monthToLoad) {
+                    loadCeklokDataFromServer(loggedInUser.teacherName, monthToLoad, true);
+                } else {
+                    logout();
+                }
             } else {
                 logout();
             }
-        } else {
-            if (loggedInUser.role === 'admin') goBackToAdminDashboard();
-            else if (loggedInUser.role === 'user') logout(); 
-            else logout();
         }
     }
     
@@ -2297,7 +2544,11 @@
                 }
             })
             .withFailureHandler(err => { hideLoading(); showAlert(`Gagal menambah entri: ${err.message}`, 'error'); })
-            .addKalenderPendidikanEntry({ date: formattedDate, description: description });
+            .addKalenderPendidikanEntry(
+                { date: formattedDate, description: description }, // entryData
+                loggedInUser.username,                             // actingUserUsername
+                loggedInUser.role                                  // actingUserRole
+            );
     }
 
     function confirmDeleteKalenderEntry(sheetRow) {
@@ -2310,32 +2561,40 @@
                     if (response.success) loadAndDisplayKalenderEntries();
                 })
                 .withFailureHandler(err => { hideLoading(); showAlert(`Gagal menghapus: ${err.message}`, 'error'); })
-                .deleteKalenderPendidikanEntry(sheetRow);
+                .deleteKalenderPendidikanEntry(sheetRow, loggedInUser.username, loggedInUser.role);
         }
     }
     
     function navigateToUserManagement() { renderView('user_management'); }
 
+    // Modifikasi fungsi setupUserManagementView()
     function setupUserManagementView() {
         showLoading("Memuat data...");
         google.script.run
             .withSuccessHandler(teacherData => {
                 allTeachersList = teacherData.success ? (teacherData.teachers || []) : [];
                 if (!teacherData.success) showAlert(`Gagal memuat daftar guru untuk form: ${teacherData.error || "Error"}`, 'warning');
-                
+
                 google.script.run
                     .withSuccessHandler(userResponse => {
                         hideLoading();
-                        if (userResponse.success) renderUserListTable(userResponse.users);
-                        else {
+                        if (userResponse.success) {
+                            renderUserListTable(userResponse.users); // renderUserListTable akan diubah juga
+                        } else {
                             const container = document.getElementById('userListTableContainer'); 
                             if(container) container.innerHTML = `<p style="color:red;">Error: ${userResponse.error}</p>`;
                             showAlert(userResponse.error, 'error');
                         }
+                        // Mempopulasikan dropdown peran untuk form 'Tambah Pengguna Baru'
+                        populateRoleDropdown('manageUserRole'); // Untuk form tambah baru
                         populateTeacherDropdownForUserForm(); 
+
+                        // Set default role dan panggil toggleManageTeacherNameInput
                         const roleSelect = document.getElementById('manageUserRole');
-                        if(roleSelect) toggleManageTeacherNameInput(roleSelect.value); 
-                        cancelEditUserForm(); 
+                        if(roleSelect) {
+                          // populateRoleDropdown sudah mengatur default value dan memanggil toggle
+                        }
+                        cancelEditUserForm(); // Ini akan memastikan form tambah user di-reset dengan benar
                     })
                     .withFailureHandler(err => { hideLoading(); showAlert(`Gagal memuat pengguna: ${err.message}`, 'error'); })
                     .getUsersForAdmin();
@@ -2344,10 +2603,10 @@
                 hideLoading(); 
                 allTeachersList = [];
                 showAlert(`Gagal memuat daftar guru: ${err.message}`, 'error');
-                 google.script.run
+                google.script.run
                     .withSuccessHandler(userResponse => { /* ... */ })
                     .withFailureHandler(err => { /* ... */ })
-                    .getUsersForAdmin();
+                    .getUsersForAdmin(); // Tetap coba muat user meskipun guru gagal
             })
             .getTeachersForAdmin(); 
         window.scrollTo(0,0);
@@ -2387,33 +2646,78 @@
         }
     }
 
+    // Modifikasi fungsi renderUserListTable() di dalam <script> index.html
     function renderUserListTable(users) {
-        const container = document.getElementById('userListTableBody'); 
-        if (!container) return;
+        const container = document.getElementById('userListTableBody');
+        if (!container) {
+            console.error("Elemen 'userListTableBody' tidak ditemukan.");
+            return;
+        }
         let tableHtml = '';
         if (users && users.length > 0) {
             users.forEach(user => {
+                let canEdit = true;
+                let canDelete = true;
+                let actionsHtml = '';
+
+                // Logika untuk menentukan apakah tombol Edit dan Delete harus ditampilkan/diaktifkan
+                if (loggedInUser.role === ROLE_ADMIN) {
+                    // Admin tidak bisa mengedit atau menghapus Superadmin
+                    if (user.role === ROLE_SUPERADMIN) {
+                        canEdit = false;
+                        canDelete = false;
+                    }
+                }
+                // Superadmin bisa mengedit dan menghapus semua (termasuk admin lain),
+                // kecuali dirinya sendiri (untuk tombol delete)
+
+                // Semua pengguna tidak bisa menghapus dirinya sendiri dari daftar ini
+                if (loggedInUser.username === user.username) {
+                    canDelete = false;
+                    // Superadmin juga tidak bisa mengedit dirinya sendiri melalui form ini
+                    // (misalnya mengubah role sendiri menjadi lebih rendah jika dia superadmin terakhir)
+                    // Namun, mereka bisa mengubah password sendiri via menu profil.
+                    // Untuk edit role via tabel ini, kita bisa nonaktifkan jika itu dirinya sendiri.
+                    // if (user.role === ROLE_SUPERADMIN) { // Atau periksa jika username sama
+                    //     canEdit = false;
+                    // }
+                }
+
+                // Membuat HTML untuk tombol aksi
+                if (canEdit) {
+                    actionsHtml += `<button class="btn-warning" onclick="prepareEditUserForm('${user.username}', '${user.role}', '${user.teacherName || ''}')">Edit</button>`;
+                }
+                if (canDelete) {
+                    // Tambahkan spasi jika tombol edit juga ada
+                    if (actionsHtml !== '') actionsHtml += ' ';
+                    actionsHtml += `<button class="btn-danger" onclick="confirmDeleteUser('${user.username}')">Hapus</button>`;
+                }
+
+                if (actionsHtml === '') {
+                    actionsHtml = '<span style="font-size:0.85em; color: #777;">Tidak Ada Aksi</span>';
+                }
+
                 tableHtml += `<tr>
                     <td data-label="Username">${user.username}</td>
                     <td data-label="Role">${user.role}</td>
                     <td data-label="Nama Guru Asli">${user.teacherName || '-'}</td>
                     <td data-label="Aksi" class="actions-cell">
-                        <button class="btn-warning" onclick="prepareEditUserForm('${user.username}', '${user.role}', '${user.teacherName || ''}')">Edit</button>
-                        ${loggedInUser && loggedInUser.username !== user.username ? `<button class="btn-danger" onclick="confirmDeleteUser('${user.username}')">Hapus</button>` : ''}
+                        ${actionsHtml}
                     </td></tr>`;
             });
         } else {
-            tableHtml += `<tr><td colspan="4">Tidak ada pengguna.</td></tr>`;
+            tableHtml += `<tr><td colspan="4" style="text-align:center; padding:15px;">Tidak ada pengguna terdaftar.</td></tr>`;
         }
         container.innerHTML = tableHtml;
     }
 
+    // Modifikasi fungsi prepareEditUserForm()
     function prepareEditUserForm(username, role, teacherName) {
         const formTitle = document.getElementById('userFormTitle');
         const editKey = document.getElementById('editUsernameKey');
         const usernameInput = document.getElementById('manageUsernameInput');
         const passwordInput = document.getElementById('manageUserPasswordInput');
-        const roleSelect = document.getElementById('manageUserRole');
+        // const roleSelect = document.getElementById('manageUserRole'); // Akan di-handle oleh populateRoleDropdown
         const teacherDropdown = document.getElementById('manageUserActualTeacherNameDropdown');
         const teacherTextInput = document.getElementById('manageUserActualTeacherNameInput');
         const saveBtn = document.getElementById('btnSaveUser');
@@ -2423,24 +2727,22 @@
         if(editKey) editKey.value = username; 
         if(usernameInput) { usernameInput.value = username; usernameInput.readOnly = true; }
         if(passwordInput) { passwordInput.value = ''; passwordInput.placeholder = 'Kosongkan jika tidak ubah password'; }
-        if(roleSelect) roleSelect.value = role;
-        
-        toggleManageTeacherNameInput(role); 
-        if (role === 'user') {
-            if (teacherDropdown && teacherDropdown.style.display !== 'none') {
-                teacherDropdown.value = teacherName;
-            } else if (teacherTextInput) {
-                teacherTextInput.value = teacherName;
-            }
+
+        // Mempopulasikan dan mengatur dropdown peran untuk mode edit
+        populateRoleDropdown('manageUserRole', role); // Kirim peran saat ini untuk diseleksi
+
+        // toggleManageTeacherNameInput(role) akan dipanggil oleh populateRoleDropdown
+        if (role === ROLE_USER) { // Menggunakan konstanta
+            populateTeacherDropdownForUserForm(teacherName); // Panggil ini untuk mengisi nama guru jika dropdown
         } else {
             if (teacherDropdown) teacherDropdown.value = '';
             if (teacherTextInput) teacherTextInput.value = '';
         }
-        
+
         if(saveBtn) saveBtn.textContent = 'Update Pengguna'; 
         if(cancelBtn) cancelBtn.style.display = 'inline-block'; 
         clearInlineError('userFormErrorGlobal'); 
-        if(formTitle) window.scrollTo(0, formTitle.offsetTop);
+        if(formTitle) window.scrollTo(0, formTitle.offsetTop - 20); // Scroll ke form
     }
 
     function cancelEditUserForm() { 
@@ -2471,6 +2773,7 @@
         clearInlineError('userFormErrorGlobal');
     }
 
+    // Modifikasi fungsi handleSaveUser()
     function handleSaveUser() { 
         const editUsernameKey = document.getElementById('editUsernameKey').value;
         const isEditMode = !!editUsernameKey;
@@ -2488,8 +2791,10 @@
         const password = passwordEl.value; 
         const role = roleEl.value;
         let teacherName = "";
-        if (role === 'user') {
-            teacherName = (teacherDropdownEl && teacherDropdownEl.style.display !== 'none') ? teacherDropdownEl.value : teacherInputEl.value.trim();
+        if (role === ROLE_USER) { // Menggunakan konstanta
+            teacherName = (teacherDropdownEl && teacherDropdownEl.style.display !== 'none' && teacherDropdownEl.value) 
+                          ? teacherDropdownEl.value 
+                          : teacherInputEl.value.trim();
         }
 
         if (!username) { showInlineError(errorContainerId, "Username wajib."); showInputError(usernameEl); return; }
@@ -2497,13 +2802,20 @@
         if (password && password.length < 4 && (isEditMode && password || !isEditMode) ) { 
             showInlineError(errorContainerId, "Password minimal 4 karakter."); showInputError(passwordEl); return;
         }
-        if (role === 'user' && !teacherName) {
+        if (!role) { // Validasi tambahan jika dropdown role bisa kosong (seharusnya tidak dengan implementasi populate)
+            showInlineError(errorContainerId, "Peran pengguna wajib dipilih."); showInputError(roleEl); return;
+        }
+        if (role === ROLE_USER && !teacherName) { // Menggunakan konstanta
             showInlineError(errorContainerId, "Nama Guru Asli wajib untuk role 'user'.");
             if(teacherDropdownEl && teacherDropdownEl.style.display !== 'none') showInputError(teacherDropdownEl); else showInputError(teacherInputEl);
             return;
         }
 
         showLoading(isEditMode ? "Memperbarui..." : "Menambahkan...");
+        const actingUserRole = loggedInUser.role; // Ambil peran pengguna yang login
+        const actingUsername = loggedInUser.username;
+        const actingRole = loggedInUser.role;
+        
         if (isEditMode) {
             const userDataToUpdate = { newRole: role, newTeacherName: teacherName };
             if (password) userDataToUpdate.newPassword = password; 
@@ -2511,26 +2823,29 @@
                 hideLoading(); showAlert(response.message || response.error, response.success ? 'success' : 'error');
                 if (response.success) { cancelEditUserForm(); setupUserManagementView();  }
             }).withFailureHandler(err => { hideLoading(); showAlert(`Update gagal: ${err.message}`, 'error'); })
-            .updateUserByUsername(editUsernameKey, userDataToUpdate);
+            .updateUserByUsername(editUsernameKey, userDataToUpdate, actingUsername, actingUserRole); // Kirim actingUserRole
         } else {
             const newUser = { username, password, role, teacherName };
             google.script.run.withSuccessHandler(response => {
                 hideLoading(); showAlert(response.message || response.error, response.success ? 'success' : 'error');
                 if (response.success) { cancelEditUserForm(); setupUserManagementView();  }
             }).withFailureHandler(err => { hideLoading(); showAlert(`Tambah gagal: ${err.message}`, 'error'); })
-            .addNewUser(newUser);
+            .addNewUser(newUser, actingUsername, actingUserRole); // Kirim actingUserRole
         }
     }
 
+    // Modifikasi fungsi confirmDeleteUser()
     function confirmDeleteUser(username) {
         if (username === loggedInUser.username) { showAlert("Tidak bisa menghapus akun sendiri.", 'error'); return; }
         if (confirm(`Yakin hapus pengguna '${username}'?`)) {
             showLoading("Menghapus pengguna...");
+            const actingUsername = loggedInUser.username;
+            const actingUserRole = loggedInUser.role; // Ambil peran pengguna yang login
             google.script.run.withSuccessHandler(response => {
                 hideLoading(); showAlert(response.message || response.error, response.success ? 'success' : 'error');
                 if (response.success) setupUserManagementView(); 
             }).withFailureHandler(err => { hideLoading(); showAlert(`Hapus gagal: ${err.message}`, 'error'); })
-            .deleteUserByUsername(username);
+            .deleteUserByUsername(username, actingUsername, actingUserRole); // Kirim actingUserRole
         }
     }
 
@@ -4129,7 +4444,7 @@
                 hideLoading();
                 showAlert(`Gagal mengunci bulan: ${err.message}`, 'error');
             })
-            .lockMonth(monthYearToLock);
+            .lockMonth(monthYearToLock, loggedInUser.username, loggedInUser.role);
     }
 
     function handleUnlockThisMonth(monthYearToUnlock) {
@@ -4153,7 +4468,7 @@
                 hideLoading();
                 showAlert(`Gagal membuka kunci bulan: ${err.message}`, 'error');
             })
-            .unlockMonth(monthYearToUnlock);
+            .unlockMonth(monthYearToUnlock, loggedInUser.username, loggedInUser.role);
     }
 
     // Modifikasi pada fungsi setupAdminDashboardView(data)
@@ -4224,37 +4539,232 @@
         }
     }
 
-    // Panggil initializeAllPasswordToggles saat halaman dimuat atau view dirender
-    // Anda perlu memanggil ini di dalam fungsi renderView atau setup fungsi untuk view yang relevan.
-    // Misalnya, di setupLoginFormEventListeners, setupUserManagementView, dan saat modal changePassword ditampilkan.
+    // Di dalam file index.html, dalam blok <script>
 
-    // Modifikasi pada setupLoginFormEventListeners:
-    // Hapus atau komentari bagian toggle password yang spesifik di sana jika sudah ada,
-    // karena initializeAllPasswordToggles akan menanganinya.
-    // Atau, pastikan panggilannya tidak duplikat.
-    // Cara terbaik adalah memanggil initializeAllPasswordToggles() setelah HTML untuk form/modal tersebut dimuat.
+    // ... (variabel global dan fungsi lain yang sudah ada) ...
 
-    // Contoh pemanggilan:
-    // Di dalam renderView, setelah HTML dimuat:
-    // loadHtmlContent(htmlFile, targetElementId, (dataForSetupFunction) => {
-    // if (setupFunction) {
-    // setupFunction(dataForSetupFunction);
+    // Fungsi untuk navigasi ke halaman log aktivitas
+    function navigateToActivityLog() {
+        if (loggedInUser && loggedInUser.role === ROLE_SUPERADMIN) {
+            // 'activity_log' adalah nama view baru yang akan kita daftarkan di renderView
+            renderView('activity_log');
+        } else {
+            showAlert("Hanya Superadmin yang dapat mengakses halaman ini.", "error");
+            // Arahkan kembali ke dashboard yang sesuai atau logout jika perlu
+            if (loggedInUser && loggedInUser.role === ROLE_ADMIN) {
+                goBackToAdminDashboard();
+            } else {
+                logout();
+            }
+        }
+    }
+
+    // Di dalam file index.html, dalam blok <script>
+
+    // --- Variabel Global untuk Paginasi dan Filter Log (sudah ada atau tambahkan) ---
+    let currentLogPage = 1;
+    const LOGS_PER_PAGE = 30; // Anda bisa sesuaikan jumlah log per halaman
+    let totalLogEntriesGlobal = 0; // Untuk menyimpan total entri setelah filter dari server
+    let currentLogFiltersGlobal = {}; // Untuk menyimpan state filter saat ini
+
+    // Fungsi setupActivityLogView (diperbarui)
+    function setupActivityLogView() {
+        window.scrollTo(0, 0);
+        currentLogPage = 1; // Selalu mulai dari halaman 1 saat view dimuat
+        // Set filter tanggal default (misalnya, hari ini) atau kosongkan
+        const today = new Date();
+        const logFilterDateEndEl = document.getElementById('logFilterDateEnd');
+        // const logFilterDateStartEl = document.getElementById('logFilterDateStart');
+        if(logFilterDateEndEl) logFilterDateEndEl.valueAsDate = today; 
+        // Jika ingin default start date (misal 7 hari lalu):
+        // if(logFilterDateStartEl) {
+        //     const sevenDaysAgo = new Date();
+        //     sevenDaysAgo.setDate(today.getDate() - 7);
+        //     logFilterDateStartEl.valueAsDate = sevenDaysAgo;
+        // }
+
+        resetActivityLogFilters(false); // Panggil reset untuk membersihkan input lain, false = jangan langsung load
+        loadActivityLogWithFilters();   // Lakukan pemanggilan data awal dengan filter default/kosong
+    }
+
+    // Di dalam file index.html, dalam blok <script>
+    // Fungsi loadActivityLogWithFilters yang sudah dimodifikasi
+
+    function loadActivityLogWithFilters(isPageChange = false) {
+        if (!isPageChange) {
+            currentLogPage = 1;
+        }
+
+        const filterUsernameEl = document.getElementById('logFilterUsername');
+        const filterActionTypeEl = document.getElementById('logFilterActionType');
+        const filterStartDateEl = document.getElementById('logFilterDateStart');
+        const filterEndDateEl = document.getElementById('logFilterDateEnd');
+
+        // Ambil nilai tanggal sebagai string "YYYY-MM-DD" langsung dari input type="date"
+        const startDateValue = filterStartDateEl && filterStartDateEl.value ? filterStartDateEl.value : null;
+        const endDateValue = filterEndDateEl && filterEndDateEl.value ? filterEndDateEl.value : null;
+
+        currentLogFiltersGlobal = {
+            filterUsername: filterUsernameEl ? filterUsernameEl.value.trim() : "",
+            filterActionType: filterActionTypeEl ? filterActionTypeEl.value.trim() : "",
+            filterStartDateString: startDateValue, // Kirim sebagai string YYYY-MM-DD atau null
+            filterEndDateString: endDateValue,     // Kirim sebagai string YYYY-MM-DD atau null
+            limit: LOGS_PER_PAGE,
+            offset: (currentLogPage - 1) * LOGS_PER_PAGE
+        };
+        
+        // Validasi sederhana untuk rentang tanggal (perbandingan string YYYY-MM-DD bisa dilakukan)
+        if (currentLogFiltersGlobal.filterStartDateString && currentLogFiltersGlobal.filterEndDateString &&
+            currentLogFiltersGlobal.filterStartDateString > currentLogFiltersGlobal.filterEndDateString) {
+            showAlert("Tanggal 'Dari' tidak boleh lebih besar dari tanggal 'Sampai'. Filter tanggal diabaikan.", "warning");
+            // Anda bisa memilih untuk mengabaikan filter tanggal atau tidak melanjutkan
+            // Untuk sekarang, kita akan tetap melanjutkan tapi server mungkin tidak menghasilkan apa-apa jika tanggal tidak logis
+            // Atau lebih baik, kosongkan filter tanggal jika tidak valid:
+            // currentLogFiltersGlobal.filterStartDateString = null;
+            // currentLogFiltersGlobal.filterEndDateString = null;
+            // Atau return saja:
+            // return; 
+        }
+
+        showLoading("Memuat log aktivitas...");
+        const tableBody = document.getElementById('activityLogTableBody');
+        if (tableBody) {
+            tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px;">Memuat data log...</td></tr>`;
+        }
+        document.getElementById('totalLogEntriesInfo').textContent = '';
+
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (!tableBody) return;
+
+                if (response.success) {
+                    totalLogEntriesGlobal = response.totalFilteredLogs || 0;
+                    renderActivityLogTable(response.logs);
+                    updateLogPaginationControls();
+                    document.getElementById('totalLogEntriesInfo').textContent = `Total ${totalLogEntriesGlobal} entri ditemukan ${ (startDateValue || endDateValue) ? 'sesuai filter' : ''}.`;
+                } else {
+                    showAlert(response.error || "Gagal memuat log.", "error");
+                    tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:red;">${response.error || 'Gagal memuat data.'}</td></tr>`;
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                showAlert(`Error server saat mengambil log: ${err.message}`, "error");
+                if (tableBody) {
+                    tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:red;">Error server: ${err.message}</td></tr>`;
+                }
+            })
+            .getActivityLogData(loggedInUser.role, currentLogFiltersGlobal);
+    }
+
+    // Fungsi BARU untuk mereset filter
+    function resetActivityLogFilters(doLoad = true) {
+        const filterUsernameEl = document.getElementById('logFilterUsername');
+        const filterActionTypeEl = document.getElementById('logFilterActionType');
+        const filterStartDateEl = document.getElementById('logFilterDateStart');
+        const filterEndDateEl = document.getElementById('logFilterDateEnd');
+
+        if (filterUsernameEl) filterUsernameEl.value = '';
+        if (filterActionTypeEl) filterActionTypeEl.value = '';
+        if (filterStartDateEl) filterStartDateEl.value = '';
+        if (filterEndDateEl) {
+            // Set default end date ke hari ini lagi jika diinginkan saat reset
+            // filterEndDateEl.valueAsDate = new Date();
+            filterEndDateEl.value = ''; // Atau kosongkan saja
+        }
+
+        currentLogFiltersGlobal = {}; // Hapus semua filter yang tersimpan
+        currentLogPage = 1;
+        if (doLoad) {
+            loadActivityLogWithFilters();
+        }
+    }
+
+    // Fungsi BARU untuk memperbarui kontrol paginasi
+    function updateLogPaginationControls() {
+        const pageInfo = document.getElementById('logPageInfo');
+        const prevButton = document.getElementById('logPrevPage');
+        const nextButton = document.getElementById('logNextPage');
+
+        if (!pageInfo || !prevButton || !nextButton) {
+            console.error("Elemen kontrol paginasi tidak ditemukan.");
+            return;
+        }
+
+        const totalPages = Math.ceil(totalLogEntriesGlobal / LOGS_PER_PAGE);
+        pageInfo.textContent = `Halaman ${currentLogPage} dari ${totalPages > 0 ? totalPages : 1}`;
+
+        prevButton.disabled = (currentLogPage <= 1);
+        nextButton.disabled = (currentLogPage >= totalPages || totalPages === 0);
+    }
+
+    // Fungsi BARU untuk mengganti halaman log
+    function changeLogPage(direction) {
+        const newPage = currentLogPage + direction;
+        // Tidak perlu cek totalPages di sini karena loadActivityLogWithFilters akan dipanggil
+        // dan server akan mengembalikan data yang sesuai (atau kosong jika halaman tidak ada)
+        // Namun, kita bisa nonaktifkan tombol berdasarkan totalPages di updateLogPaginationControls
+
+        currentLogPage = newPage;
+        loadActivityLogWithFilters(true); // true menandakan ini adalah perubahan halaman
+    }
+
+    // renderActivityLogTable(logs) sudah ada dari langkah sebelumnya, pastikan format timestamp-nya baik.
+    // Fungsi seperti navigateToActivityLog, goBackToAdminDashboard juga sudah ada.
+
+    // Fungsi untuk merender data log ke dalam tabel
+    function renderActivityLogTable(logs) {
+        const tableBody = document.getElementById('activityLogTableBody');
+        if (!tableBody) return;
+
+        let html = '';
+        if (logs && logs.length > 0) {
+            logs.forEach(log => {
+                // Format timestamp agar lebih mudah dibaca
+                let formattedTimestamp = log.timestamp;
+                try {
+                    // Mencoba format ke 'dd/MM/yyyy HH:mm:ss', sesuaikan dengan lokal Anda jika perlu
+                    // Google Sheet DisplayValue biasanya sudah dalam format yang cukup baik,
+                    // tapi jika itu ISO string, kita bisa format.
+                    const dateObj = new Date(log.timestamp);
+                    if (!isNaN(dateObj)) {
+                        // Gunakan toLocaleString dengan opsi untuk format Indonesia
+                        formattedTimestamp = dateObj.toLocaleString('id-ID', {
+                            day: '2-digit', month: '2-digit', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                        }).replace(/\./g, ':'); // Mengganti titik pemisah waktu dengan :
+                    }
+                } catch (e) {
+                    // Biarkan timestamp apa adanya jika parsing gagal
+                }
+
+                html += `<tr>
+                    <td data-label="Waktu">${formattedTimestamp}</td>
+                    <td data-label="Pengguna">${log.actorUsername || '-'}</td>
+                    <td data-label="Peran Aktor">${log.actorRole || '-'}</td>
+                    <td data-label="Jenis Aksi" style="word-break:break-word;">${log.actionType || '-'}</td>
+                    <td data-label="Target Entitas" style="word-break:break-word;">${log.targetEntity || '-'}</td>
+                    <td data-label="Detail" style="max-width: 250px; overflow-wrap: break-word; white-space: pre-wrap;">${log.details || '-'}</td>
+                    <td data-label="Status">${log.status || '-'}</td>
+                </tr>`;
+            });
+        } else {
+            html = `<tr><td colspan="7" style="text-align:center; padding:20px;">Tidak ada aktivitas yang tercatat atau sesuai filter.</td></tr>`;
+        }
+        tableBody.innerHTML = html;
+    }
+
+    // Jangan lupa untuk menambahkan case 'activity_log' ke fungsi renderView Anda
+    // Contoh:
+    // function renderView(viewName, data, postRenderCallback) {
+    // // ...
+    // case 'activity_log':
+    // htmlFile = 'activity_log_content.html';
+    // setupFunction = setupActivityLogView;
+    // break;
+    // // ...
     // }
-    // initializeAllPasswordToggles(); // <--- Panggil di sini
-    // if (postRenderCallback) {
-    // postRenderCallback();
-    // }
-    // }, data);
-
-    // Saat menampilkan modal (misalnya di openChangePasswordModal):
-    // function openChangePasswordModal() {
-    //   // ... kode untuk menampilkan modal ...
-    //   initializeAllPasswordToggles(); // Pastikan toggle di dalam modal diinisialisasi
-    // }
-
-    // Pastikan setupLoginFormEventListeners memanggil initializeAllPasswordToggles()
-    // Atau, jika Anda memanggil initializeAllPasswordToggles() secara global setelah setiap renderView,
-    // maka Anda tidak perlu memanggilnya secara spesifik di setiap setup fungsi.
   </script>
 </body>
 </html>
