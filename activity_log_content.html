@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+</head>
+<body>
+  <div class="container" id="activityLogContainer">
+    <h2>Log Aktivitas Pengguna</h2>
+
+    <div class="filter-controls" style="margin-bottom: 20px; padding: 15px 20px; background-color:#f9f9f9; border: 1px solid #eee; border-radius:8px;">
+      <h4 style="margin-top:0; margin-bottom:15px; color:var(--primary);">Filter Log:</h4>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:15px; align-items:flex-end;">
+        <div>
+          <label for="logFilterDateStart" style="font-size:0.9em; margin-bottom:3px;">Dari Tanggal:</label>
+          <input type="date" id="logFilterDateStart" style="width:100%; padding:8px 10px; font-size:15px; border-radius:5px; border:1px solid #ccc;">
+        </div>
+        <div>
+          <label for="logFilterDateEnd" style="font-size:0.9em; margin-bottom:3px;">Sampai Tanggal:</label>
+          <input type="date" id="logFilterDateEnd" style="width:100%; padding:8px 10px; font-size:15px; border-radius:5px; border:1px solid #ccc;">
+        </div>
+        <div>
+          <label for="logFilterUsername" style="font-size:0.9em; margin-bottom:3px;">Username Aktor:</label>
+          <input type="text" id="logFilterUsername" placeholder="Nama pengguna" style="width:100%; padding:8px 10px; font-size:15px; border-radius:5px; border:1px solid #ccc;">
+        </div>
+        <div>
+          <label for="logFilterActionType" style="font-size:0.9em; margin-bottom:3px;">Jenis Aksi:</label>
+          <input type="text" id="logFilterActionType" placeholder="Mis: CREATE_USER" style="width:100%; padding:8px 10px; font-size:15px; border-radius:5px; border:1px solid #ccc;">
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="loadActivityLogWithFilters()" style="padding:9px 15px; font-size:15px; flex-grow:1;">Terapkan</button>
+            <button onclick="resetActivityLogFilters()" style="padding:9px 15px; font-size:15px; background-color:#6c757d; flex-grow:1;">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-container" style="max-height: 50vh; overflow-y: auto;"> <table id="activityLogTable">
+        <thead>
+          <tr>
+            <th style="width: 18%;">Waktu</th>
+            <th style="width: 15%;">Pengguna (Aktor)</th>
+            <th style="width: 10%;">Peran Aktor</th>
+            <th style="width: 17%;">Jenis Aksi</th>
+            <th style="width: 15%;">Target Entitas</th>
+            <th>Detail</th>
+            <th style="width: 8%;">Status</th>
+          </tr>
+        </thead>
+        <tbody id="activityLogTableBody">
+          <tr><td colspan="7" style="text-align:center; padding:20px;">Memuat log aktivitas...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="logPaginationControls" style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding: 0 10px;">
+      <button id="logPrevPage" onclick="changeLogPage(-1)" disabled style="padding:8px 15px; font-size:14px;">&laquo; Sebelumnya</button>
+      <span id="logPageInfo" style="margin: 0 10px; font-size:0.95em; color:#555;">Halaman 1 dari 1</span>
+      <button id="logNextPage" onclick="changeLogPage(1)" disabled style="padding:8px 15px; font-size:14px;">Berikutnya &raquo;</button>
+    </div>
+    <div style="text-align:center; margin-top:10px;">
+        <small id="totalLogEntriesInfo" style="color: #777; font-size:0.85em;"></small>
+    </div>
+
+    <div class="btn-container" style="margin-top: 30px;">
+      <button onclick="goBackToAdminDashboard()">Kembali ke Dashboard Admin</button>
+    </div>
+  </div>
+</body>
+</html>
