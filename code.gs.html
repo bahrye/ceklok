@@ -4085,6 +4085,11 @@ function logUserActivity(actorUsername, actorRole, actionType, targetEntity, det
 // Di dalam file code.gs
 // Fungsi getActivityLogData yang sudah dimodifikasi
 
+// Di dalam file code.gs.html
+
+// Fungsi getActivityLogData yang sudah dimodifikasi untuk parsing timestamp yang lebih baik
+// dan menerima parameter sortir
+
 function getActivityLogData(actingUserRole, options = {}) {
   if (actingUserRole !== ROLE_SUPERADMIN) {
     return { success: false, error: "Akses ditolak. Hanya Superadmin yang dapat melihat log aktivitas." };
@@ -4101,24 +4106,55 @@ function getActivityLogData(actingUserRole, options = {}) {
       return { success: true, logs: [], totalFilteredLogs: 0, message: "Belum ada aktivitas yang tercatat." };
     }
 
-    const allLogValues = logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 7).getDisplayValues();
-    let filteredLogs = allLogValues.map(row => ({
-      timestamp: row[0], // Ini adalah string tanggal dari sheet
-      actorUsername: row[1],
-      actorRole: row[2],
-      actionType: row[3],
-      targetEntity: row[4],
-      details: row[5],
-      status: row[6]
-    }));
+    // Ambil semua data (baris ke-2 sampai terakhir, 7 kolom)
+    const logSheetRange = logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 7);
+    const allLogRawValues = logSheetRange.getValues(); // Untuk timestamp jika berupa Date object
+    const allLogDisplayValues = logSheetRange.getDisplayValues(); // Untuk semua field lainnya
 
-    Logger.log("Jumlah log mentah sebelum filter: " + filteredLogs.length);
-    if (filteredLogs.length > 0) {
-        Logger.log("Contoh timestamp log mentah dari sheet: " + filteredLogs[0].timestamp);
-    }
-    // --- Implementasi Filter ---
-    // Ambil string tanggal langsung dari options, jangan ubah dulu di klien
+    let mappedLogs = allLogRawValues.map((row, index) => {
+      const displayRow = allLogDisplayValues[index];
+      let timestampObject;
+      // Kolom pertama (indeks 0) adalah Timestamp
+      if (row[0] instanceof Date) {
+        timestampObject = row[0];
+      } else {
+        // Coba parsing display value. Ini mungkin perlu penyesuaian berdasarkan format tanggal di sheet Anda.
+        // Asumsi format umum yang bisa diparse atau dd/MM/yyyy HH:mm:ss
+        let tsString = displayRow[0];
+        let parsedDate = new Date(tsString); // Coba parsing langsung
+        if (isNaN(parsedDate.getTime())) { // Jika gagal, coba format dd/MM/yyyy HH:mm:ss
+            const parts = tsString.match(/(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}):(\d{2}):(\d{2})/);
+            if (parts) {
+                // parts[1]=dd, parts[2]=MM, parts[3]=yyyy, parts[4]=HH, parts[5]=mm, parts[6]=ss
+                parsedDate = new Date(parts[3], parseInt(parts[2],10) - 1, parts[1], parts[4], parts[5], parts[6]);
+            } else { // Coba format dd/MM/yyyy saja (jika tidak ada waktu)
+                const datePartsOnly = tsString.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+                if(datePartsOnly){
+                    parsedDate = new Date(datePartsOnly[3], parseInt(datePartsOnly[2],10) - 1, datePartsOnly[1]);
+                } else {
+                    parsedDate = null; // Tidak bisa diparse
+                    Logger.log("Timestamp tidak dapat diparse: " + tsString);
+                }
+            }
+        }
+        timestampObject = parsedDate;
+      }
+
+      return {
+        timestamp: displayRow[0], // Selalu kirim string display ke client
+        timestamp_internal_sort: timestampObject, // Untuk sorting internal
+        actorUsername: displayRow[1],
+        actorRole: displayRow[2],
+        actionType: displayRow[3],
+        targetEntity: displayRow[4],
+        details: displayRow[5],
+        status: displayRow[6]
+      };
+    }).filter(log => log.timestamp_internal_sort instanceof Date); // Hanya proses log dengan timestamp valid
+
+    // --- Implementasi Filter (dari kode Anda sebelumnya) ---
     const { filterUsername, filterActionType, filterStartDateString, filterEndDateString } = options;
+    let filteredLogs = mappedLogs;
 
     if (filterUsername && filterUsername.trim() !== "") {
       const searchTerm = filterUsername.trim().toLowerCase();
@@ -4129,56 +4165,63 @@ function getActivityLogData(actingUserRole, options = {}) {
       filteredLogs = filteredLogs.filter(log => log.actionType.toLowerCase().includes(searchTerm));
     }
 
-    // Penanganan filter tanggal yang lebih hati-hati
-    if (filterStartDateString) { // filterStartDateString diharapkan "YYYY-MM-DD"
+    if (filterStartDateString) {
       try {
         const [year, month, day] = filterStartDateString.split('-').map(Number);
-        // Buat tanggal di awal hari (00:00:00) di zona waktu skrip
-        const startDate = new Date(year, month - 1, day, 0, 0, 0, 0); 
-        Logger.log(`Filter - StartDate (dari YYYY-MM-DD "${filterStartDateString}") dikonversi menjadi objek Date server: <span class="math-inline">\{startDate\.toISOString\(\)\} \(</span>{startDate.toString()})`); // Log ISO dan string lokal server
-        
-        filteredLogs = filteredLogs.filter(log => {
-          try {
-            // Konversi timestamp log (string) ke objek Date untuk perbandingan
-            return new Date(log.timestamp) >= startDate;
-          } catch (dateParseErr) { return false; /* Abaikan log dengan timestamp tidak valid */ }
-        });
-        Logger.log("Jumlah log setelah filter StartDate: " + filteredLogs.length);
-      } catch (e) { 
-        Logger.log(`Error memproses filterStartDateString "${filterStartDateString}": ${e.message}`); 
-      }
+        const startDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+        filteredLogs = filteredLogs.filter(log => log.timestamp_internal_sort >= startDate);
+      } catch (e) { Logger.log(`Error parsing filterStartDateString: ${e.message}`); }
     }
 
-    if (filterEndDateString) { // filterEndDateString diharapkan "YYYY-MM-DD"
+    if (filterEndDateString) {
       try {
         const [year, month, day] = filterEndDateString.split('-').map(Number);
-        // Buat tanggal di akhir hari (23:59:59.999) di zona waktu skrip
-        const endDate = new Date(year, month - 1, day, 23, 59, 59, 999); 
-        Logger.log(`Filter - EndDate (dari YYYY-MM-DD "${filterEndDateString}") dikonversi menjadi objek Date server: <span class="math-inline">\{endDate\.toISOString\(\)\} \(</span>{endDate.toString()})`);
-
-        filteredLogs = filteredLogs.filter(log => {
-          try {
-            return new Date(log.timestamp) <= endDate;
-          } catch (dateParseErr) { return false; }
-        });
-        Logger.log("Jumlah log setelah filter EndDate: " + filteredLogs.length);
-      } catch (e) { 
-        Logger.log(`Error memproses filterEndDateString "${filterEndDateString}": ${e.message}`); 
-      }
+        const endDate = new Date(year, month - 1, day, 23, 59, 59, 999);
+        filteredLogs = filteredLogs.filter(log => log.timestamp_internal_sort <= endDate);
+      } catch (e) { Logger.log(`Error parsing filterEndDateString: ${e.message}`); }
     }
     // --- Akhir Implementasi Filter ---
 
-    filteredLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // --- Implementasi Sorting ---
+    const sortBy = options.sortBy || 'timestamp_internal_sort'; // Default sort
+    const sortDir = options.sortDir || 'desc'; // Default descending
+
+    filteredLogs.sort((a, b) => {
+      let valA = a[sortBy];
+      let valB = b[sortBy];
+
+      if (sortBy === 'timestamp_internal_sort') {
+        valA = valA instanceof Date ? valA.getTime() : 0;
+        valB = valB instanceof Date ? valB.getTime() : 0;
+      } else { // Untuk kolom string
+        valA = String(valA || "").toLowerCase(); // Tangani null/undefined dengan string kosong
+        valB = String(valB || "").toLowerCase();
+      }
+
+      let comparison = 0;
+      if (valA > valB) {
+        comparison = 1;
+      } else if (valA < valB) {
+        comparison = -1;
+      }
+      return (sortDir === 'desc' ? (comparison * -1) : comparison);
+    });
+    // --- Akhir Implementasi Sorting ---
 
     const totalFilteredLogs = filteredLogs.length;
-    const limit = parseInt(options.limit, 10) || 50;
+    const limit = parseInt(options.limit, 10) || 30; // Sesuaikan default limit jika perlu
     const offset = parseInt(options.offset, 10) || 0;
-    const paginatedLogs = filteredLogs.slice(offset, offset + limit);
+    
+    // Hapus field internal sebelum kirim ke client
+    const paginatedLogs = filteredLogs.slice(offset, offset + limit).map(log => {
+        const { timestamp_internal_sort, ...clientLog } = log;
+        return clientLog;
+    });
 
     return { success: true, logs: paginatedLogs, totalFilteredLogs: totalFilteredLogs };
 
   } catch (e) {
-    Logger.log(`Error di getActivityLogData (options: ${JSON.stringify(options)}): ${e.toString()}`);
+    Logger.log(`Error di getActivityLogData (options: ${JSON.stringify(options)}): ${e.toString()}\nStack: ${e.stack}`);
     logUserActivity("SYSTEM", "N/A", "GET_ACTIVITY_LOG_ERROR", "", `Options: ${JSON.stringify(options)}, Error: ${e.message}`, "ERROR");
     return { success: false, error: `Gagal mengambil log aktivitas: ${e.message}` };
   }
