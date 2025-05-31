@@ -313,7 +313,13 @@
           font-weight: 500; color: var(--grey-text); margin-right: 8px;
       }
       #ceklokInputContainer .table-container td select.inline-select {
-        flex-grow: 1; width: auto; max-width: 250px; padding: 9px 10px; font-size: 1em;
+        flex-grow: 1; 
+        width: auto; /* Atau bisa juga dipertimbangkan 100% jika flex-basis diatur lebih eksplisit */
+        max-width: 120px; /* Menyamakan max-width dengan input jam (input.inline-input) */
+        padding: 9px 10px; 
+        font-size: 1em;
+        box-sizing: border-box; /* Memastikan padding tidak menambah lebar total melebihi max-width */
+        /* text-overflow: ellipsis; */ /* Opsional: jika teks di dalam select terlalu panjang, akan menampilkan "..." */
       }
       #ceklokInputContainer .table-container td[data-label="Hari"]::before,
       #ceklokInputContainer .table-container td[data-label="Tanggal"]::before { font-weight: bold; color: var(--primary); }
@@ -974,6 +980,18 @@
     </div>
   </div>
 
+  <div id="overallSummaryDetailModal" class="modal-overlay" style="display:none; z-index: 20002;">
+    <div class="modal-content" style="max-width: 550px;">
+      <span class="modal-close-button" onclick="closeOverallSummaryDetailModal()">&times;</span>
+      <h3 id="overallSummaryDetailTitle">Detail Kehadiran</h3>
+      <div id="overallSummaryDetailContent" style="max-height: 400px; overflow-y: auto; padding: 10px; background-color: #f9f9f9; border-radius: 4px; border: 1px solid #eee;">
+        </div>
+      <div class="btn-container" style="margin-top: 20px;">
+        <button onclick="closeOverallSummaryDetailModal()" style="background-color: #777;">Tutup</button>
+      </div>
+    </div>
+  </div>
+
   <footer>
     <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v1.2</p>
   </footer>
@@ -1200,6 +1218,10 @@
             case 'activity_log':
                 htmlFile = 'activity_log_content.html';
                 setupFunction = setupActivityLogView;
+                break;
+            case 'overall_teacher_summary': // Add this case
+                htmlFile = 'overall_summary_content.html';
+                setupFunction = setupOverallSummaryView;
                 break;
             default:
                 console.error("Tampilan tidak dikenal:", viewName);
@@ -1674,6 +1696,14 @@
     function setupAdminDashboardView(data) {
         // data yang diterima berisi: { guruList: response.guruList, adminDefinedMinMonthYearDisplay: response.adminDefinedMinMonthYear }
         // dari pemanggilan getInitialData() saat admin/superadmin login.
+        const overallSummaryButton = document.getElementById('btnOverallSummary');
+        if (overallSummaryButton) {
+            if (loggedInUser && loggedInUser.role === ROLE_SUPERADMIN) {
+                overallSummaryButton.style.display = 'block'; // Or 'inline-block' depending on your layout
+            } else {
+                overallSummaryButton.style.display = 'none';
+            }
+        }
 
         const namaSelect = document.getElementById('namaAdminSelect');
         if (namaSelect) {
@@ -4833,6 +4863,231 @@
             activeIcon.classList.add(currentLogSortDirection);
         }
     }
+  
+    // --- Add to renderView function ---
+    // case 'overall_teacher_summary': // Add this case
+    //     htmlFile = 'overall_summary_content.html';
+    //     setupFunction = setupOverallSummaryView;
+    //     break;
+
+    // --- Add these new functions ---
+
+    function navigateToOverallTeacherSummary() {
+        if (loggedInUser && loggedInUser.role === ROLE_SUPERADMIN) {
+            renderView('overall_teacher_summary');
+        } else {
+            showAlert("Akses ditolak. Fitur ini hanya untuk Superadmin.", "error");
+        }
+    }
+
+    function setupOverallSummaryView() {
+        const bulanSelect = document.getElementById('overallSummaryBulanSelect');
+        const tahunSelect = document.getElementById('overallSummaryTahunSelect');
+
+        // Populate year select (similar to other views)
+        const currentYear = new Date().getFullYear();
+        let minYearOverall = getYearFromMMYYYY(globalAdminMinMonthYear) || (currentYear - 2);
+        let maxYearOverall = getYearFromMMYYYY(globalServerCurrentMonthYear) || currentYear;
+        
+        populateYearSelect('overallSummaryTahunSelect', minYearOverall, maxYearOverall, maxYearOverall);
+        if (bulanSelect && globalServerCurrentMonthYear) {
+            bulanSelect.value = getMonthStrFromMMYYYY(globalServerCurrentMonthYear);
+        }
+        validateMonthRange('overallSummaryBulanSelect', 'overallSummaryTahunSelect'); // Ensure validation logic is available
+
+        // Set initial state for results area
+        const resultsArea = document.getElementById('overallSummaryResultsArea');
+        if(resultsArea) resultsArea.innerHTML = '<p style="text-align:center;"><i>Silakan pilih periode dan klik "Tampilkan Ringkasan".</i></p>';
+        const periodDisplay = document.getElementById('overallSummaryPeriodDisplay');
+        const totalWorkingDaysDisplay = document.getElementById('overallTotalWorkingDays');
+        const effectiveDaysDisplay = document.getElementById('overallEffectiveDaysPassed');
+        if(periodDisplay) periodDisplay.textContent = "-";
+        if(totalWorkingDaysDisplay) totalWorkingDaysDisplay.textContent = "-";
+        if(effectiveDaysDisplay) effectiveDaysDisplay.textContent = "-";
+
+        window.scrollTo(0, 0);
+    }
+
+    // Variabel global untuk menyimpan data ringkasan yang sedang ditampilkan
+    let currentOverallSummaryData = null;
+
+    function openOverallSummaryDetailModal(title, detailsArray) {
+        const modal = document.getElementById('overallSummaryDetailModal');
+        const titleEl = document.getElementById('overallSummaryDetailTitle');
+        const contentEl = document.getElementById('overallSummaryDetailContent');
+
+        if (modal && titleEl && contentEl) {
+            titleEl.textContent = title;
+            if (detailsArray && detailsArray.length > 0) {
+                let listHtml = '<ul>';
+                detailsArray.forEach(item => {
+                    listHtml += `<li>${item}</li>`;
+                });
+                listHtml += '</ul>';
+                contentEl.innerHTML = listHtml;
+            } else {
+                contentEl.innerHTML = '<p style="text-align:center; font-style:italic;">Tidak ada detail untuk ditampilkan.</p>';
+            }
+            modal.style.display = 'flex';
+        }
+    }
+
+    function closeOverallSummaryDetailModal() {
+        const modal = document.getElementById('overallSummaryDetailModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+        document.getElementById('overallSummaryDetailContent').innerHTML = ''; // Kosongkan konten
+    }
+
+    function loadOverallSummaryData() {
+        const bulanSelect = document.getElementById('overallSummaryBulanSelect');
+        const tahunSelect = document.getElementById('overallSummaryTahunSelect');
+        const resultsArea = document.getElementById('overallSummaryResultsArea');
+        const periodDisplay = document.getElementById('overallSummaryPeriodDisplay');
+        const totalWorkingDaysDisplay = document.getElementById('overallTotalWorkingDays');
+        const effectiveDaysDisplay = document.getElementById('overallEffectiveDaysPassed');
+
+        if (!bulanSelect || !tahunSelect || !resultsArea || !periodDisplay || !totalWorkingDaysDisplay || !effectiveDaysDisplay) {
+            showAlert("Elemen UI untuk ringkasan keseluruhan tidak ditemukan.", "error");
+            return;
+        }
+        const selectedMonth = bulanSelect.value;
+        const selectedYear = tahunSelect.value;
+        if (!selectedMonth || !selectedYear) {
+            showAlert("Pilih bulan dan tahun terlebih dahulu.", "warning");
+            return;
+        }
+        if (bulanSelect.options[bulanSelect.selectedIndex] && bulanSelect.options[bulanSelect.selectedIndex].disabled) {
+            showAlert("Bulan yang dipilih tidak valid untuk tahun ini.", "warning");
+            return;
+        }
+        const monthYear = `${selectedMonth}/${selectedYear}`;
+
+        showLoading("Memuat ringkasan keseluruhan guru...");
+        resultsArea.innerHTML = '<p style="text-align:center;">Memuat data...</p>'; // Ganti dengan pesan loading tabel
+        periodDisplay.textContent = monthYear;
+        totalWorkingDaysDisplay.textContent = "Memuat...";
+        effectiveDaysDisplay.textContent = "Memuat...";
+
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success) {
+                    currentOverallSummaryData = response.allTeachersSummary; // Simpan data untuk modal
+                    
+                    periodDisplay.textContent = response.monthYear || monthYear;
+                    totalWorkingDaysDisplay.textContent = response.totalWorkingDaysInMonth !== undefined ? response.totalWorkingDaysInMonth : "-";
+                    effectiveDaysDisplay.textContent = response.effectiveWorkingDaysPassed !== undefined ? response.effectiveWorkingDaysPassed : "-";
+
+                    if (response.allTeachersSummary && response.allTeachersSummary.length > 0) {
+                        let tableHtml = `
+                            <table id="overallSummaryTable">
+                                <thead>
+                                    <tr>
+                                        <th>Nama Guru</th>
+                                        <th>Ceklok Terisi Lengkap</th>
+                                        <th>Hadir (Jam Lengkap)</th>
+                                        <th>Hari Libur Sekolah (Input Guru)</th>
+                                        <th>Alasan Lain (Valid)</th>
+                                        <th>Alpa</th>
+                                        <th>Ceklok Tidak Lengkap</th>
+                                        <th>Persentase Pengisian</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+
+                        response.allTeachersSummary.forEach((teacher, index) => {
+                            tableHtml += `<tr>
+                                <td data-label="Nama Guru">${teacher.teacherName}</td>
+                                <td data-label="Ceklok Terisi Lengkap" style="text-align:center;">${teacher.completedChecklokCount} hari</td>
+                                <td data-label="Hadir (Jam Lengkap)">${teacher.presentDetails.length} hari 
+                                    ${teacher.presentDetails.length > 0 ? `<button class="btn-detail-summary" onclick="showSummaryDetail(${index}, 'presentDetails', 'Hadir: ${teacher.teacherName}')">Detail</button>` : ''}
+                                </td>
+                                <td data-label="Hari Libur Sekolah (Input Guru)">${teacher.schoolHolidayDetails.length} hari
+                                    ${teacher.schoolHolidayDetails.length > 0 ? `<button class="btn-detail-summary" onclick="showSummaryDetail(${index}, 'schoolHolidayDetails', 'Libur Sekolah (Input): ${teacher.teacherName}')">Detail</button>` : ''}
+                                </td>
+                                <td data-label="Alasan Lain (Valid)">${teacher.otherValidReasonDetails.length} hari
+                                    ${teacher.otherValidReasonDetails.length > 0 ? `<button class="btn-detail-summary" onclick="showSummaryDetail(${index}, 'otherValidReasonDetails', 'Alasan Lain: ${teacher.teacherName}')">Detail</button>` : ''}
+                                </td>
+                                <td data-label="Alpa">${teacher.absentDetails.length} hari
+                                    ${teacher.absentDetails.length > 0 ? `<button class="btn-detail-summary" onclick="showSummaryDetail(${index}, 'absentDetails', 'Alpa: ${teacher.teacherName}')">Detail</button>` : ''}
+                                </td>
+                                <td data-label="Ceklok Tidak Lengkap">${teacher.incompleteDetails.length} hari
+                                    ${teacher.incompleteDetails.length > 0 ? `<button class="btn-detail-summary" onclick="showSummaryDetail(${index}, 'incompleteDetails', 'Tidak Lengkap: ${teacher.teacherName}')">Detail</button>` : ''}
+                                </td>
+                                <td data-label="Persentase Pengisian" style="text-align:center;">${teacher.attendancePercentage}%</td>
+                            </tr>`;
+                        });
+                        tableHtml += `</tbody></table>`;
+                        resultsArea.innerHTML = tableHtml;
+                    } else if (response.message) {
+                        resultsArea.innerHTML = `<p style="text-align:center;"><i>${response.message}</i></p>`;
+                    } else {
+                        resultsArea.innerHTML = '<p style="text-align:center;"><i>Tidak ada data ringkasan untuk ditampilkan.</i></p>';
+                    }
+                } else {
+                    showAlert(response.error || "Gagal memuat ringkasan keseluruhan.", "error");
+                    resultsArea.innerHTML = `<p style="text-align:center; color:red;">${response.error || "Gagal memuat data."}</p>`;
+                    totalWorkingDaysDisplay.textContent = "-";
+                    effectiveDaysDisplay.textContent = "-";
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                showAlert(`Error server: ${err.message}`, "error");
+                resultsArea.innerHTML = `<p style="text-align:center; color:red;">Error server: ${err.message}</p>`;
+                totalWorkingDaysDisplay.textContent = "-";
+                effectiveDaysDisplay.textContent = "-";
+                currentOverallSummaryData = null; // Kosongkan jika error
+            })
+            .getOverallMonthlySummaryForAllTeachers(monthYear, loggedInUser.role);
+    }
+
+    // Fungsi baru untuk menampilkan detail di modal
+    function showSummaryDetail(teacherIndex, detailType, titlePrefix) {
+        if (currentOverallSummaryData && currentOverallSummaryData[teacherIndex] && currentOverallSummaryData[teacherIndex][detailType]) {
+            const details = currentOverallSummaryData[teacherIndex][detailType];
+            const teacherName = currentOverallSummaryData[teacherIndex].teacherName;
+            let title = `${titlePrefix}`; // Title sudah mencakup nama guru dari argumen
+
+            // Menyesuaikan judul jika diperlukan berdasarkan detailType
+            // switch(detailType) {
+            //     case 'presentDetails': title = `Detail Kehadiran (Jam Lengkap) - ${teacherName}`; break;
+            //     case 'schoolHolidayDetails': title = `Detail Hari Libur Sekolah (Input Guru) - ${teacherName}`; break;
+            //     case 'otherValidReasonDetails': title = `Detail Alasan Lain (Valid) - ${teacherName}`; break;
+            //     case 'absentDetails': title = `Detail Alpa - ${teacherName}`; break;
+            //     case 'incompleteDetails': title = `Detail Ceklok Tidak Lengkap - ${teacherName}`; break;
+            // }
+            openOverallSummaryDetailModal(title, details);
+        } else {
+            showAlert("Data detail tidak ditemukan.", "error");
+        }
+    }
+
+    // Pastikan juga fungsi setupOverallSummaryView, navigateToOverallTeacherSummary,
+    // dan case di renderView sudah ada seperti pada respons sebelumnya.
+    // Pastikan juga listener untuk modal (klik di luar untuk tutup, tombol escape)
+    // juga menangani modal baru ini jika diperlukan.
+    // Pada `setupModalEventListeners` di index.html, tambahkan:
+
+    // ...
+    // const overallSummaryDetailModal = document.getElementById('overallSummaryDetailModal');
+    // if (overallSummaryDetailModal) {
+    //     overallSummaryDetailModal.addEventListener('click', function(event) {
+    //         if (event.target === overallSummaryDetailModal) {
+    //             closeOverallSummaryDetailModal();
+    //         }
+    //     });
+    // }
+    // ...
+    // Dan di dalam listener keydown untuk Escape:
+    // ...
+    // if (overallSummaryDetailModal && overallSummaryDetailModal.style.display === 'flex') {
+    //     closeOverallSummaryDetailModal();
+    // }
+    // ...
+
   </script>
 </body>
 </html>
