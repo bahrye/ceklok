@@ -378,18 +378,19 @@ function getCeklokData(nama, bulanTahun) {
   }
 }
 
+
 function simpanData(nama, dataInput, actorUsername, actorRole) {
   try {
     if (!dataInput || dataInput.length === 0 || !dataInput[0].tanggal) {
       Logger.log("simpanData dipanggil dengan dataInput tidak valid.");
-      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, "Data input tidak valid", "FAIL");
+      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, "Data input tidak valid (payload)", "FAIL");
       return "Error: Data input tidak valid untuk disimpan.";
     }
     const tanggalPertama = dataInput[0].tanggal;
     const parts = tanggalPertama.split("/");
     if (parts.length !== 3) {
       Logger.log(`simpanData: Format tanggalPertama tidak valid: ${tanggalPertama}`);
-      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, `Format tanggal tidak valid: ${tanggalPertama}`, "FAIL");
+      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, `Format tanggal tidak valid pada input: ${tanggalPertama}`, "FAIL");
       return "Error: Format tanggal pada data input tidak valid.";
     }
     const bulanTahunSimpan = `${parts[1]}/${parts[2]}`;
@@ -399,26 +400,24 @@ function simpanData(nama, dataInput, actorUsername, actorRole) {
     Logger.log(`simpanData: Hasil getLockedMonths: ${JSON.stringify(lockStatusResult)}`);
 
     if (lockStatusResult.success && (lockStatusResult.months || []).includes(bulanTahunSimpan)) {
-      Logger.log(`simpanData: PENYIMPANAN DITOLAK. Bulan ${bulanTahunSimpan} terkunci. Daftar terkunci: ${(lockStatusResult.months || []).join(', ')}`);
-      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, `Bulan ${bulanTahunSimpan} terkunci`, "FAIL");
+      Logger.log(`simpanData: PENYIMPANAN DITOLAK. Bulan ${bulanTahunSimpan} terkunci.`);
+      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, `Penyimpanan ditolak, bulan ${bulanTahunSimpan} terkunci`, "FAIL");
       return `Error: Bulan ${bulanTahunSimpan} telah dikunci oleh Admin dan tidak dapat diubah.`;
     } else if (!lockStatusResult.success) {
-      Logger.log(`simpanData: Peringatan - Gagal memeriksa status kunci bulan - ${lockStatusResult.error}. Penyimpanan dilanjutkan (KEBIJAKAN SAAT INI).`);
+      Logger.log(`simpanData: Peringatan - Gagal memeriksa status kunci bulan - ${lockStatusResult.error}. Penyimpanan dilanjutkan.`);
       logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_WARN", nama, `Gagal cek status kunci (${bulanTahunSimpan}): ${lockStatusResult.error}. Simpan dilanjutkan.`, "WARN");
-    } else {
-      Logger.log(`simpanData: Bulan ${bulanTahunSimpan} tidak terkunci. Daftar terkunci: ${(lockStatusResult.months || []).join(', ')}. Penyimpanan dilanjutkan.`);
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
+    const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME); //
     if (!sheet) {
       Logger.log("simpanData: Sheet 'Ceklok_Manual' tidak ditemukan.");
-      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_ERROR", nama, `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan`, "ERROR");
-      return "Error: Sheet 'Ceklok_Manual' tidak ditemukan.";
+      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_ERROR", nama, `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan`, "ERROR"); //
+      return "Error: Sheet 'Ceklok_Manual' tidak ditemukan."; //
     }
 
     const dataRange = sheet.getDataRange();
-    const data = dataRange.getValues();
+    const data = dataRange.getValues(); // Semua data yang ada di sheet
     const headers = data[0].map(h => String(h).trim());
     const namaColIdx = headers.indexOf("Nama_Guru");
     const tanggalColIdx = headers.indexOf("Tanggal");
@@ -429,74 +428,124 @@ function simpanData(nama, dataInput, actorUsername, actorRole) {
     if ([namaColIdx, tanggalColIdx, masukColIdx, pulangColIdx, ketLiburManualColIdx].includes(-1)) {
       let missingHeaders = [];
       if (namaColIdx === -1) missingHeaders.push("Nama_Guru");
-      if (tanggalColIdx === -1) missingHeaders.push("Tanggal");
-      if (masukColIdx === -1) missingHeaders.push("Jam_Masuk");
-      if (pulangColIdx === -1) missingHeaders.push("Jam_Pulang");
-      if (ketLiburManualColIdx === -1) missingHeaders.push("Ket_Libur_Manual");
-      Logger.log(`simpanData: Header di 'Ceklok_Manual' tidak lengkap. Hilang: ${missingHeaders.join(', ')}`);
-      return `Error: Header di 'Ceklok_Manual' tidak lengkap. Kolom yang hilang: ${missingHeaders.join(', ')}.`;
+      // ... (cek header lainnya)
+      const errorMsg = `Header di '${CEKLOK_MANUAL_SHEET_NAME}' tidak lengkap. Kolom hilang: ${missingHeaders.join(', ')}.`; //
+      Logger.log(`simpanData: ${errorMsg}`);
+      logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_ERROR", nama, errorMsg, "ERROR");
+      return `Error: ${errorMsg}`;
     }
 
     dataInput.forEach(row => {
       if (!row || !row.tanggal) return;
-      const { tanggal, jamMasuk, jamPulang, keteranganLiburManual } = row;
+      const { tanggal, jamMasuk, jamPulang, keteranganLiburManual } = row; // Nilai baru dari inputan pengguna
 
-      let jm = jamMasuk || "";
-      let jp = jamPulang || "";
-      const ketLiburTrimmed = keteranganLiburManual ? String(keteranganLiburManual).trim() : "";
-      if (ketLiburTrimmed !== "") {
-        jm = "";
-        jp = "";
+      let jmToSave = jamMasuk || "";
+      let jpToSave = jamPulang || "";
+      const ketLiburTrimmedToSave = keteranganLiburManual ? String(keteranganLiburManual).trim() : "";
+
+      // Jika Keterangan diisi, jam masuk dan pulang dikosongkan
+      if (ketLiburTrimmedToSave !== "") {
+        jmToSave = "";
+        jpToSave = "";
       }
 
-      let existingRowIndex = -1;
-      for (let i = 1; i < data.length; i++) {
+      let existingRowSheetIndex = -1; // Indeks baris di sheet (1-based)
+      let existingRowDataIndex = -1;  // Indeks baris di array `data` (0-based untuk data setelah header)
+
+      for (let i = 1; i < data.length; i++) { // Mulai dari 1 untuk skip header di array `data`
         if (data[i][tanggalColIdx] instanceof Date &&
             Utilities.formatDate(new Date(data[i][tanggalColIdx]), Session.getScriptTimeZone(), "dd/MM/yyyy") === tanggal &&
             String(data[i][namaColIdx]).trim() === nama) {
-          existingRowIndex = i + 1;
+          existingRowSheetIndex = i + 1; // i adalah indeks di array `data` (setelah header), jadi i+1 adalah baris di sheet
+          existingRowDataIndex = i;
           break;
         }
       }
 
-      if (existingRowIndex !== -1) {
-        sheet.getRange(existingRowIndex, masukColIdx + 1).setValue(jm);
-        sheet.getRange(existingRowIndex, pulangColIdx + 1).setValue(jp);
-        sheet.getRange(existingRowIndex, ketLiburManualColIdx + 1).setValue(ketLiburTrimmed);
-      } else if (jm || jp || ketLiburTrimmed !== "") {
+      const targetEntityLog = `${nama} (${tanggal})`; // Target entitas untuk log
+
+      if (existingRowSheetIndex !== -1 && existingRowDataIndex !== -1) { // Jika entri sudah ada, berarti UPDATE
+        const oldJm = data[existingRowDataIndex][masukColIdx] ? String(data[existingRowDataIndex][masukColIdx]).trim() : '';
+        const oldJp = data[existingRowDataIndex][pulangColIdx] ? String(data[existingRowDataIndex][pulangColIdx]).trim() : '';
+        const oldKet = data[existingRowDataIndex][ketLiburManualColIdx] ? String(data[existingRowDataIndex][ketLiburManualColIdx]).trim() : '';
+
+        let hasChanges = false;
+
+        // Log dan update Jam Masuk jika berubah
+        if (oldJm !== jmToSave) {
+          logUserActivity(actorUsername, actorRole, "UPDATE_JAM_MASUK", targetEntityLog, `Jam Masuk: '${oldJm || "kosong"}' -> '${jmToSave || "kosong"}'`, "SUCCESS");
+          sheet.getRange(existingRowSheetIndex, masukColIdx + 1).setValue(jmToSave);
+          hasChanges = true;
+        }
+        // Log dan update Jam Pulang jika berubah
+        if (oldJp !== jpToSave) {
+          logUserActivity(actorUsername, actorRole, "UPDATE_JAM_PULANG", targetEntityLog, `Jam Pulang: '${oldJp || "kosong"}' -> '${jpToSave || "kosong"}'`, "SUCCESS");
+          sheet.getRange(existingRowSheetIndex, pulangColIdx + 1).setValue(jpToSave);
+          hasChanges = true;
+        }
+        // Log dan update Keterangan jika berubah
+        if (oldKet !== ketLiburTrimmedToSave) {
+          logUserActivity(actorUsername, actorRole, "UPDATE_KETERANGAN_CEKLOK", targetEntityLog, `Keterangan: '${oldKet || "kosong"}' -> '${ketLiburTrimmedToSave || "kosong"}'`, "SUCCESS");
+          sheet.getRange(existingRowSheetIndex, ketLiburManualColIdx + 1).setValue(ketLiburTrimmedToSave);
+          hasChanges = true;
+        }
+        
+        // Jika tidak ada perubahan spesifik field tapi baris ada di dataInput, log sebagai "REVIEWED_NO_CHANGE" (opsional)
+        // if (!hasChanges) {
+        //   logUserActivity(actorUsername, actorRole, "REVIEWED_CEKLOK_NO_CHANGE", targetEntityLog, `Data direview, tidak ada perubahan. JM: ${jmToSave}, JP: ${jpToSave}, Ket: ${ketLiburTrimmedToSave}`, "INFO");
+        // }
+
+      } else if (jmToSave || jpToSave || ketLiburTrimmedToSave !== "") { // Jika entri baru dan ada data yang diisi
         const dateParts = tanggal.split("/");
         if (dateParts.length === 3) {
             const dateObject = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]));
             let newRowValues = new Array(headers.length).fill('');
             newRowValues[namaColIdx] = nama;
             newRowValues[tanggalColIdx] = dateObject;
-            newRowValues[masukColIdx] = jm;
-            newRowValues[pulangColIdx] = jp;
-            newRowValues[ketLiburManualColIdx] = ketLiburTrimmed;
+            newRowValues[masukColIdx] = jmToSave;
+            newRowValues[pulangColIdx] = jpToSave;
+            newRowValues[ketLiburManualColIdx] = ketLiburTrimmedToSave;
             sheet.appendRow(newRowValues);
+
+            // Log pembuatan data baru
+            if (jmToSave) {
+              logUserActivity(actorUsername, actorRole, "CREATE_JAM_MASUK", targetEntityLog, `Jam Masuk diinput: '${jmToSave}'`, "SUCCESS");
+            }
+            if (jpToSave) {
+              logUserActivity(actorUsername, actorRole, "CREATE_JAM_PULANG", targetEntityLog, `Jam Pulang diinput: '${jpToSave}'`, "SUCCESS");
+            }
+            if (ketLiburTrimmedToSave) {
+              logUserActivity(actorUsername, actorRole, "CREATE_KETERANGAN_CEKLOK", targetEntityLog, `Keterangan diinput: '${ketLiburTrimmedToSave}'`, "SUCCESS");
+            }
         } else {
             Logger.log(`simpanData: Format tanggal tidak valid saat appendRow untuk tanggal ${tanggal}`);
+            logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", targetEntityLog, `Format tanggal tidak valid saat buat baris baru: ${tanggal}`, "FAIL");
         }
       }
     });
 
+    // Set format kolom ke teks untuk mencegah interpretasi otomatis oleh Google Sheets
     if (sheet.getLastRow() > 1) {
       const lastDataRow = sheet.getLastRow();
-      if (masukColIdx > -1 && lastDataRow > 1) sheet.getRange(2, masukColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
-      if (pulangColIdx > -1 && lastDataRow > 1) sheet.getRange(2, pulangColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
-      if (ketLiburManualColIdx > -1 && lastDataRow > 1) sheet.getRange(2, ketLiburManualColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
+      if (masukColIdx > -1) sheet.getRange(2, masukColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
+      if (pulangColIdx > -1) sheet.getRange(2, pulangColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
+      if (ketLiburManualColIdx > -1) sheet.getRange(2, ketLiburManualColIdx + 1, lastDataRow - 1, 1).setNumberFormat("@");
     }
 
-    const detailLog = `Periode: ${bulanTahunSimpan}, Jml entri: ${dataInput.length}`;
-    logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_SUCCESS", nama, detailLog, "SUCCESS");
-    Logger.log(`simpanData: Data berhasil disimpan untuk guru ${nama}, bulan ${bulanTahunSimpan}.`);
+    // Log umum bahwa proses penyimpanan batch telah selesai
+    const detailLogUmum = `Penyimpanan batch untuk periode: ${bulanTahunSimpan}, Jumlah item input: ${dataInput.length}`;
+    logUserActivity(actorUsername, actorRole, "CEKLOK_BATCH_SAVE_COMPLETE", nama, detailLogUmum, "SUCCESS");
+    Logger.log(`simpanData: Data berhasil diproses untuk guru ${nama}, bulan ${bulanTahunSimpan}.`);
     return "Data berhasil disimpan.";
+
   } catch (e) {
     Logger.log(`Error in simpanData (Nama: ${nama}, DataInput: ${JSON.stringify(dataInput)}): ${e.toString()}\nStack: ${e.stack}`);
-    logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_ERROR", nama || "N/A", e.message, "ERROR");
+    logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_SYSTEM_ERROR", nama || "N/A", `Error sistem: ${e.message}`, "ERROR");
     return `Error saat menyimpan: ${e.message}`;
   }
 }
+
+// ... (sisa kode di code.gs.html tetap sama)
 
 /**
  * Menyiapkan data rekapitulasi kehadiran untuk dicetak ke sheet CETAK (template)
