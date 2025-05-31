@@ -3422,6 +3422,12 @@ function processIncompleteAttendanceReminder(teacher, allCeklokData, ceklokHeade
 /**
  * Memproses dan mengirim notifikasi untuk pengisian absensi berkala (jika ada tanggal kosong).
  */
+// ... (fungsi helper_isWorkingDay, helper_getLiburMap, dll. tetap ada) ...
+
+/**
+ * Memproses dan mengirim notifikasi untuk pengisian absensi berkala (jika ada tanggal kosong).
+ * Notifikasi dikirim setiap 3 hari jika kondisi terpenuhi.
+ */
 function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHeaders, liburMap, reminderLogSheet, today, globalMinDateToCheck) {
   const idxCeklokNama = ceklokHeaders.indexOf("nama_guru");
   const idxCeklokTanggal = ceklokHeaders.indexOf("tanggal");
@@ -3429,10 +3435,8 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
   const idxCeklokPulang = ceklokHeaders.indexOf("jam_pulang");
   const idxCeklokKetManual = ceklokHeaders.indexOf("ket_libur_manual");
 
+  // 1. Tentukan tanggal efektif terakhir guru mengisi data (baik jam atau keterangan)
   let lastEffectivelyFilledDate = null;
-
-  // Cari tanggal terakhir guru tersebut mengisi absensi (ada jam masuk/pulang ATAU keterangan manual)
-  // Mulai dari data terbaru ke belakang, tapi tidak lebih awal dari globalMinDateToCheck
   for (let i = allCeklokData.length - 1; i >= 1; i--) {
     const row = allCeklokData[i];
     if (String(row[idxCeklokNama]).trim() === teacher.name) {
@@ -3440,36 +3444,34 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
       const tanggalCek = new Date(row[idxCeklokTanggal]);
       tanggalCek.setHours(0, 0, 0, 0);
 
-      if (tanggalCek < globalMinDateToCheck) continue; // Jangan periksa tanggal sebelum batas minimum
+      if (tanggalCek < globalMinDateToCheck) continue;
 
       const jamMasuk = row[idxCeklokMasuk] ? String(row[idxCeklokMasuk]).trim() : "";
       const jamPulang = row[idxCeklokPulang] ? String(row[idxCeklokPulang]).trim() : "";
       const ketLiburManualValue = row[idxCeklokKetManual] ? String(row[idxCeklokKetManual]).trim() : "";
 
-      if ((jamMasuk || jamPulang) || ketLiburManualValue) { // Dianggap terisi jika ada jam ATAU keterangan
+      if ((jamMasuk || jamPulang) || ketLiburManualValue) {
         lastEffectivelyFilledDate = tanggalCek;
-        break; 
+        break;
       }
     }
   }
 
+  // 2. Tentukan tanggal mulai pemeriksaan kekosongan
   let dateToCheckFrom;
   if (lastEffectivelyFilledDate) {
     dateToCheckFrom = new Date(lastEffectivelyFilledDate);
-    dateToCheckFrom.setDate(lastEffectivelyFilledDate.getDate() + 1); // Mulai cek dari hari setelah terakhir diisi
+    dateToCheckFrom.setDate(lastEffectivelyFilledDate.getDate() + 1);
   } else {
-    // Jika guru belum pernah mengisi sama sekali (setelah globalMinDateToCheck)
     dateToCheckFrom = new Date(globalMinDateToCheck);
-    Logger.log(`Guru ${teacher.name} belum ada catatan absensi valid sejak ${Utilities.formatDate(globalMinDateToCheck, Session.getScriptTimeZone(), "dd/MM/yyyy")}. Pemeriksaan kekosongan dimulai dari tanggal tersebut.`);
   }
   dateToCheckFrom.setHours(0,0,0,0);
 
-
-  // Iterasi dari dateToCheckFrom hingga kemarin (karena hari ini belum tentu wajib diisi saat script jalan)
+  // 3. Cari hari kerja pertama yang kosong setelah tanggal terakhir diisi (atau globalMinDateToCheck)
   let firstEmptyWorkingDay = null;
   let tempDate = new Date(dateToCheckFrom);
   const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() -1);
+  yesterday.setDate(today.getDate() - 1); // Kita hanya peduli kekosongan sampai kemarin
   yesterday.setHours(0,0,0,0);
 
   while(tempDate <= yesterday) {
@@ -3482,7 +3484,6 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
          (row[idxCeklokKetManual] && String(row[idxCeklokKetManual]).trim()))
     );
     
-    // Untuk helper_isWorkingDay, kita perlu ket manual spesifik untuk tanggal `tempDate` jika ada
     const ketManualForTempDateRow = allCeklokData.find(row =>
         String(row[idxCeklokNama]).trim() === teacher.name &&
         row[idxCeklokTanggal] instanceof Date &&
@@ -3492,72 +3493,80 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
 
     if (helper_isWorkingDay(tempDate, liburMap, ketManualForTempDate) && !isAlreadyFilledOrHasKet) {
       firstEmptyWorkingDay = new Date(tempDate);
-      break; // Temukan hari kerja pertama yang kosong
+      break; 
     }
     tempDate.setDate(tempDate.getDate() + 1);
   }
 
   if (!firstEmptyWorkingDay) {
-    Logger.log(`Tidak ditemukan hari kerja yang kosong untuk guru ${teacher.name} sampai dengan kemarin.`);
-    return; // Tidak ada yang perlu diingatkan
+    // Logger.log(`Tidak ditemukan hari kerja yang kosong untuk guru ${teacher.name} sampai dengan kemarin.`);
+    return; 
   }
 
-  // `firstEmptyWorkingDay` adalah tanggal pertama yang kosong dan seharusnya diisi.
-  // `lastEffectivelyFilledDate` adalah tanggal terakhir guru melakukan pengisian.
-  // Jika tidak ada `lastEffectivelyFilledDate` (guru baru / belum pernah isi),
-  // maka `firstEmptyWorkingDay` adalah tanggal paling awal yang kosong sejak `globalMinDateToCheck`.
-  // Dalam kasus guru baru, `baseDateForReminder` adalah sehari sebelum `firstEmptyWorkingDay`.
-  
-  const baseDateForReminder = lastEffectivelyFilledDate ? new Date(lastEffectivelyFilledDate) : new Date(firstEmptyWorkingDay.setDate(firstEmptyWorkingDay.getDate()-1));
-  baseDateForReminder.setHours(0,0,0,0);
-  
-  const daysSinceBase = Math.floor((today.getTime() - baseDateForReminder.getTime()) / (1000 * 60 * 60 * 24));
+  // 4. Logika pengiriman notifikasi berdasarkan interval 3 hari
   const targetEmptyDateStr = Utilities.formatDate(firstEmptyWorkingDay, Session.getScriptTimeZone(), "dd/MM/yyyy");
+  const reminderTypeBase = "berkala_kosong"; // Tipe dasar untuk log
+  
+  const lastReminderRecord = helper_getLastPeriodicNotificationForTarget(reminderLogSheet, teacher.name, targetEmptyDateStr, reminderTypeBase);
+  // helper_getLastPeriodicNotificationForTarget akan mencari semua log dengan tipe yang dimulai "berkala_kosong" untuk target tanggal tsb.
 
-  let reminderType = "berkala_kosong"; // Generic type, detailnya di urutan
-  let urutanPengingat = 0;
-  const lastReminderForTarget = helper_getLastPeriodicNotificationForTarget(reminderLogSheet, teacher.name, targetEmptyDateStr, reminderType);
+  let shouldSendToday = false;
+  let newSequence = 1;
 
-  if (!lastReminderForTarget) { // Belum pernah ada notifikasi untuk target tanggal kosong INI
-    if (daysSinceBase >= 3) {
-      urutanPengingat = 1; // Notifikasi pertama (setelah 3 hari dari basis)
+  if (!lastReminderRecord) {
+    // Belum pernah ada notifikasi untuk targetEmptyDateStr ini.
+    // Kirim notifikasi pertama jika hari kosong ini sudah cukup "lama" (misal, lewat 1 hari).
+    const ageOfEmptyDayInDays = Math.floor((today.getTime() - firstEmptyWorkingDay.getTime()) / (1000 * 60 * 60 * 24));
+    if (ageOfEmptyDayInDays >= 1) { // Kirim jika hari kosong adalah kemarin atau lebih tua
+        shouldSendToday = true;
+        newSequence = 1;
     }
   } else {
-    const lastReminderDate = new Date(lastReminderForTarget.tanggalKirim);
+    // Sudah ada notifikasi sebelumnya untuk targetEmptyDateStr ini.
+    const lastReminderDate = new Date(lastReminderRecord.tanggalKirim);
     lastReminderDate.setHours(0,0,0,0);
     const daysSinceLastReminderForTarget = Math.floor((today.getTime() - lastReminderDate.getTime()) / (1000 * 60 * 60 * 24));
-    const currentSequence = lastReminderForTarget.urutan;
 
-    if (currentSequence === 1 && daysSinceBase >= 5 && daysSinceLastReminderForTarget >= (5-3) ) { // Dari urutan 1 ke 2 (selisih 2 hari dari notif terakhir, total 5 dari basis)
-      urutanPengingat = 2;
-    } else if (currentSequence >= 2 && daysSinceBase >= (5 + (currentSequence - 1) * 5) && daysSinceLastReminderForTarget >= 5) { // Urutan ke-2 dst. (selisih 5 hari dari notif terakhir)
-      urutanPengingat = currentSequence + 1;
+    if (daysSinceLastReminderForTarget >= 3) {
+      shouldSendToday = true;
+      newSequence = lastReminderRecord.urutan + 1;
     }
   }
 
-  if (urutanPengingat > 0) {
-    if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, targetEmptyDateStr, `${reminderType}_${urutanPengingat}`)) {
+  if (shouldSendToday) {
+    const specificNotifTypeForLog = `${reminderTypeBase}_${newSequence}`; // e.g., "berkala_kosong_1"
+    
+    if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, targetEmptyDateStr, specificNotifTypeForLog)) {
         const actualLastFilledDateStr = lastEffectivelyFilledDate ? Utilities.formatDate(lastEffectivelyFilledDate, Session.getScriptTimeZone(), "dd/MM/yyyy") : "belum ada catatan";
-        Logger.log(`Mengirim notifikasi pengisian berkala (Urutan: ${urutanPengingat}) ke ${teacher.name}. Absen terakhir diisi: ${actualLastFilledDateStr}. Target kosong: ${targetEmptyDateStr}. Selisih dari basis: ${daysSinceBase} hari.`);
-        const subject = `Pemberitahuan: Mohon Lengkapi Absensi Ceklok - ${teacher.name}`;
+        Logger.log(`Mengirim notifikasi pengisian berkala (Urutan: ${newSequence}, Interval 3 hari terpenuhi) ke ${teacher.name}. Absen terakhir diisi: ${actualLastFilledDateStr}. Target kosong: ${targetEmptyDateStr}.`);
+        
+        const subject = `Pengingat Pengisian Absensi Ceklok - ${teacher.name}`;
         let body = `Yth. ${teacher.name},\n\n`;
         body += `Sistem kami mengingatkan bahwa Anda belum mengisi data absensi Ceklok setidaknya untuk tanggal ${targetEmptyDateStr}.\n`;
-        body += `Tanggal absensi terakhir Anda yang tercatat adalah ${actualLastFilledDateStr}.\n\n`;
-        body += `Mohon untuk segera mengisi data absensi Anda melalui aplikasi Ceklok di link : https://shorten.is/ceklok-mtstanuntung.\n\nTerima kasih.\n${EMAIL_SENDER_NAME}`;
+        if(lastEffectivelyFilledDate){
+            body += `Tanggal absensi terakhir Anda yang tercatat adalah ${actualLastFilledDateStr}.\n\n`;
+        } else {
+            body += `Kami belum menemukan catatan absensi dari Anda sejak periode ${Utilities.formatDate(globalMinDateToCheck, Session.getScriptTimeZone(), "dd/MM/yyyy")}.\n\n`;
+        }
+        body += `Mohon untuk segera mengisi data absensi Anda melalui aplikasi Ceklok MTS Tanuntung.\n\n`; // Link bisa ditambahkan jika ada
+        body += `Terima kasih.\n${EMAIL_SENDER_NAME}`; // Pastikan EMAIL_SENDER_NAME didefinisikan global
+
         try {
             MailApp.sendEmail({
-            to: teacher.email,
-            subject: subject,
-            body: body,
-            name: EMAIL_SENDER_NAME
+              to: teacher.email,
+              subject: subject,
+              body: body,
+              name: EMAIL_SENDER_NAME 
             });
-            helper_logSentNotification(reminderLogSheet, teacher.name, targetEmptyDateStr, `${reminderType}_${urutanPengingat}`, urutanPengingat);
+            helper_logSentNotification(reminderLogSheet, teacher.name, targetEmptyDateStr, specificNotifTypeForLog, newSequence);
         } catch (e) {
             Logger.log(`Gagal mengirim email pengingat berkala ke ${teacher.email} untuk ${targetEmptyDateStr}: ${e.toString()}`);
         }
     } else {
-        Logger.log(`Notifikasi pengisian berkala (Urutan: ${urutanPengingat}) untuk ${teacher.name} target ${targetEmptyDateStr} sudah dikirim hari ini.`);
+        Logger.log(`Notifikasi pengisian berkala (Urutan: ${newSequence}) untuk ${teacher.name} target ${targetEmptyDateStr} sudah dikirim hari ini (dicegah duplikasi).`);
     }
+  } else {
+    // Logger.log(`Kondisi interval 3 hari belum terpenuhi untuk ${teacher.name}, target ${targetEmptyDateStr}. Last reminder: ${lastReminderRecord ? Utilities.formatDate(new Date(lastReminderRecord.tanggalKirim), Session.getScriptTimeZone(), "dd/MM/yyyy") : 'N/A'}`);
   }
 }
 
@@ -4224,5 +4233,200 @@ function getActivityLogData(actingUserRole, options = {}) {
     Logger.log(`Error di getActivityLogData (options: ${JSON.stringify(options)}): ${e.toString()}\nStack: ${e.stack}`);
     logUserActivity("SYSTEM", "N/A", "GET_ACTIVITY_LOG_ERROR", "", `Options: ${JSON.stringify(options)}, Error: ${e.message}`, "ERROR");
     return { success: false, error: `Gagal mengambil log aktivitas: ${e.message}` };
+  }
+}
+
+// Add this function to your code.gs
+
+/**
+ * Mengambil ringkasan kehadiran bulanan untuk SEMUA guru.
+ * Hanya bisa diakses oleh Superadmin.
+ * @param {string} monthYear Periode bulan dan tahun (format "MM/YYYY").
+ * @param {string} actingUserRole Peran pengguna yang meminta (untuk verifikasi Superadmin).
+ * @return {object} Objek yang berisi statistik ringkasan atau error.
+ */
+function getOverallMonthlySummaryForAllTeachers(monthYear, actingUserRole) {
+  if (actingUserRole !== ROLE_SUPERADMIN) {
+    return { success: false, error: "Akses ditolak. Fungsi ini hanya untuk Superadmin." };
+  }
+
+  try {
+    if (!monthYear || !/^\d{2}\/\d{4}$/.test(monthYear)) {
+      return { success: false, error: "Periode (MM/YYYY) harus valid." };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const namaGuruSheet = ss.getSheetByName(NAMA_GURU_SHEET_NAME);
+    const ceklokManualSheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
+    const kalenderSheet = ss.getSheetByName(KALENDER_SHEET_NAME);
+    const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME);
+
+    if (!namaGuruSheet) return { success: false, error: `Sheet '${NAMA_GURU_SHEET_NAME}' tidak ditemukan.` };
+    if (!ceklokManualSheet) return { success: false, error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` };
+    if (!kalenderSheet) return { success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` };
+    // opsiKetLiburSheet is optional for this core logic but good to check if used for "OtherValidReason" validation
+    if (!opsiKetLiburSheet) Logger.log(`Peringatan: Sheet '${OPSIKETLIBUR_SHEET_NAME}' tidak ditemukan. Validasi alasan lain mungkin terbatas.`);
+
+
+    const daftarNamaGuru = namaGuruSheet.getLastRow() > 0 ?
+                           namaGuruSheet.getRange(1, 1, namaGuruSheet.getLastRow(), 1)
+                                      .getValues().flat().filter(String).map(g => String(g).trim()) :
+                           [];
+    if (daftarNamaGuru.length === 0) {
+      return { success: true, message: "Tidak ada data guru untuk ditampilkan.", monthYear: monthYear, totalWorkingDaysInMonth: 0, effectiveWorkingDaysPassed: 0, allTeachersSummary: [] };
+    }
+
+    const [mmStr, yyyyStr] = monthYear.split("/");
+    const mm = parseInt(mmStr, 10);
+    const yyyy = parseInt(yyyyStr, 10);
+
+    const lastDayOfMonth = new Date(yyyy, mm, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const liburMap = {}; // From Kalender_Pendidikan
+    if (kalenderSheet.getLastRow() > 1) {
+      const kalenderData = kalenderSheet.getRange(2, 1, kalenderSheet.getLastRow() - 1, 2).getDisplayValues();
+      kalenderData.forEach(row => {
+        if (row[0] && String(row[0]).trim() !== "") {
+          liburMap[String(row[0]).trim()] = String(row[1]).trim() || "Hari Libur";
+        }
+      });
+    }
+
+    let allValidReasonsFromSheet = [];
+    if (opsiKetLiburSheet && opsiKetLiburSheet.getLastRow() > 1) {
+      allValidReasonsFromSheet = opsiKetLiburSheet.getRange(2, 1, opsiKetLiburSheet.getLastRow() - 1, 1)
+                                      .getValues().flat().filter(String).map(o => String(o).trim().toLowerCase());
+    }
+
+    const allCeklokData = ceklokManualSheet.getDataRange().getValues();
+    const ceklokHeaders = allCeklokData[0].map(h => String(h).trim().toLowerCase());
+    const idxNama = ceklokHeaders.indexOf("nama_guru");
+    const idxTanggal = ceklokHeaders.indexOf("tanggal");
+    const idxMasuk = ceklokHeaders.indexOf("jam_masuk");
+    const idxPulang = ceklokHeaders.indexOf("jam_pulang");
+    const idxKetManual = ceklokHeaders.indexOf("ket_libur_manual");
+
+    if ([idxNama, idxTanggal, idxMasuk, idxPulang, idxKetManual].includes(-1)) {
+      return { success: false, error: "Header kolom di 'Ceklok_Manual' tidak lengkap." };
+    }
+
+    // Calculate global month stats
+    let totalWorkingDaysInMonth = 0;
+    let effectiveWorkingDaysPassed = 0;
+    for (let day = 1; day <= lastDayOfMonth; day++) {
+      const currentDate = new Date(yyyy, mm - 1, day);
+      const dateStr = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), "dd/MM/yyyy");
+      const dayOfWeek = currentDate.getDay(); // 0 for Sunday, 6 for Saturday
+
+      let isDefinitelyHoliday = false;
+      if (dayOfWeek === 0) { // Sunday is a holiday
+        isDefinitelyHoliday = true;
+      } else if (liburMap[dateStr]) { // Holiday from Kalender Pendidikan
+        isDefinitelyHoliday = true;
+      }
+
+      if (!isDefinitelyHoliday) {
+        totalWorkingDaysInMonth++;
+        if (currentDate <= today) {
+          effectiveWorkingDaysPassed++;
+        }
+      }
+    }
+
+    const allTeachersSummary = [];
+
+    for (const teacherName of daftarNamaGuru) {
+      let teacherSummary = {
+        teacherName: teacherName,
+        completedChecklokCount: 0,
+        presentDetails: [],
+        schoolHolidayDetails: [],
+        otherValidReasonDetails: [],
+        absentDetails: [],
+        incompleteDetails: [],
+        attendancePercentage: 0
+      };
+
+      for (let day = 1; day <= lastDayOfMonth; day++) {
+        const currentDate = new Date(yyyy, mm - 1, day);
+        currentDate.setHours(0,0,0,0);
+        const dateStr = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), "dd/MM/yyyy");
+        const dayOfWeek = currentDate.getDay();
+
+        let isBaseWorkingDay = true; // Is it a working day before considering teacher's specific input?
+        if (dayOfWeek === 0 || liburMap[dateStr]) {
+          isBaseWorkingDay = false;
+        }
+
+        let entryProcessed = false;
+        for (let k = 1; k < allCeklokData.length; k++) {
+          const row = allCeklokData[k];
+          if (String(row[idxNama]).trim() === teacherName &&
+              row[idxTanggal] instanceof Date &&
+              Utilities.formatDate(new Date(row[idxTanggal]), Session.getScriptTimeZone(), "dd/MM/yyyy") === dateStr) {
+            
+            const jamMasuk = String(row[idxMasuk] || "").trim();
+            const jamPulang = String(row[idxPulang] || "").trim();
+            const ketManual = String(row[idxKetManual] || "").trim();
+
+            if (ketManual) {
+              const ketManualLower = ketManual.toLowerCase();
+              if (ketManualLower.includes("hari libur sekolah") || ketManualLower.includes("libur sekolah")) {
+                teacherSummary.schoolHolidayDetails.push(dateStr);
+                teacherSummary.completedChecklokCount++;
+              } else if (allValidReasonsFromSheet.includes(ketManualLower)) {
+                teacherSummary.otherValidReasonDetails.push(`${dateStr} : ${ketManual}`);
+                teacherSummary.completedChecklokCount++;
+              } else { // Keterangan manual ada tapi bukan alasan valid / bukan libur sekolah
+                if (isBaseWorkingDay && currentDate < today) { // Dianggap alpa jika hari kerja telah berlalu
+                  teacherSummary.absentDetails.push(dateStr);
+                }
+              }
+            } else if (jamMasuk && jamPulang) {
+              if (isBaseWorkingDay) { // Hanya dihitung hadir jika memang hari kerja
+                teacherSummary.presentDetails.push(dateStr);
+                teacherSummary.completedChecklokCount++;
+              }
+            } else if (jamMasuk || jamPulang) { // Salah satu jam terisi
+              if (isBaseWorkingDay) {
+                const missingPart = jamMasuk ? "Jam Pulang Kosong" : "Jam Masuk Kosong";
+                teacherSummary.incompleteDetails.push(`${dateStr} : ${missingPart}`);
+              }
+            } else { // Tidak ada jam, tidak ada keterangan
+              if (isBaseWorkingDay && currentDate < today) {
+                teacherSummary.absentDetails.push(dateStr);
+              }
+            }
+            entryProcessed = true;
+            break; 
+          }
+        }
+        
+        if (!entryProcessed && isBaseWorkingDay && currentDate < today) {
+          teacherSummary.absentDetails.push(dateStr);
+        }
+      } // end loop days
+
+      if (totalWorkingDaysInMonth > 0) {
+        teacherSummary.attendancePercentage = parseFloat(((teacherSummary.completedChecklokCount / totalWorkingDaysInMonth) * 100).toFixed(2));
+      }
+      allTeachersSummary.push(teacherSummary);
+    } // end loop teachers
+
+    return {
+      success: true,
+      monthYear: monthYear,
+      totalWorkingDaysInMonth: totalWorkingDaysInMonth,
+      effectiveWorkingDaysPassed: effectiveWorkingDaysPassed,
+      allTeachersSummary: allTeachersSummary
+    };
+
+  } catch (e) {
+    Logger.log(`Error in getOverallMonthlySummaryForAllTeachers (month: ${monthYear}): ${e.toString()}\nStack: ${e.stack}`);
+    // Log to activity log if possible, or handle error display
+    logUserActivity(Session.getActiveUser().getEmail(), actingUserRole, "GET_OVERALL_SUMMARY_ERROR", monthYear, e.message, "ERROR");
+    return { success: false, error: `Gagal mengambil ringkasan keseluruhan: ${e.message}` };
   }
 }
