@@ -1,0 +1,74 @@
+<div class="container" id="overallSummaryContainer">
+  <h2>Ringkasan Kehadiran Bulanan Semua Guru</h2>
+
+  <div class="rekap-controls">
+    <div class="form-row" style="justify-content: center; align-items: center; margin-bottom: 20px; gap: 10px;">
+      <label for="overallSummaryBulanSelect">Pilih Bulan:</label>
+      <select id="overallSummaryBulanSelect">
+        <option value="01">Januari</option><option value="02">Februari</option><option value="03">Maret</option>
+        <option value="04">April</option><option value="05">Mei</option><option value="06">Juni</option>
+        <option value="07">Juli</option><option value="08">Agustus</option><option value="09">September</option>
+        <option value="10">Oktober</option><option value="11">November</option><option value="12">Desember</option>
+      </select>
+      <label for="overallSummaryTahunSelect">Pilih Tahun:</label>
+      <select id="overallSummaryTahunSelect"></select>
+      <button id="btnLoadOverallSummary" onclick="loadOverallSummaryData()">Tampilkan Ringkasan</button>
+    </div>
+  </div>
+
+  <div id="overallSummaryGlobalInfo" style="text-align: center; margin-bottom: 20px; padding: 10px; background-color: #f0f4f8; border-radius: 6px;">
+    <p><strong>Periode:</strong> <span id="overallSummaryPeriodDisplay">-</span></p>
+    <p><strong>Total Hari Kerja Sebulan:</strong> <span id="overallTotalWorkingDays">-</span> hari</p>
+    <p><strong>Hari Kerja Efektif Berlalu:</strong> <span id="overallEffectiveDaysPassed">-</span> hari</p>
+  </div>
+
+  <div id="overallSummaryResultsArea" class="table-container">
+    <p style="text-align:center;"><i>Silakan pilih periode dan klik "Tampilkan Ringkasan".</i></p>
+  </div>
+
+  <div class="btn-container" style="margin-top: 30px;">
+    <button onclick="goBackToAdminDashboard()">Kembali ke Dashboard Admin</button>
+  </div>
+</div>
+
+<style>
+  /* Style untuk tombol detail yang lebih kecil */
+  .btn-detail-summary {
+    padding: 2px 8px;
+    font-size: 0.8em;
+    margin-left: 5px;
+    background-color: var(--secondary);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .btn-detail-summary:hover {
+    background-color: var(--primary);
+  }
+  #overallSummaryResultsArea table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0; /* Dihilangkan karena table-container sudah ada margin */
+  }
+  #overallSummaryResultsArea th,
+  #overallSummaryResultsArea td {
+    border: 1px solid #ddd;
+    padding: 8px 10px; /* Sedikit padding dikurangi agar lebih compact */
+    text-align: left;
+    vertical-align: top; /* Penting agar konten sel sejajar atas */
+  }
+  #overallSummaryResultsArea th {
+    background-color: var(--primary);
+    color: white;
+    text-align: center;
+  }
+  #overallSummaryResultsArea td:first-child { /* Kolom Nama Guru */
+    font-weight: bold;
+    min-width: 180px;
+  }
+  #overallSummaryResultsArea td:nth-child(2), /* Kolom Ceklok Terisi Lengkap */
+  #overallSummaryResultsArea td:last-child { /* Kolom Persentase */
+    text-align: center;
+  }
+</style>
