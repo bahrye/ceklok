@@ -2,6 +2,28 @@
 <html>
 <head>
   <base target="_top">
+  <style>
+    /* Tambahkan style untuk ikon sortir */
+    .sortable-header {
+      cursor: pointer;
+      position: relative;
+      padding-right: 20px; /* Ruang untuk ikon */
+    }
+    .sort-icon {
+      position: absolute;
+      right: 5px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.8em;
+      color: #888;
+    }
+    .sort-icon.asc::before {
+      content: " \25B2"; /* Panah ke atas */
+    }
+    .sort-icon.desc::before {
+      content: " \25BC"; /* Panah ke bawah */
+    }
+  </style>
 </head>
 <body>
   <div class="container" id="activityLogContainer">
@@ -12,11 +34,11 @@
       <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:15px; align-items:flex-end;">
         <div>
           <label for="logFilterDateStart" style="font-size:0.9em; margin-bottom:3px;">Dari Tanggal:</label>
-          <input type="date" id="logFilterDateStart" style="width:100%; padding:8px 10px; font-size:15px; border-radius:5px; border:1px solid #ccc;">
+          <input type="text" id="logFilterDateStart" placeholder="dd/mm/yyyy" style="width:100%; padding:8px 10px; font-size:15px; border-radius:5px; border:1px solid #ccc;">
         </div>
         <div>
           <label for="logFilterDateEnd" style="font-size:0.9em; margin-bottom:3px;">Sampai Tanggal:</label>
-          <input type="date" id="logFilterDateEnd" style="width:100%; padding:8px 10px; font-size:15px; border-radius:5px; border:1px solid #ccc;">
+          <input type="text" id="logFilterDateEnd" placeholder="dd/mm/yyyy" style="width:100%; padding:8px 10px; font-size:15px; border-radius:5px; border:1px solid #ccc;">
         </div>
         <div>
           <label for="logFilterUsername" style="font-size:0.9em; margin-bottom:3px;">Username Aktor:</label>
@@ -36,13 +58,13 @@
     <div class="table-container" style="max-height: 50vh; overflow-y: auto;"> <table id="activityLogTable">
         <thead>
           <tr>
-            <th style="width: 18%;">Waktu</th>
-            <th style="width: 15%;">Pengguna (Aktor)</th>
-            <th style="width: 10%;">Peran Aktor</th>
-            <th style="width: 17%;">Jenis Aksi</th>
-            <th style="width: 15%;">Target Entitas</th>
+            <th style="width: 18%;" class="sortable-header" data-column-key="timestamp_internal_sort">Waktu <span class="sort-icon" id="sortIcon-timestamp_internal_sort"></span></th>
+            <th style="width: 15%;" class="sortable-header" data-column-key="actorUsername">Pengguna (Aktor) <span class="sort-icon" id="sortIcon-actorUsername"></span></th>
+            <th style="width: 10%;" class="sortable-header" data-column-key="actorRole">Peran Aktor <span class="sort-icon" id="sortIcon-actorRole"></span></th>
+            <th style="width: 17%;" class="sortable-header" data-column-key="actionType">Jenis Aksi <span class="sort-icon" id="sortIcon-actionType"></span></th>
+            <th style="width: 15%;" class="sortable-header" data-column-key="targetEntity">Target Entitas <span class="sort-icon" id="sortIcon-targetEntity"></span></th>
             <th>Detail</th>
-            <th style="width: 8%;">Status</th>
+            <th style="width: 8%;" class="sortable-header" data-column-key="status">Status <span class="sort-icon" id="sortIcon-status"></span></th>
           </tr>
         </thead>
         <tbody id="activityLogTableBody">
