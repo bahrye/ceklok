@@ -996,6 +996,9 @@
     let activeCeklokMonthYear = null;       
     let activeRekapMonthYear = null; 
 
+    let currentLogSortColumn = 'timestamp_internal_sort'; // Default sort column (harus cocok dengan key di backend)
+    let currentLogSortDirection = 'desc';   // Default direction (newest first)
+
     let usernameForReset = null;
     let otpTimerInterval = null; 
 
@@ -4570,29 +4573,38 @@
     // Fungsi setupActivityLogView (diperbarui)
     function setupActivityLogView() {
         window.scrollTo(0, 0);
-        currentLogPage = 1; // Selalu mulai dari halaman 1 saat view dimuat
-        // Set filter tanggal default (misalnya, hari ini) atau kosongkan
-        const today = new Date();
-        const logFilterDateEndEl = document.getElementById('logFilterDateEnd');
-        // const logFilterDateStartEl = document.getElementById('logFilterDateStart');
-        if(logFilterDateEndEl) logFilterDateEndEl.valueAsDate = today; 
-        // Jika ingin default start date (misal 7 hari lalu):
-        // if(logFilterDateStartEl) {
-        //     const sevenDaysAgo = new Date();
-        //     sevenDaysAgo.setDate(today.getDate() - 7);
-        //     logFilterDateStartEl.valueAsDate = sevenDaysAgo;
-        // }
+        currentLogPage = 1; 
+        currentLogSortColumn = 'timestamp_internal_sort'; // Reset ke default sort saat view dimuat
+        currentLogSortDirection = 'desc';
 
-        resetActivityLogFilters(false); // Panggil reset untuk membersihkan input lain, false = jangan langsung load
-        loadActivityLogWithFilters();   // Lakukan pemanggilan data awal dengan filter default/kosong
+        resetActivityLogFilters(false); 
+        loadActivityLogWithFilters();   
+
+        // Tambahkan event listener ke header yang bisa disortir
+        document.querySelectorAll('#activityLogTable th.sortable-header').forEach(header => {
+            header.onclick = function() {
+                const columnKey = this.dataset.columnKey;
+                if (columnKey) {
+                    handleLogColumnSort(columnKey);
+                }
+            };
+        });
     }
 
-    // Di dalam file index.html, dalam blok <script>
     // Fungsi loadActivityLogWithFilters yang sudah dimodifikasi
-
     function loadActivityLogWithFilters(isPageChange = false) {
         if (!isPageChange) {
-            currentLogPage = 1;
+            // currentLogPage sudah direset oleh handleLogColumnSort jika bukan page change
+            // Jika ini apply filter biasa, reset page ke 1
+            if(currentLogFiltersGlobal.sortBy !== currentLogSortColumn || currentLogFiltersGlobal.sortDir !== currentLogSortDirection){
+                 // No, it means if this call to loadActivityLogWithFilters
+                 // is NOT a direct result of a sort change (e.g. it's a filter change or initial load)
+                 // then reset the page.
+                 // If it IS a page change, currentLogPage is already set by changeLogPage.
+                 // If it IS a sort change, currentLogPage is already set by handleLogColumnSort.
+            } else if (!isPageChange) { // For regular filter application, reset page
+                 currentLogPage = 1;
+            }
         }
 
         const filterUsernameEl = document.getElementById('logFilterUsername');
@@ -4600,30 +4612,44 @@
         const filterStartDateEl = document.getElementById('logFilterDateStart');
         const filterEndDateEl = document.getElementById('logFilterDateEnd');
 
-        // Ambil nilai tanggal sebagai string "YYYY-MM-DD" langsung dari input type="date"
-        const startDateValue = filterStartDateEl && filterStartDateEl.value ? filterStartDateEl.value : null;
-        const endDateValue = filterEndDateEl && filterEndDateEl.value ? filterEndDateEl.value : null;
+        let startDateForAPI = null;
+        let endDateForAPI = null;
 
+        const startDateInput = filterStartDateEl ? filterStartDateEl.value.trim() : "";
+        if (startDateInput) {
+            if (isValidDDMMYYYY(startDateInput)) { // Asumsi fungsi ini sudah ada
+                startDateForAPI = convertDDMMYYYYtoYYYYMMDD(startDateInput); // Asumsi fungsi ini sudah ada
+            } else {
+                showAlert(`Format Tanggal Mulai (${startDateInput}) salah. Harap gunakan dd/mm/yyyy. Filter tanggal mulai diabaikan.`, "warning");
+            }
+        }
+
+        const endDateInput = filterEndDateEl ? filterEndDateEl.value.trim() : "";
+        if (endDateInput) {
+            if (isValidDDMMYYYY(endDateInput)) {
+                endDateForAPI = convertDDMMYYYYtoYYYYMMDD(endDateInput);
+            } else {
+                showAlert(`Format Tanggal Akhir (${endDateInput}) salah. Harap gunakan dd/mm/yyyy. Filter tanggal akhir diabaikan.`, "warning");
+            }
+        }
+        
         currentLogFiltersGlobal = {
             filterUsername: filterUsernameEl ? filterUsernameEl.value.trim() : "",
             filterActionType: filterActionTypeEl ? filterActionTypeEl.value.trim() : "",
-            filterStartDateString: startDateValue, // Kirim sebagai string YYYY-MM-DD atau null
-            filterEndDateString: endDateValue,     // Kirim sebagai string YYYY-MM-DD atau null
+            filterStartDateString: startDateForAPI, 
+            filterEndDateString: endDateForAPI,     
             limit: LOGS_PER_PAGE,
-            offset: (currentLogPage - 1) * LOGS_PER_PAGE
+            offset: (currentLogPage - 1) * LOGS_PER_PAGE,
+            // Parameter sortir BARU:
+            sortBy: currentLogSortColumn,
+            sortDir: currentLogSortDirection
         };
         
-        // Validasi sederhana untuk rentang tanggal (perbandingan string YYYY-MM-DD bisa dilakukan)
         if (currentLogFiltersGlobal.filterStartDateString && currentLogFiltersGlobal.filterEndDateString &&
             currentLogFiltersGlobal.filterStartDateString > currentLogFiltersGlobal.filterEndDateString) {
             showAlert("Tanggal 'Dari' tidak boleh lebih besar dari tanggal 'Sampai'. Filter tanggal diabaikan.", "warning");
-            // Anda bisa memilih untuk mengabaikan filter tanggal atau tidak melanjutkan
-            // Untuk sekarang, kita akan tetap melanjutkan tapi server mungkin tidak menghasilkan apa-apa jika tanggal tidak logis
-            // Atau lebih baik, kosongkan filter tanggal jika tidak valid:
-            // currentLogFiltersGlobal.filterStartDateString = null;
-            // currentLogFiltersGlobal.filterEndDateString = null;
-            // Atau return saja:
-            // return; 
+            currentLogFiltersGlobal.filterStartDateString = null;
+            currentLogFiltersGlobal.filterEndDateString = null;
         }
 
         showLoading("Memuat log aktivitas...");
@@ -4632,6 +4658,7 @@
             tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px;">Memuat data log...</td></tr>`;
         }
         document.getElementById('totalLogEntriesInfo').textContent = '';
+        updateActivityLogHeaderSortIcons(); // Update ikon sebelum memuat
 
         google.script.run
             .withSuccessHandler(response => {
@@ -4640,9 +4667,9 @@
 
                 if (response.success) {
                     totalLogEntriesGlobal = response.totalFilteredLogs || 0;
-                    renderActivityLogTable(response.logs);
+                    renderActivityLogTable(response.logs); // renderActivityLogTable tetap sama
                     updateLogPaginationControls();
-                    document.getElementById('totalLogEntriesInfo').textContent = `Total ${totalLogEntriesGlobal} entri ditemukan ${ (startDateValue || endDateValue) ? 'sesuai filter' : ''}.`;
+                    document.getElementById('totalLogEntriesInfo').textContent = `Total ${totalLogEntriesGlobal} entri ditemukan ${ (startDateForAPI || endDateForAPI) ? 'sesuai filter' : ''}.`;
                 } else {
                     showAlert(response.error || "Gagal memuat log.", "error");
                     tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:red;">${response.error || 'Gagal memuat data.'}</td></tr>`;
@@ -4765,6 +4792,47 @@
     // break;
     // // ...
     // }
+    // Fungsi helper BARU untuk validasi format dd/mm/yyyy
+    function isValidDDMMYYYY(dateString) {
+        if (!dateString) return false; // Kosong tidak valid untuk fungsi ini, tapi bisa valid untuk filter
+        const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+        if (!regex.test(dateString)) return false;
+        const [, day, month, year] = regex.exec(dateString);
+        const d = parseInt(day, 10);
+        const m = parseInt(month, 10);
+        const y = parseInt(year, 10);
+        const dateObj = new Date(y, m - 1, d); // Month is 0-indexed
+        return dateObj.getFullYear() === y && dateObj.getMonth() === m - 1 && dateObj.getDate() === d;
+    }
+
+    // Fungsi helper BARU untuk konversi dd/mm/yyyy ke yyyy-mm-dd
+    function convertDDMMYYYYtoYYYYMMDD(ddmmyyyy) {
+        if (!isValidDDMMYYYY(ddmmyyyy)) return null;
+        const [day, month, year] = ddmmyyyy.split('/');
+        return `${year}-${month}-${day}`;
+    }
+
+    function handleLogColumnSort(columnKey) {
+        if (currentLogSortColumn === columnKey) {
+            currentLogSortDirection = currentLogSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentLogSortColumn = columnKey;
+            currentLogSortDirection = 'asc'; // Default ke 'asc' saat kolom baru dipilih, atau 'desc' jika preferensi
+        }
+        currentLogPage = 1; // Reset ke halaman pertama saat sortir diubah
+        loadActivityLogWithFilters(); // Memuat ulang data dengan parameter sortir baru
+    }
+
+    function updateActivityLogHeaderSortIcons() {
+        document.querySelectorAll('#activityLogTable th .sort-icon').forEach(icon => {
+            icon.classList.remove('asc', 'desc');
+            icon.textContent = ''; // Atau ikon default jika ada
+        });
+        const activeIcon = document.getElementById(`sortIcon-${currentLogSortColumn}`);
+        if (activeIcon) {
+            activeIcon.classList.add(currentLogSortDirection);
+        }
+    }
   </script>
 </body>
 </html>
