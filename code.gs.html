@@ -33,6 +33,9 @@ const ROLE_USER = "user";
 
 const ACTIVITY_LOG_SHEET_NAME = "Activity_Log"; // Nama untuk sheet log baru
 
+const IN_APP_NOTIFICATIONS_SHEET_NAME = "InAppNotifications";
+const ss = SpreadsheetApp.getActiveSpreadsheet();
+
 
 function doGet(e) {
   return HtmlService.createHtmlOutputFromFile('index')
@@ -3415,18 +3418,16 @@ function processIncompleteAttendanceReminder(teacher, allCeklokData, ceklokHeade
     const namaGuruDiSheet = String(row[idxCeklokNama]).trim();
 
     if (namaGuruDiSheet === teacher.name) {
-      if (!(row[idxCeklokTanggal] instanceof Date)) continue; 
+      if (!(row[idxCeklokTanggal] instanceof Date)) continue;
       const tanggalAbsen = new Date(row[idxCeklokTanggal]);
       tanggalAbsen.setHours(0, 0, 0, 0);
 
       if (tanggalAbsen >= globalMinDateToCheck && tanggalAbsen <= today) {
         const ketLiburManualValue = row[idxCeklokKetManual] ? String(row[idxCeklokKetManual]).trim() : "";
         
-        // Hanya proses jika BUKAN hari libur berdasarkan kalender DAN TIDAK ADA keterangan manual yang sudah diisi
-        // (karena jika ada ket. manual, berarti sudah ada tindakan dari guru).
-        const isEffectivelyWorkDayForFillingHours = 
+        const isEffectivelyWorkDayForFillingHours =
             (tanggalAbsen.getDay() !== 0 && !liburMap[Utilities.formatDate(tanggalAbsen, Session.getScriptTimeZone(), "dd/MM/yyyy")]) &&
-            (ketLiburManualValue === ""); 
+            (ketLiburManualValue === "");
 
         if (isEffectivelyWorkDayForFillingHours) {
           const jamMasuk = row[idxCeklokMasuk] ? String(row[idxCeklokMasuk]).trim() : "";
@@ -3434,9 +3435,42 @@ function processIncompleteAttendanceReminder(teacher, allCeklokData, ceklokHeade
 
           if ((jamMasuk && !jamPulang) || (!jamMasuk && jamPulang)) {
             const tanggalAbsenStr = Utilities.formatDate(tanggalAbsen, Session.getScriptTimeZone(), "dd/MM/yyyy");
-            const notifType = "tidak_lengkap";
-            
-            if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, tanggalAbsenStr, notifType)) {
+            const notifType = "tidak_lengkap"; // Tipe notifikasi untuk email dan in-app
+
+            // --- AWAL PENAMBAHAN KODE UNTUK NOTIFIKASI LONCENG ---
+            try {
+                const inAppNotifSheet = ensureSheet(IN_APP_NOTIFICATIONS_SHEET_NAME, ["NotificationID", "TeacherName", "Message", "TimestampCreated", "IsRead", "NotificationType", "TargetDate", "Link"]); //
+                const notificationId = Utilities.getUuid();
+                let inAppMessage = `Absensi Anda pada tanggal ${tanggalAbsenStr} belum lengkap. `;
+                if (jamMasuk && !jamPulang) {
+                    inAppMessage += `Jam pulang masih kosong.`;
+                } else { // !jamMasuk && jamPulang
+                    inAppMessage += `Jam masuk masih kosong.`;
+                }
+
+                // Anda bisa menambahkan pengecekan di sini jika tidak ingin membuat notifikasi in-app
+                // jika notifikasi email dengan tipe dan target tanggal yang sama sudah dikirim hari ini
+                // (menggunakan helper_hasSentNotificationToday atau logika serupa untuk in-app)
+                // Untuk sekarang, kita buat saja notifikasinya.
+
+                inAppNotifSheet.appendRow([
+                    notificationId,
+                    teacher.name,       // Menggunakan teacher.name
+                    inAppMessage,
+                    new Date(),         // TimestampCreated
+                    false,              // IsRead (default false)
+                    notifType,          // "tidak_lengkap"
+                    tanggalAbsenStr,    // TargetDate
+                    ""                  // Link (opsional)
+                ]);
+                Logger.log(`In-app notification (bell) created for ${teacher.name} for date ${tanggalAbsenStr} (incomplete).`);
+            } catch (e) {
+                Logger.log(`Failed to create in-app notification for ${teacher.name} (incomplete, date: ${tanggalAbsenStr}): ${e.toString()}`);
+            }
+            // --- AKHIR PENAMBAHAN KODE UNTUK NOTIFIKASI LONCENG ---
+
+            // Logika pengiriman email yang sudah ada:
+            if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, tanggalAbsenStr, notifType)) { //
               Logger.log(`Guru ${teacher.name} memiliki absensi tidak lengkap pada ${tanggalAbsenStr}. Mengirim email.`);
               const subject = `Pemberitahuan: Absensi Ceklok Tidak Lengkap - ${teacher.name}`;
               let body = `Yth. ${teacher.name},\n\n`;
@@ -3448,16 +3482,20 @@ function processIncompleteAttendanceReminder(teacher, allCeklokData, ceklokHeade
               }
               body += `Mohon untuk segera melengkapi data absensi Anda melalui aplikasi Ceklok.\n\nTerima kasih.\n${EMAIL_SENDER_NAME}`;
               
-              try {
-                MailApp.sendEmail({
-                  to: teacher.email,
-                  subject: subject,
-                  body: body,
-                  name: EMAIL_SENDER_NAME 
-                });
-                helper_logSentNotification(reminderLogSheet, teacher.name, tanggalAbsenStr, notifType, 0); // Urutan 0 untuk tipe ini
-              } catch (e) {
-                Logger.log(`Gagal mengirim email absensi tidak lengkap ke ${teacher.email} untuk tanggal ${tanggalAbsenStr}: ${e.toString()}`);
+              if (teacher.email && helper_isValidEmailFormat(teacher.email)) { // Pastikan email valid sebelum mengirim
+                try {
+                  MailApp.sendEmail({
+                    to: teacher.email,
+                    subject: subject,
+                    body: body,
+                    name: EMAIL_SENDER_NAME
+                  });
+                  helper_logSentNotification(reminderLogSheet, teacher.name, tanggalAbsenStr, notifType, 0); // Urutan 0 untuk tipe ini //
+                } catch (e) {
+                  Logger.log(`Gagal mengirim email absensi tidak lengkap ke ${teacher.email} untuk tanggal ${tanggalAbsenStr}: ${e.toString()}`);
+                }
+              } else {
+                Logger.log(`Email tidak valid atau tidak ada untuk ${teacher.name} (${teacher.email}). Email pengingat absensi tidak lengkap tidak dikirim untuk tanggal ${tanggalAbsenStr}.`);
               }
             }
           }
@@ -3467,11 +3505,6 @@ function processIncompleteAttendanceReminder(teacher, allCeklokData, ceklokHeade
   }
 }
 
-
-/**
- * Memproses dan mengirim notifikasi untuk pengisian absensi berkala (jika ada tanggal kosong).
- */
-// ... (fungsi helper_isWorkingDay, helper_getLiburMap, dll. tetap ada) ...
 
 /**
  * Memproses dan mengirim notifikasi untuk pengisian absensi berkala (jika ada tanggal kosong).
@@ -3524,15 +3557,15 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
   yesterday.setHours(0,0,0,0);
 
   while(tempDate <= yesterday) {
-    const isAlreadyFilledOrHasKet = allCeklokData.some(row => 
+    const isAlreadyFilledOrHasKet = allCeklokData.some(row =>
         String(row[idxCeklokNama]).trim() === teacher.name &&
         row[idxCeklokTanggal] instanceof Date &&
         new Date(row[idxCeklokTanggal]).setHours(0,0,0,0) === tempDate.getTime() &&
-        ((row[idxCeklokMasuk] && String(row[idxCeklokMasuk]).trim()) || 
-         (row[idxCeklokPulang] && String(row[idxCeklokPulang]).trim()) || 
+        ((row[idxCeklokMasuk] && String(row[idxCeklokMasuk]).trim()) ||
+         (row[idxCeklokPulang] && String(row[idxCeklokPulang]).trim()) ||
          (row[idxCeklokKetManual] && String(row[idxCeklokKetManual]).trim()))
     );
-    
+
     const ketManualForTempDateRow = allCeklokData.find(row =>
         String(row[idxCeklokNama]).trim() === teacher.name &&
         row[idxCeklokTanggal] instanceof Date &&
@@ -3540,38 +3573,33 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
     );
     const ketManualForTempDate = ketManualForTempDateRow ? String(ketManualForTempDateRow[idxCeklokKetManual]).trim() : "";
 
-    if (helper_isWorkingDay(tempDate, liburMap, ketManualForTempDate) && !isAlreadyFilledOrHasKet) {
+    if (helper_isWorkingDay(tempDate, liburMap, ketManualForTempDate) && !isAlreadyFilledOrHasKet) { //
       firstEmptyWorkingDay = new Date(tempDate);
-      break; 
+      break;
     }
     tempDate.setDate(tempDate.getDate() + 1);
   }
 
   if (!firstEmptyWorkingDay) {
-    // Logger.log(`Tidak ditemukan hari kerja yang kosong untuk guru ${teacher.name} sampai dengan kemarin.`);
-    return; 
+    return;
   }
 
   // 4. Logika pengiriman notifikasi berdasarkan interval 3 hari
   const targetEmptyDateStr = Utilities.formatDate(firstEmptyWorkingDay, Session.getScriptTimeZone(), "dd/MM/yyyy");
   const reminderTypeBase = "berkala_kosong"; // Tipe dasar untuk log
-  
-  const lastReminderRecord = helper_getLastPeriodicNotificationForTarget(reminderLogSheet, teacher.name, targetEmptyDateStr, reminderTypeBase);
-  // helper_getLastPeriodicNotificationForTarget akan mencari semua log dengan tipe yang dimulai "berkala_kosong" untuk target tanggal tsb.
+
+  const lastReminderRecord = helper_getLastPeriodicNotificationForTarget(reminderLogSheet, teacher.name, targetEmptyDateStr, reminderTypeBase); //
 
   let shouldSendToday = false;
   let newSequence = 1;
 
   if (!lastReminderRecord) {
-    // Belum pernah ada notifikasi untuk targetEmptyDateStr ini.
-    // Kirim notifikasi pertama jika hari kosong ini sudah cukup "lama" (misal, lewat 1 hari).
     const ageOfEmptyDayInDays = Math.floor((today.getTime() - firstEmptyWorkingDay.getTime()) / (1000 * 60 * 60 * 24));
-    if (ageOfEmptyDayInDays >= 1) { // Kirim jika hari kosong adalah kemarin atau lebih tua
+    if (ageOfEmptyDayInDays >= 1) {
         shouldSendToday = true;
         newSequence = 1;
     }
   } else {
-    // Sudah ada notifikasi sebelumnya untuk targetEmptyDateStr ini.
     const lastReminderDate = new Date(lastReminderRecord.tanggalKirim);
     lastReminderDate.setHours(0,0,0,0);
     const daysSinceLastReminderForTarget = Math.floor((today.getTime() - lastReminderDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -3583,12 +3611,43 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
   }
 
   if (shouldSendToday) {
-    const specificNotifTypeForLog = `${reminderTypeBase}_${newSequence}`; // e.g., "berkala_kosong_1"
-    
-    if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, targetEmptyDateStr, specificNotifTypeForLog)) {
+    const specificNotifTypeForLogEmail = `${reminderTypeBase}_${newSequence}`; // e.g., "berkala_kosong_1" - untuk log email
+    const inAppNotifType = `MISSING_CEKLOK_PERIODIC_${newSequence}`; // Tipe spesifik untuk in-app
+
+    // --- AWAL PENAMBAHAN KODE UNTUK NOTIFIKASI LONCENG ---
+    try {
+        const inAppNotifSheet = ensureSheet(IN_APP_NOTIFICATIONS_SHEET_NAME, ["NotificationID", "TeacherName", "Message", "TimestampCreated", "IsRead", "NotificationType", "TargetDate", "Link"]); //
+        const notificationId = Utilities.getUuid();
+        const actualLastFilledDateStrForInApp = lastEffectivelyFilledDate ? Utilities.formatDate(lastEffectivelyFilledDate, Session.getScriptTimeZone(), "dd/MM/yyyy") : "belum ada catatan";
+        let inAppMessage = `Anda diingatkan untuk mengisi absensi Ceklok yang kosong, setidaknya untuk tanggal ${targetEmptyDateStr}. `;
+        if (lastEffectivelyFilledDate) {
+            inAppMessage += `Absen terakhir Anda pada ${actualLastFilledDateStrForInApp}.`;
+        } else {
+            inAppMessage += `Belum ada catatan absensi dari Anda sejak ${Utilities.formatDate(globalMinDateToCheck, Session.getScriptTimeZone(), "dd/MM/yyyy")}.`;
+        }
+
+        inAppNotifSheet.appendRow([
+            notificationId,
+            teacher.name,
+            inAppMessage,
+            new Date(),
+            false,
+            inAppNotifType, // Menggunakan tipe notifikasi in-app yang baru
+            targetEmptyDateStr,
+            ""
+        ]);
+        Logger.log(`In-app notification (bell) created for ${teacher.name} for missing attendance (target: ${targetEmptyDateStr}, sequence: ${newSequence}).`);
+    } catch (e) {
+        Logger.log(`Failed to create in-app notification for ${teacher.name} (missing, target: ${targetEmptyDateStr}, sequence: ${newSequence}): ${e.toString()}`);
+    }
+    // --- AKHIR PENAMBAHAN KODE UNTUK NOTIFIKASI LONCENG ---
+
+
+    // Logika pengiriman email yang sudah ada:
+    if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, targetEmptyDateStr, specificNotifTypeForLogEmail)) { //
         const actualLastFilledDateStr = lastEffectivelyFilledDate ? Utilities.formatDate(lastEffectivelyFilledDate, Session.getScriptTimeZone(), "dd/MM/yyyy") : "belum ada catatan";
         Logger.log(`Mengirim notifikasi pengisian berkala (Urutan: ${newSequence}, Interval 3 hari terpenuhi) ke ${teacher.name}. Absen terakhir diisi: ${actualLastFilledDateStr}. Target kosong: ${targetEmptyDateStr}.`);
-        
+
         const subject = `Pengingat Pengisian Absensi Ceklok - ${teacher.name}`;
         let body = `Yth. ${teacher.name},\n\n`;
         body += `Sistem kami mengingatkan bahwa Anda belum mengisi data absensi Ceklok setidaknya untuk tanggal ${targetEmptyDateStr}.\n`;
@@ -3597,25 +3656,27 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
         } else {
             body += `Kami belum menemukan catatan absensi dari Anda sejak periode ${Utilities.formatDate(globalMinDateToCheck, Session.getScriptTimeZone(), "dd/MM/yyyy")}.\n\n`;
         }
-        body += `Mohon untuk segera mengisi data absensi Anda melalui aplikasi Ceklok MTS Tanuntung.\n\n`; // Link bisa ditambahkan jika ada
-        body += `Terima kasih.\n${EMAIL_SENDER_NAME}`; // Pastikan EMAIL_SENDER_NAME didefinisikan global
+        body += `Mohon untuk segera mengisi data absensi Anda melalui aplikasi Ceklok MTS Tanuntung.\n\n`;
+        body += `Terima kasih.\n${EMAIL_SENDER_NAME}`; //
 
-        try {
-            MailApp.sendEmail({
-              to: teacher.email,
-              subject: subject,
-              body: body,
-              name: EMAIL_SENDER_NAME 
-            });
-            helper_logSentNotification(reminderLogSheet, teacher.name, targetEmptyDateStr, specificNotifTypeForLog, newSequence);
-        } catch (e) {
-            Logger.log(`Gagal mengirim email pengingat berkala ke ${teacher.email} untuk ${targetEmptyDateStr}: ${e.toString()}`);
+        if (teacher.email && helper_isValidEmailFormat(teacher.email)) { //
+            try {
+                MailApp.sendEmail({
+                  to: teacher.email,
+                  subject: subject,
+                  body: body,
+                  name: EMAIL_SENDER_NAME //
+                });
+                helper_logSentNotification(reminderLogSheet, teacher.name, targetEmptyDateStr, specificNotifTypeForLogEmail, newSequence); //
+            } catch (e) {
+                Logger.log(`Gagal mengirim email pengingat berkala ke ${teacher.email} untuk ${targetEmptyDateStr}: ${e.toString()}`);
+            }
+        } else {
+            Logger.log(`Email tidak valid atau tidak ada untuk ${teacher.name} (${teacher.email}). Email pengingat berkala tidak dikirim untuk tanggal ${targetEmptyDateStr}.`);
         }
     } else {
-        Logger.log(`Notifikasi pengisian berkala (Urutan: ${newSequence}) untuk ${teacher.name} target ${targetEmptyDateStr} sudah dikirim hari ini (dicegah duplikasi).`);
+        Logger.log(`Notifikasi pengisian berkala (Urutan: ${newSequence}) untuk ${teacher.name} target ${targetEmptyDateStr} sudah dikirim hari ini (dicegah duplikasi email).`);
     }
-  } else {
-    // Logger.log(`Kondisi interval 3 hari belum terpenuhi untuk ${teacher.name}, target ${targetEmptyDateStr}. Last reminder: ${lastReminderRecord ? Utilities.formatDate(new Date(lastReminderRecord.tanggalKirim), Session.getScriptTimeZone(), "dd/MM/yyyy") : 'N/A'}`);
   }
 }
 
@@ -4478,4 +4539,130 @@ function getOverallMonthlySummaryForAllTeachers(monthYear, actingUserRole) {
     logUserActivity(Session.getActiveUser().getEmail(), actingUserRole, "GET_OVERALL_SUMMARY_ERROR", monthYear, e.message, "ERROR");
     return { success: false, error: `Gagal mengambil ringkasan keseluruhan: ${e.message}` };
   }
+}
+
+
+function getUnreadInAppNotifications(teacherName) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet(); // <--- TAMBAHKAN BARIS INI
+    if (!teacherName) return { success: false, error: "Nama guru diperlukan." };
+
+    const notifSheet = ss.getSheetByName(IN_APP_NOTIFICATIONS_SHEET_NAME);
+    if (!notifSheet || notifSheet.getLastRow() < 2) {
+      return { success: true, notifications: [], unreadCount: 0 };
+    }
+
+    const data = notifSheet.getDataRange().getValues();
+    const headers = data[0].map(h => String(h).trim());
+    const teacherNameColIdx = headers.indexOf("TeacherName");
+    const messageColIdx = headers.indexOf("Message");
+    const timestampColIdx = headers.indexOf("TimestampCreated");
+    const isReadColIdx = headers.indexOf("IsRead");
+    const idColIdx = headers.indexOf("NotificationID");
+
+    if (teacherNameColIdx === -1 || isReadColIdx === -1 || idColIdx === -1) {
+      return { success: false, error: "Struktur sheet InAppNotifications tidak sesuai." };
+    }
+
+    const unreadNotifications = [];
+    let unreadCount = 0;
+
+    for (let i = data.length - 1; i >= 1; i--) { // Iterasi dari terbaru
+      const row = data[i];
+      if (String(row[teacherNameColIdx]).trim() === teacherName) {
+        const isRead = row[isReadColIdx];
+        if (isRead === false || String(isRead).toUpperCase() === "FALSE") {
+          unreadCount++;
+          if (unreadNotifications.length < 10) {
+            unreadNotifications.push({
+              id: row[idColIdx],
+              message: row[messageColIdx],
+              timestamp: row[timestampColIdx] ? new Date(row[timestampColIdx]).toLocaleString('id-ID') : 'N/A',
+            });
+          }
+        }
+      }
+    }
+    return { success: true, notifications: unreadNotifications, unreadCount: unreadCount };
+  } catch (e) {
+    Logger.log(`Error in getUnreadInAppNotifications for ${teacherName}: ${e.toString()}`);
+    return { success: false, error: `Gagal mengambil notifikasi: ${e.message}` };
+  }
+}
+
+// Di dalam file code.gs.html
+
+function markInAppNotificationAsRead(notificationId, teacherName) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet(); // <--- TAMBAHKAN BARIS INI
+    if (!notificationId || !teacherName) {
+      return { success: false, error: "ID Notifikasi dan Nama Guru diperlukan." };
+    }
+    const notifSheet = ss.getSheetByName(IN_APP_NOTIFICATIONS_SHEET_NAME);
+    if (!notifSheet || notifSheet.getLastRow() < 2) {
+      return { success: false, error: "Sheet notifikasi tidak ditemukan atau kosong." };
+    }
+
+    const data = notifSheet.getDataRange().getValues();
+    const headers = data[0].map(h => String(h).trim());
+    const idColIdx = headers.indexOf("NotificationID");
+    const teacherNameColIdx = headers.indexOf("TeacherName");
+    const isReadColIdx = headers.indexOf("IsRead");
+
+    if (idColIdx === -1 || teacherNameColIdx === -1 || isReadColIdx === -1) {
+      return { success: false, error: "Struktur kolom sheet InAppNotifications tidak sesuai." };
+    }
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idColIdx]) === String(notificationId) && String(data[i][teacherNameColIdx]).trim() === teacherName) {
+        notifSheet.getRange(i + 1, isReadColIdx + 1).setValue(true);
+        SpreadsheetApp.flush();
+        return { success: true, message: "Notifikasi ditandai sudah dibaca." };
+      }
+    }
+    return { success: false, error: "Notifikasi tidak ditemukan atau tidak cocok dengan pengguna." };
+  } catch (e) {
+    Logger.log(`Error marking notification read (${notificationId}): ${e.toString()}`);
+    return { success: false, error: `Gagal menandai notifikasi: ${e.message}` };
+  }
+}
+
+// Di dalam file code.gs.html
+
+function markAllInAppNotificationsAsRead(teacherName) {
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet(); // <--- TAMBAHKAN BARIS INI
+        if (!teacherName) return { success: false, error: "Nama guru diperlukan." };
+
+        const notifSheet = ss.getSheetByName(IN_APP_NOTIFICATIONS_SHEET_NAME);
+        if (!notifSheet || notifSheet.getLastRow() < 2) {
+            return { success: true, message: "Tidak ada notifikasi untuk ditandai." };
+        }
+
+        const data = notifSheet.getDataRange().getValues();
+        const headers = data[0].map(h => String(h).trim());
+        const teacherNameColIdx = headers.indexOf("TeacherName");
+        const isReadColIdx = headers.indexOf("IsRead");
+
+        if (teacherNameColIdx === -1 || isReadColIdx === -1) {
+            return { success: false, error: "Struktur kolom sheet InAppNotifications tidak sesuai." };
+        }
+
+        let markedCount = 0;
+        for (let i = 1; i < data.length; i++) {
+            if (String(data[i][teacherNameColIdx]).trim() === teacherName) {
+                const isRead = data[i][isReadColIdx];
+                if (isRead === false || String(isRead).toUpperCase() === "FALSE") {
+                    notifSheet.getRange(i + 1, isReadColIdx + 1).setValue(true);
+                    markedCount++;
+                }
+            }
+        }
+        if (markedCount > 0) SpreadsheetApp.flush();
+        return { success: true, message: `${markedCount} notifikasi ditandai sudah dibaca.` };
+
+    } catch (e) {
+        Logger.log(`Error in markAllInAppNotificationsAsRead for ${teacherName}: ${e.toString()}`);
+        return { success: false, error: `Gagal menandai semua notifikasi: ${e.message}` };
+    }
 }
