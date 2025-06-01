@@ -861,6 +861,20 @@
     </div>
   </div>
 
+  <div id="inAppNotificationBellContainer" style="position: fixed; top: 10px; right: 70px; z-index: 10001; display: none; cursor: pointer;">
+      <svg id="notificationIconTrigger" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#333" style="background-color: white; border-radius: 50%; padding: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #ccc; width: 40px; height: 40px;">
+          <path d="M0 0h24v24H0V0z" fill="none"/>
+          <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.21 1.79-4 4-4s4 1.79 4 4v6z"/>
+      </svg>
+      <span id="notificationBadge" style="position: absolute; top: 5px; right: 5px; background-color: red; color: white; border-radius: 50%; padding: 1px 5px; font-size: 0.75em; display: none; font-weight: bold;"></span>
+      <div id="notificationDropdownPanel" class="profile-dropdown-content" style="display: none; top: calc(100% + 8px); right: 0; min-width: 300px; max-height: 400px; overflow-y: auto;">
+          <div id="notificationDropdownHeader" style="padding: 10px 15px; font-weight: bold; border-bottom: 1px solid #eee;">Notifikasi</div>
+          <div id="notificationListContainer">
+              </div>
+          <a href="#" id="markAllReadLink" style="display: block; text-align: center; padding: 8px 15px; border-top: 1px solid #eee; margin-top:5px; font-size:0.9em;">Tandai semua sudah dibaca</a>
+      </div>
+  </div>
+
   <div id="app">
     </div>
 
@@ -1477,6 +1491,14 @@
         profileMenuContainer.classList.remove('show-dropdown'); 
       }
 
+      // --- AWAL MODIFIKASI UNTUK NOTIFIKASI LONCENG ---
+      const bellContainerLogout = document.getElementById('inAppNotificationBellContainer');
+      if (bellContainerLogout) bellContainerLogout.style.display = 'none';
+      updateInAppNotificationBadge(0); // Reset badge saat logout
+      if (inAppNotificationsInterval) clearInterval(inAppNotificationsInterval); // Hentikan polling
+      unreadInAppNotificationCount = 0; // Reset count global
+      // --- AKHIR MODIFIKASI UNTUK NOTIFIKASI LONCENG ---
+
       sessionStorage.removeItem('loggedInUserData');
       clearTimeout(idleTimer);
       removeIdleListeners();
@@ -1549,6 +1571,17 @@
         setupProfileMenuEventListeners();
         closeProfileDropdownOnClickOutside();
         closeProfileDropdownOnEscape();
+
+        // --- AWAL MODIFIKASI UNTUK NOTIFIKASI LONCENG ---
+        if (loggedInUser.role === ROLE_USER) {
+            setupInAppNotificationBell(); // Panggil setup untuk lonceng notifikasi
+        } else {
+            // Pastikan lonceng disembunyikan jika bukan guru
+            const bellContainer = document.getElementById('inAppNotificationBellContainer');
+            if (bellContainer) bellContainer.style.display = 'none';
+            if (inAppNotificationsInterval) clearInterval(inAppNotificationsInterval); // Hentikan polling jika ada
+        }
+        // --- AKHIR MODIFIKASI UNTUK NOTIFIKASI LONCENG ---
 
         showLoading("Memuat data aplikasi...");
         google.script.run
@@ -5087,7 +5120,267 @@
     //     closeOverallSummaryDetailModal();
     // }
     // ...
+    // Di dalam blok <script> di index.html
 
+    // Variabel global untuk notifikasi
+    let unreadInAppNotificationCount = 0; // Diganti dari unreadNotificationCount agar lebih spesifik
+    let inAppNotificationsInterval = null; // Untuk polling jika diinginkan
+
+    function setupInAppNotificationBell() {
+        const bellContainer = document.getElementById('inAppNotificationBellContainer');
+        const iconTrigger = document.getElementById('notificationIconTrigger');
+        const dropdownPanel = document.getElementById('notificationDropdownPanel');
+        const markAllReadLink = document.getElementById('markAllReadLink'); // Pastikan ID ini ada di HTML
+
+        if (loggedInUser && loggedInUser.role === ROLE_USER) { // Hanya untuk guru
+            if (bellContainer) bellContainer.style.display = 'block'; // Tampilkan kontainer lonceng
+            fetchAndUpdateUnreadInAppNotificationCount(); // Panggil saat setup untuk inisialisasi badge
+
+            if (iconTrigger) {
+                iconTrigger.onclick = function(event) {
+                    event.stopPropagation();
+                    if (dropdownPanel) {
+                        const isDropdownVisible = dropdownPanel.style.display === 'block';
+                        if (!isDropdownVisible) {
+                            loadAndDisplayInAppNotifications(); // Muat notifikasi saat dropdown dibuka
+                            dropdownPanel.style.display = 'block';
+                        } else {
+                            dropdownPanel.style.display = 'none';
+                        }
+                    }
+                };
+            }
+            if (markAllReadLink) {
+                markAllReadLink.onclick = function(e) {
+                    e.preventDefault();
+                    handleMarkAllInAppNotificationsAsRead();
+                    if (dropdownPanel) dropdownPanel.style.display = 'none'; // Tutup dropdown setelah klik
+                };
+            }
+            // Listener untuk menutup dropdown jika diklik di luar
+            document.addEventListener('click', function(event) {
+                if (dropdownPanel && bellContainer && !bellContainer.contains(event.target) && dropdownPanel.style.display === 'block') {
+                    dropdownPanel.style.display = 'none';
+                }
+            });
+
+            // Opsional: Polling untuk notifikasi baru setiap beberapa menit
+            if (inAppNotificationsInterval) clearInterval(inAppNotificationsInterval);
+            inAppNotificationsInterval = setInterval(fetchAndUpdateUnreadInAppNotificationCount, 5 * 60 * 1000); // Setiap 5 menit
+
+        } else {
+            if (bellContainer) bellContainer.style.display = 'none'; // Sembunyikan jika bukan guru
+            if (inAppNotificationsInterval) clearInterval(inAppNotificationsInterval); // Hentikan polling jika logout atau bukan guru
+        }
+    }
+
+    function fetchAndUpdateUnreadInAppNotificationCount() {
+        if (!loggedInUser || loggedInUser.role !== ROLE_USER || !loggedInUser.teacherName) { // Pastikan teacherName ada
+            updateInAppNotificationBadge(0); // Atau sembunyikan badge jika tidak relevan
+            return;
+        }
+
+        google.script.run
+            .withSuccessHandler(response => {
+                if (response.success) {
+                    unreadInAppNotificationCount = response.unreadCount || 0;
+                    updateInAppNotificationBadge(unreadInAppNotificationCount);
+                } else {
+                    console.error("Gagal mengambil jumlah notifikasi in-app:", response.error);
+                    // Pertimbangkan untuk tidak menampilkan error ke pengguna, cukup log
+                }
+            })
+            .withFailureHandler(err => {
+                console.error("Error server saat mengambil jumlah notifikasi in-app:", err.message);
+                // Pertimbangkan untuk tidak menampilkan error ke pengguna
+            })
+            .getUnreadInAppNotifications(loggedInUser.teacherName); // Menggunakan teacherName
+    }
+
+    function updateInAppNotificationBadge(count) {
+        const badge = document.getElementById('notificationBadge');
+        if (badge) {
+            if (count > 0) {
+                badge.textContent = count > 9 ? '9+' : count.toString();
+                badge.style.display = 'block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    }
+
+    function loadAndDisplayInAppNotifications() {
+        const listContainer = document.getElementById('notificationListContainer');
+        if (!listContainer || !loggedInUser || loggedInUser.role !== ROLE_USER || !loggedInUser.teacherName) return; // Pastikan teacherName ada
+
+        listContainer.innerHTML = '<p style="padding:10px 15px; text-align:center; color:#777;">Memuat notifikasi...</p>';
+
+        google.script.run
+            .withSuccessHandler(response => {
+                if (response.success) {
+                    renderInAppNotifications(response.notifications);
+                    // Setelah notifikasi baru dimuat dan ditampilkan, tandai mereka sebagai sudah dibaca (opsional,
+                    // tergantung apakah Anda ingin otomatis menandai saat dropdown dibuka atau saat item diklik)
+                    // Jika ingin menandai semua yang baru saja ditampilkan:
+                    // if (response.notifications && response.notifications.length > 0) {
+                    //     handleMarkAllInAppNotificationsAsRead(); // Ini akan update badge juga
+                    // } else {
+                    //     fetchAndUpdateUnreadInAppNotificationCount(); // Update badge jika tidak ada notif baru yg dimuat
+                    // }
+                } else {
+                    listContainer.innerHTML = `<p style="padding:10px 15px; color:red; text-align:center;">${response.error || 'Gagal memuat notifikasi.'}</p>`;
+                }
+            })
+            .withFailureHandler(err => {
+                listContainer.innerHTML = `<p style="padding:10px 15px; color:red; text-align:center;">Error server: ${err.message}</p>`;
+            })
+            .getUnreadInAppNotifications(loggedInUser.teacherName); // Ambil notifikasi (yang terbaru dan belum dibaca)
+    }
+
+    function renderInAppNotifications(notifications) {
+        const listContainer = document.getElementById('notificationListContainer');
+        const dropdownHeader = document.getElementById('notificationDropdownHeader'); //
+        const markAllLink = document.getElementById('markAllReadLink'); //
+
+        if (!listContainer) return;
+
+        if (!notifications || notifications.length === 0) {
+            listContainer.innerHTML = '<p style="padding:10px 15px; text-align:center; color:#777;">Tidak ada notifikasi baru.</p>';
+            if(dropdownHeader) dropdownHeader.textContent = "Notifikasi"; //
+            if(markAllLink) markAllLink.style.display = 'none'; // Sembunyikan link jika tidak ada notifikasi
+            return;
+        }
+
+        if(dropdownHeader) dropdownHeader.textContent = `Notifikasi (${notifications.length > 0 ? unreadInAppNotificationCount : 0} belum dibaca)`; //
+        if(markAllLink) markAllLink.style.display = 'block'; // Tampilkan link jika ada notifikasi
+
+        let html = '';
+        notifications.forEach(notif => {
+            html += `<div class="in-app-notification-item" data-id="${notif.id}" title="Klik untuk tandai sudah dibaca"
+                        style="padding: 10px 15px; border-bottom: 1px solid #f0f0f0; cursor:pointer; background-color: var(--white); transition: background-color 0.2s;">
+                        <p style="margin:0; font-size:0.9em; color: var(--text); line-height:1.4;">${notif.message || 'Pesan tidak tersedia.'}</p>
+                        <small style="font-size:0.75em; color: var(--grey-text);">${notif.timestamp || ''}</small>
+                    </div>`;
+        });
+        listContainer.innerHTML = html;
+
+        // Tambahkan event listener untuk setiap item notifikasi
+        document.querySelectorAll('.in-app-notification-item').forEach(item => {
+            item.onclick = function() {
+                const notifId = this.dataset.id;
+                // Optimis UI update: langsung ubah tampilan item menjadi "terbaca"
+                this.style.backgroundColor = '#f9f9f9'; // Warna lebih pudar
+                this.style.opacity = '0.7';
+                this.title = 'Sudah dibaca'; // Ubah title
+                // Hapus event listener agar tidak bisa diklik lagi, atau handle state "read"
+                // this.onclick = null; // Cara sederhana
+
+                handleMarkInAppNotificationAsRead(notifId, this);
+            };
+            item.onmouseover = function() { this.style.backgroundColor = 'var(--accent)'; };
+            item.onmouseout = function() { if(this.style.opacity !== '0.7') this.style.backgroundColor = 'var(--white)'; };
+        });
+    }
+
+    function handleMarkInAppNotificationAsRead(notificationId, element) { // element adalah elemen DOM notifikasi
+        if (!loggedInUser || loggedInUser.role !== ROLE_USER || !loggedInUser.teacherName) return; //
+
+        google.script.run
+            .withSuccessHandler(response => {
+                if (response.success) {
+                    // showAlert("Notifikasi ditandai sudah dibaca.", "info", 1500); // Bisa dihilangkan agar tidak terlalu banyak alert
+                    // Kurangi count secara manual di client untuk update badge segera
+                    if (unreadInAppNotificationCount > 0) {
+                        unreadInAppNotificationCount--;
+                        updateInAppNotificationBadge(unreadInAppNotificationCount);
+                    }
+                    // Jika semua notifikasi di panel sudah dibaca (misal setelah klik item terakhir)
+                    const listContainer = document.getElementById('notificationListContainer');
+                    if(listContainer){
+                        const unreadItems = Array.from(listContainer.children).filter(child => child.style.opacity !== '0.7' && child.classList.contains('in-app-notification-item'));
+                        if(unreadItems.length === 0 && unreadInAppNotificationCount === 0){ // Jika semua item di panel sudah terlihat terbaca dan count global 0
+                            renderInAppNotifications([]); // Tampilkan "Tidak ada notifikasi baru."
+                        } else if (element && unreadInAppNotificationCount === 0 && listContainer.children.length === 1 && listContainer.firstChild === element) {
+                            // Jika ini adalah item terakhir dan count jadi 0, refresh panel
+                            renderInAppNotifications([]);
+                        }
+                    }
+
+
+                } else {
+                    showAlert(response.error || "Gagal menandai notifikasi.", "error");
+                    // Kembalikan tampilan item jika gagal
+                    if (element) {
+                        element.style.backgroundColor = 'var(--white)';
+                        element.style.opacity = '1';
+                        element.title = 'Klik untuk tandai sudah dibaca';
+                    }
+                }
+            })
+            .withFailureHandler(err => {
+                showAlert(`Error server: ${err.message}`, "error");
+                if (element) { // Kembalikan tampilan item jika gagal
+                    element.style.backgroundColor = 'var(--white)';
+                    element.style.opacity = '1';
+                    element.title = 'Klik untuk tandai sudah dibaca';
+                }
+            })
+            .markInAppNotificationAsRead(notificationId, loggedInUser.teacherName); // Menggunakan teacherName
+    }
+
+    function handleMarkAllInAppNotificationsAsRead() {
+        if (!loggedInUser || loggedInUser.role !== ROLE_USER || !loggedInUser.teacherName) return; //
+        showLoading("Menandai semua notifikasi...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success) {
+                    showAlert(response.message || "Semua notifikasi ditandai sudah dibaca.", "success", 2000);
+                    unreadInAppNotificationCount = 0; // Reset count di client
+                    updateInAppNotificationBadge(unreadInAppNotificationCount);
+                    renderInAppNotifications([]); // Kosongkan daftar di UI dan tampilkan pesan "Tidak ada notifikasi"
+                } else {
+                    showAlert(response.error || "Gagal menandai semua notifikasi.", "error");
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                showAlert(`Error server: ${err.message}`, "error");
+            })
+            .markAllInAppNotificationsAsRead(loggedInUser.teacherName); // Menggunakan teacherName
+    }
+
+    // --- Modifikasi pada fungsi proceedAfterLogin ---
+    // Di dalam fungsi proceedAfterLogin() di index.html:
+    // Setelah baris setupProfileMenuEventListeners(); tambahkan:
+
+    /*
+        // ... (setelah setupProfileMenuEventListeners())
+        if (loggedInUser.role === ROLE_USER) {
+            setupInAppNotificationBell(); // Panggil setup untuk lonceng notifikasi
+        } else {
+            // Pastikan lonceng disembunyikan jika bukan guru
+            const bellContainer = document.getElementById('inAppNotificationBellContainer');
+            if (bellContainer) bellContainer.style.display = 'none';
+            if (inAppNotificationsInterval) clearInterval(inAppNotificationsInterval);
+        }
+        // ...
+    */
+
+    // --- Modifikasi pada fungsi logout ---
+    // Di dalam fungsi logout() di index.html:
+    // Sebelum renderView('login'); tambahkan:
+
+    /*
+        // ...
+        const bellContainerLogout = document.getElementById('inAppNotificationBellContainer'); // Gunakan nama variabel berbeda
+        if (bellContainerLogout) bellContainerLogout.style.display = 'none';
+        updateInAppNotificationBadge(0); // Reset badge saat logout
+        if (inAppNotificationsInterval) clearInterval(inAppNotificationsInterval); // Hentikan polling
+        unreadInAppNotificationCount = 0; // Reset count global
+        // renderView('login');
+        // ...
+    */
   </script>
 </body>
 </html>
