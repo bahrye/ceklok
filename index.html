@@ -1039,6 +1039,11 @@
     let usernameForReset = null;
     let otpTimerInterval = null; 
 
+    let currentTeacherSummaryDetails = { // BARU: Untuk menyimpan detail dari ringkasan
+        absentDates: [],
+        incompleteEntries: []
+    };
+
     let proposedNewPrimaryEmail = null;
     let changeEmailOtpTimerInterval = null; 
     const CHANGE_EMAIL_OTP_EXPIRY_MINUTES = 10;
@@ -1704,6 +1709,14 @@
                 }
             });
         }
+        const summaryDetailModalEl = document.getElementById('summaryDetailModal');
+        if (summaryDetailModalEl) {
+            summaryDetailModalEl.addEventListener('click', function(event) {
+                if (event.target === summaryDetailModalEl) {
+                    closeSummaryDetailModal();
+                }
+            });
+        }
         document.addEventListener('keydown', function(event) {
             if (event.key === "Escape" || event.key === "Esc") {
                 if (primaryEmailModal && primaryEmailModal.style.display === 'flex') {
@@ -1716,9 +1729,12 @@
                 if (changePasswordModal && changePasswordModal.style.display === 'block') { 
                     closeChangePasswordModal();
                 }
-                 const profileMenuContainer = document.getElementById('profileMenuContainer');
+                const profileMenuContainer = document.getElementById('profileMenuContainer');
                 if (profileMenuContainer && profileMenuContainer.classList.contains('show-dropdown')) {
                     profileMenuContainer.classList.remove('show-dropdown');
+                }
+                if (summaryDetailModalEl && summaryDetailModalEl.style.display === 'flex') {
+                    closeSummaryDetailModal();
                 }
             }
         });
@@ -4387,7 +4403,12 @@
         const summaryDataEl = document.getElementById('summaryContentData');
         const summaryErrorEl = document.getElementById('summaryContentError');
 
-        if (!summaryContainer || !summaryLoadingEl || !summaryDataEl || !summaryErrorEl) {
+        // BARU: Elemen summary yang akan dibuat clickable
+        const summaryItemAbsentEl = document.getElementById('summaryItemAbsent');
+        const summaryItemIncompleteEl = document.getElementById('summaryItemIncomplete');
+
+        if (!summaryContainer || !summaryLoadingEl || !summaryDataEl || !summaryErrorEl || !summaryItemAbsentEl || !summaryItemIncompleteEl) {
+            console.error("Elemen ringkasan atau item yang dapat diklik tidak ditemukan.");
             return;
         }
 
@@ -4395,6 +4416,10 @@
         summaryDataEl.style.display = 'none';
         summaryErrorEl.style.display = 'none';
         summaryErrorEl.textContent = '';
+
+        // Hapus event listener lama jika ada, sebelum menambahkan yang baru
+        summaryItemAbsentEl.onclick = null;
+        summaryItemIncompleteEl.onclick = null;
 
         google.script.run
             .withSuccessHandler(response => {
@@ -4404,71 +4429,52 @@
                     document.getElementById('summaryMonthYear').textContent = summary.monthYear;
                     document.getElementById('summaryTotalWorkingDays').textContent = summary.totalWorkingDaysInMonth;
                     document.getElementById('summaryDaysPassed').textContent = summary.effectiveWorkingDaysPassed;
-                    document.getElementById('summaryCompletedChecklok').textContent = summary.completedChecklok; // <-- TAMBAHKAN INI
+                    document.getElementById('summaryCompletedChecklok').textContent = summary.completedChecklok;
                     document.getElementById('summaryPresent').textContent = summary.present;
                     document.getElementById('summarySchoolHoliday').textContent = summary.schoolHoliday;
                     document.getElementById('summaryOtherValidReason').textContent = summary.otherValidReason;
                     document.getElementById('summaryAbsent').textContent = summary.absent;
                     document.getElementById('summaryIncomplete').textContent = summary.incomplete;
                     document.getElementById('summaryAttendancePercentage').textContent = summary.attendancePercentage;
+                    
+                    // BARU: Simpan detail untuk modal dan tambahkan event listener
+                    currentTeacherSummaryDetails.absentDates = summary.absentDates || [];
+                    currentTeacherSummaryDetails.incompleteEntries = summary.incompleteEntries || [];
+
+                    if (summary.absent > 0) {
+                        summaryItemAbsentEl.onclick = function() {
+                            openSummaryDetailModal('Detail Tanggal Alpa', currentTeacherSummaryDetails.absentDates, 'absent');
+                        };
+                    } else {
+                        summaryItemAbsentEl.onclick = null; // Hapus listener jika tidak ada data
+                    }
+
+                    if (summary.incomplete > 0) {
+                        summaryItemIncompleteEl.onclick = function() {
+                            openSummaryDetailModal('Detail Ceklok Tidak Lengkap', currentTeacherSummaryDetails.incompleteEntries, 'incomplete');
+                        };
+                    } else {
+                        summaryItemIncompleteEl.onclick = null;
+                    }
+                    
                     summaryDataEl.style.display = 'block';
                 } else {
                     summaryErrorEl.textContent = response.error || "Gagal memuat ringkasan kehadiran.";
                     summaryErrorEl.style.display = 'block';
+                    // Kosongkan detail jika gagal
+                    currentTeacherSummaryDetails.absentDates = [];
+                    currentTeacherSummaryDetails.incompleteEntries = [];
                 }
             })
             .withFailureHandler(err => {
                 summaryLoadingEl.style.display = 'none';
                 summaryErrorEl.textContent = `Error server saat memuat ringkasan: ${err.message}`;
                 summaryErrorEl.style.display = 'block';
+                // Kosongkan detail jika gagal
+                currentTeacherSummaryDetails.absentDates = [];
+                currentTeacherSummaryDetails.incompleteEntries = [];
             })
             .getTeacherMonthlySummary(teacherName, monthYear);
-    }
-
-    // PASTE ATAU GABUNGKAN FUNGSI-FUNGSI INI DENGAN JAVASCRIPT YANG SUDAH ADA
-    // DI DALAM TAG <script> PADA FILE index.html
-
-    function loadLockedMonthsForAdminDisplay() {
-        const displayDiv = document.getElementById('lockedMonthsDisplay');
-        if (!displayDiv) {
-            console.error("Elemen 'lockedMonthsDisplay' tidak ditemukan.");
-            return;
-        }
-        displayDiv.innerHTML = '<i>Memuat daftar bulan terkunci...</i>';
-
-        google.script.run
-            .withSuccessHandler(response => {
-                if (response.success) {
-                    if (response.months && response.months.length > 0) {
-                        let html = '<ul style="list-style-type:none; padding-left:0; margin-top:0;">';
-                        // Urutkan bulan: pertama berdasarkan tahun (desc), lalu bulan (desc)
-                        response.months.sort((a, b) => {
-                            const [mA, yA] = a.split('/');
-                            const [mB, yB] = b.split('/');
-                            const dateA = new Date(parseInt(yA), parseInt(mA) - 1);
-                            const dateB = new Date(parseInt(yB), parseInt(mB) - 1);
-                            return dateB - dateA; // Urutkan dari yang terbaru (descending)
-                        }).forEach(monthYear => {
-                            html += `<li style="margin-bottom:8px; padding:8px 10px; background-color: #fff; border: 1px solid #ddd; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
-                                      <span style="font-weight:500;">${monthYear}</span>
-                                      <button class="btn-danger" onclick="handleUnlockThisMonth('${monthYear}')" style="padding: 4px 10px; font-size:0.9em; line-height:1.2;">Buka Kunci</button>
-                                    </li>`;
-                        });
-                        html += '</ul>';
-                        displayDiv.innerHTML = html;
-                    } else {
-                        displayDiv.innerHTML = '<p style="margin-top:0;">Tidak ada bulan yang terkunci saat ini.</p>';
-                    }
-                } else {
-                    displayDiv.innerHTML = `<p style="color:red; margin-top:0;">Gagal memuat daftar: ${response.error || 'Error tidak diketahui'}</p>`;
-                    showAlert(response.error || 'Gagal memuat daftar bulan terkunci.', 'error');
-                }
-            })
-            .withFailureHandler(err => {
-                if (displayDiv) displayDiv.innerHTML = `<p style="color:red; margin-top:0;">Error server: ${err.message}</p>`;
-                showAlert(`Error server saat memuat bulan terkunci: ${err.message}`, 'error');
-            })
-            .getLockedMonths();
     }
 
     function handleLockThisMonth() {
@@ -5333,6 +5339,118 @@
             })
             .processUsernameChangeRequest(requestID, action, loggedInUser.username, loggedInUser.role, notes);
     }
+
+    function openSummaryDetailModal(title, items, itemType) { // itemType: 'absent' atau 'incomplete'
+        const modal = document.getElementById('summaryDetailModal');
+        const modalTitle = document.getElementById('summaryDetailModalTitle');
+        const modalBody = document.getElementById('summaryDetailModalBody');
+
+        if (!modal || !modalTitle || !modalBody) {
+            showAlert("Komponen modal detail tidak ditemukan.", "error");
+            return;
+        }
+
+        modalTitle.textContent = title;
+        let listHtml = '<ul>';
+        if (items && items.length > 0) {
+            items.forEach(item => {
+                if (itemType === 'absent') {
+                    // Item adalah string tanggal "dd/MM/yyyy"
+                    listHtml += `<li><span class="modal-item-date" onclick="navigateToCeklokDate('${item}')">${item}</span></li>`;
+                } else if (itemType === 'incomplete') {
+                    // Item adalah objek { date: "dd/MM/yyyy", missing: "Keterangan" }
+                    const fieldToFocus = item.missing.toLowerCase().includes("masuk") ? 'jamMasuk' : 'jamPulang';
+                    listHtml += `<li><span class="modal-item-date" onclick="navigateToCeklokDate('${item.date}', '${fieldToFocus}')">${item.date}</span>: ${item.missing}</li>`;
+                }
+            });
+        } else {
+            listHtml += '<li>Tidak ada data untuk ditampilkan.</li>';
+        }
+        listHtml += '</ul>';
+        modalBody.innerHTML = listHtml;
+        modal.style.display = 'flex';
+    }
+
+    // BARU: Fungsi untuk menutup modal detail ringkasan
+    function closeSummaryDetailModal() {
+        const modal = document.getElementById('summaryDetailModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+        const modalBody = document.getElementById('summaryDetailModalBody');
+        if(modalBody) modalBody.innerHTML = ''; // Kosongkan isi modal
+    }
+
+    // BARU: Fungsi untuk navigasi ke tanggal tertentu di tabel ceklok
+    function navigateToCeklokDate(dateString, fieldToFocus = null) {
+        closeSummaryDetailModal(); // Tutup modal dulu
+
+        // Cari baris dan input yang sesuai di tabel ceklok
+        const tableBody = document.getElementById('ceklokTableBody');
+        if (!tableBody || !dataTanggal || dataTanggal.length === 0) {
+            showAlert("Tabel ceklok tidak termuat atau kosong.", "warning");
+            return;
+        }
+
+        let targetRowIndex = -1;
+        for (let i = 0; i < dataTanggal.length; i++) {
+            if (dataTanggal[i].tanggal === dateString) {
+                targetRowIndex = i;
+                break;
+            }
+        }
+
+        if (targetRowIndex !== -1) {
+            let inputIdToFocus;
+            if (fieldToFocus) {
+                inputIdToFocus = `${fieldToFocus}${targetRowIndex}`; // Misal: jamMasuk0, jamPulang0
+            } else {
+                // Jika hanya alpa, fokus ke input jam masuk sebagai default
+                inputIdToFocus = `jamMasuk${targetRowIndex}`;
+            }
+            
+            const inputElement = document.getElementById(inputIdToFocus);
+            if (inputElement) {
+                // Pastikan input tidak disabled sebelum fokus (misal jika keterangan libur dipilih)
+                if(!inputElement.disabled) {
+                    inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => { // Beri sedikit delay agar scroll selesai sebelum fokus
+                        inputElement.focus();
+                        inputElement.select(); // Pilih isi input jika ada
+                        // Efek highlight sementara
+                        const originalBg = inputElement.style.backgroundColor;
+                        inputElement.style.backgroundColor = 'var(--warning-hover)'; // Warna highlight
+                        setTimeout(() => {
+                            inputElement.style.backgroundColor = originalBg;
+                        }, 1500);
+                    }, 300);
+                } else {
+                    // Jika input disabled (misal karena ada keterangan libur), scroll ke rownya saja
+                    const parentRow = inputElement.closest('tr');
+                    if(parentRow) {
+                        parentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // Efek highlight sementara
+                        const originalBg = parentRow.style.backgroundColor;
+                        parentRow.style.backgroundColor = 'var(--warning-hover)'; 
+                        setTimeout(() => {
+                            parentRow.style.backgroundColor = originalBg;
+                        }, 1500);
+                    }
+                    showAlert(`Input untuk ${dateString} (${fieldToFocus || 'jam'}) tidak dapat diisi karena ada keterangan lain.`, "info");
+                }
+            } else {
+                showAlert(`Input untuk tanggal ${dateString} tidak ditemukan.`, "error");
+                // Coba scroll ke row jika input spesifik tidak ada (misal hari libur)
+                const rows = tableBody.getElementsByTagName('tr');
+                if (rows[targetRowIndex]) {
+                    rows[targetRowIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        } else {
+            showAlert(`Tanggal ${dateString} tidak ditemukan dalam data ceklok saat ini.`, "warning");
+        }
+    }
+
   </script>
 </body>
 </html>
