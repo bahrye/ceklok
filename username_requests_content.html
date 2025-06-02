@@ -1,0 +1,39 @@
+<div class="container" id="usernameRequestsContainer">
+  <h2>Kelola Pengajuan Perubahan Username</h2>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username Saat Ini</th>
+          <th>Nama Guru</th>
+          <th>Username Baru Diminta</th>
+          <th>Tgl. Pengajuan</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="usernameRequestsTableBody">
+        <tr><td colspan="6" style="text-align:center;">Memuat data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="usernameRequestNotesModal" class="modal-overlay" style="display:none; z-index:20002;">
+      <div class="modal-content" style="max-width: 400px;">
+          <span class="modal-close-button" onclick="closeUsernameRequestNotesModal()">&times;</span>
+          <h3 id="usernameRequestNotesTitle">Catatan untuk Pengajuan</h3>
+          <input type="hidden" id="processRequestIdHidden">
+          <input type="hidden" id="processRequestActionHidden">
+          <div class="form-group">
+              <label for="adminNotesForUsernameRequest">Catatan (Opsional, misal alasan penolakan):</label>
+              <textarea id="adminNotesForUsernameRequest" rows="3"></textarea>
+          </div>
+          <div class="btn-container">
+              <button onclick="submitProcessUsernameRequestWithNotes()">Proses</button>
+              <button type="button" onclick="closeUsernameRequestNotesModal()" style="background-color: #777;">Batal</button>
+          </div>
+      </div>
+  </div>
+  <div class="btn-container" style="margin-top: 30px;">
+    <button onclick="goBackToAdminDashboard()">Kembali ke Dashboard Admin</button>
+  </div>
+</div>
