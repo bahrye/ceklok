@@ -1,0 +1,147 @@
+<div class="container" id="cekDataKehadiranContainer">
+  <div class="page-header">
+    <h2>CEK DATA KEHADIRAN TAHUNAN</h2>
+    <p>Guru: <strong id="cdkTeacherName">Nama Guru</strong></p>
+  </div>
+
+  <div class="form-row" style="justify-content: center; align-items: center; margin-bottom: 30px; gap: 10px; padding: 15px; background-color: var(--accent); border-radius: 6px;">
+    <label for="cdkYearSelect" style="font-weight: bold;">Pilih Tahun:</label>
+    <select id="cdkYearSelect" style="padding: 8px 12px; border-radius: 5px; min-width: 120px; font-size: 1em;"></select>
+    <button id="btnCdkCekData" onclick="fetchAndDisplayYearlyAttendance()" style="padding: 9px 18px; font-size: 1em;">CEK DATA</button>
+  </div>
+
+  <div id="cdkLoadingIndicator" style="text-align: center; margin-top: 20px; display: none;">
+    <div class="spinner"></div>
+    <p>Memuat data kehadiran...</p>
+  </div>
+  <div id="cdkErrorMessage" class="error-message" style="text-align: center; margin-top: 20px; display: none;"></div>
+
+  <div id="cdkYearlyCalendarContainer" style="margin-top: 20px;">
+    </div>
+
+   <div id="cdkDetailModal" class="modal-overlay" style="display:none; z-index: 20004;">
+    <div class="modal-content" style="max-width: 450px;">
+      <span class="modal-close-button" onclick="closeCdkDetailModal()">&times;</span>
+      <h3 id="cdkDetailModalTitle">Detail Kehadiran</h3>
+      <p id="cdkDetailModalDate" style="text-align:center; font-weight:bold; margin-bottom:10px;"></p>
+      <p id="cdkDetailModalBody" style="text-align:center; font-size:1.1em; margin-bottom:20px;"></p>
+      <div class="btn-container">
+        <button type="button" onclick="closeCdkDetailModal()" style="background-color: #777;">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+   <div class="btn-container" style="margin-top: 30px;">
+    <button onclick="backToPreviousCeklokView()">Kembali</button>
+  </div>
+</div>
+
+<style>
+  #cekDataKehadiranContainer .form-row label {
+    text-align: left; 
+    flex: 0 0 auto; 
+  }
+
+  #cdkYearlyCalendarContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px; 
+    justify-content: center;
+  }
+
+  .cdk-month-container {
+    background-color: var(--white);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    width: 100%; 
+    box-sizing: border-box;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  @media (min-width: 600px) {
+    .cdk-month-container {
+      width: calc(50% - 8px); 
+    }
+  }
+  @media (min-width: 900px) {
+    .cdk-month-container {
+      width: calc(33.333% - 10px); 
+    }
+  }
+   @media (min-width: 1200px) {
+    .cdk-month-container {
+      width: calc(25% - 12px); 
+    }
+  }
+
+  .cdk-month-container h4 {
+    text-align: center;
+    color: var(--secondary);
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #eee;
+  }
+
+  .cdk-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px; 
+    text-align: center;
+  }
+
+  .cdk-day-header {
+    font-weight: 500;
+    font-size: 0.8em;
+    color: var(--grey-text);
+    padding-bottom: 3px;
+  }
+
+  .cdk-day-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start; 
+    padding: 4px 2px; {/* Sedikit menambah padding vertikal */}
+    min-height: 42px;  {/* Sedikit menambah tinggi minimal */}
+    font-size: 0.85em;
+    border-radius: 3px;
+    line-height: 1.2;
+  }
+  
+  .cdk-day-cell.empty-offset { 
+      background-color: transparent;
+      border: none;
+  }
+
+  .cdk-date-number {
+    display: block;
+    font-size: 0.95em;
+    margin-bottom: 4px; {/* Sedikit menambah jarak ke dot */}
+  }
+  .cdk-day-cell.is-non-working-scheduled .cdk-date-number {
+      color: #888; /* Warna angka untuk hari libur terjadwal yang jadi biru */
+  }
+
+
+  .cdk-status-dot {
+    width: 12px; {/* Perbesar dot */}
+    height: 12px; {/* Perbesar dot */}
+    border-radius: 50%;
+    display: inline-block;
+    border: 1px solid rgba(0,0,0,0.1); 
+    cursor: default; 
+  }
+  .cdk-status-dot.clickable {
+    cursor: pointer; 
+  }
+
+  .cdk-status-dot.white { background-color: #E0E0E0; border-color: #C0C0C0;} 
+  .cdk-status-dot.green { background-color: var(--success); }
+  .cdk-status-dot.yellow { background-color: var(--warning); }
+  .cdk-status-dot.red { background-color: var(--danger); }
+  .cdk-status-dot.blue { background-color: var(--primary); } 
+  
+</style>
