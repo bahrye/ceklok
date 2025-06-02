@@ -35,6 +35,8 @@ const ACTIVITY_LOG_SHEET_NAME = "Activity_Log"; // Nama untuk sheet log baru
 
 const USERNAME_CHANGE_REQUESTS_SHEET_NAME = "UsernameChangeRequests";
 
+const CONFIG_SHEET_NAME = "Setting";
+
 const ss = SpreadsheetApp.getActiveSpreadsheet();
 
 
@@ -4687,5 +4689,219 @@ function checkUserPendingUsernameRequest(username) {
   } catch (e) {
     Logger.log("Error checking pending username request for " + username + ": " + e.toString());
     return { success: false, error: "Gagal memeriksa status pengajuan."};
+  }
+}
+
+// Di dalam file code.gs.html
+
+// Pastikan variabel CONFIG_SHEET_NAME sudah didefinisikan di atas, misal:
+// const CONFIG_SHEET_NAME = "Setting"; // Atau "MasterConfig" atau nama sheet config Anda
+
+/**
+ * Mengambil nilai konfigurasi dari sheet Setting/MasterConfig.
+ * @param {Array<string>} keysArray Array dari nama kunci konfigurasi yang ingin diambil.
+ * @return {Object} Objek yang berisi pasangan key-value dari konfigurasi, plus {success: true}.
+ * Atau {success: false, error: string} jika gagal.
+ */
+function getConfigValues(keysArray) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const configSheet = ss.getSheetByName(SETTING_SHEET_NAME); // Menggunakan SETTING_SHEET_NAME
+    if (!configSheet) {
+      return { success: false, error: `Sheet konfigurasi '${SETTING_SHEET_NAME}' tidak ditemukan.`};
+    }
+    const data = configSheet.getDataRange().getValues();
+    const configs = {};
+    
+    // Asumsi format di Setting: Kolom A = Nama Setting, Kolom B = Value
+    // Khusus untuk A1 (adminDefinedMinMonthYear), kita akan treat sebagai CEKLOK_START_DATE
+    if (keysArray.includes('CEKLOK_START_DATE')) {
+        const startDateVal = data[0][0]; // Ambil dari A1
+        if (startDateVal && /^\d{2}\/\d{4}$/.test(String(startDateVal))) {
+            configs['CEKLOK_START_DATE'] = String(startDateVal);
+        } else {
+            Logger.log("CEKLOK_START_DATE (dari A1) tidak valid atau kosong.");
+            // Fallback jika A1 tidak valid, bisa diatur di sini atau biarkan error di getYearlyAttendanceData
+        }
+    }
+    // Untuk setting lain jika ada (misal MIN_CEKLOK_YEAR jika disimpan terpisah)
+    // Untuk MIN_CEKLOK_YEAR, kita akan ambil tahunnya dari CEKLOK_START_DATE saja.
+
+    configs.success = true;
+    return configs;
+  } catch (e) {
+    Logger.log(`Error in getConfigValues: ${e}`);
+    return { success: false, error: `Gagal mengambil konfigurasi: ${e.message}` };
+  }
+}
+
+
+function getYearlyAttendanceData(teacherName, year) {
+  try {
+    if (!teacherName || !year) {
+      return { success: false, error: "Nama guru dan tahun harus diisi." };
+    }
+
+    const configs = getConfigValues(['CEKLOK_START_DATE']); // Ambil config yang dibutuhkan
+    if (!configs.success) return configs;
+    
+    const ceklokStartDateStr = configs.CEKLOK_START_DATE; 
+    if (!ceklokStartDateStr || !/^\d{2}\/\d{4}$/.test(ceklokStartDateStr)) {
+      return { success: false, error: "Format CEKLOK_START_DATE (dari Setting A1) tidak valid atau tidak ditemukan. Harusnya MM/YYYY." };
+    }
+    const [startMonthStr, startYearStr] = ceklokStartDateStr.split('/');
+    const ceklokStartDateSetting = {
+      month: parseInt(startMonthStr, 10),
+      year: parseInt(startYearStr, 10)
+    };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ceklokManualSheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
+    const kalenderSheet = ss.getSheetByName(KALENDER_SHEET_NAME);
+    const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME);
+
+    if (!ceklokManualSheet || !kalenderSheet || !opsiKetLiburSheet) {
+      return { success: false, error: "Sheet Ceklok_Manual, Kalender_Pendidikan, atau OpsiKetLibur tidak ditemukan." };
+    }
+
+    const allCeklokData = ceklokManualSheet.getDataRange().getValues();
+    const ceklokHeaders = allCeklokData[0].map(h => String(h).trim().toLowerCase());
+    const idxNama = ceklokHeaders.indexOf("nama_guru");
+    const idxTanggalCeklok = ceklokHeaders.indexOf("tanggal");
+    const idxMasuk = ceklokHeaders.indexOf("jam_masuk");
+    const idxPulang = ceklokHeaders.indexOf("jam_pulang");
+    const idxKetManual = ceklokHeaders.indexOf("ket_libur_manual");
+
+    if ([idxNama, idxTanggalCeklok, idxMasuk, idxPulang, idxKetManual].includes(-1)) {
+      return { success: false, error: "Header kolom di 'Ceklok_Manual' tidak lengkap." };
+    }
+    
+    const teacherCeklokEntries = {};
+    for (let i = 1; i < allCeklokData.length; i++) {
+        const row = allCeklokData[i];
+        if (String(row[idxNama]).trim() === teacherName && row[idxTanggalCeklok] instanceof Date) {
+            const dateKey = Utilities.formatDate(new Date(row[idxTanggalCeklok]), Session.getScriptTimeZone(), "dd/MM/yyyy");
+            teacherCeklokEntries[dateKey] = {
+                jamMasuk: String(row[idxMasuk] || "").trim(),
+                jamPulang: String(row[idxPulang] || "").trim(),
+                ketManual: String(row[idxKetManual] || "").trim()
+            };
+        }
+    }
+
+    const kalenderLiburMap = {};
+    if (kalenderSheet.getLastRow() > 1) {
+      const kalenderData = kalenderSheet.getRange(2, 1, kalenderSheet.getLastRow() - 1, 2).getDisplayValues();
+      kalenderData.forEach(row => {
+        if (row[0] && String(row[0]).trim() !== "") {
+          kalenderLiburMap[String(row[0]).trim()] = String(row[1]).trim() || "Hari Libur Nasional";
+        }
+      });
+    }
+
+    const opsiKetLiburList = []; 
+     if (opsiKetLiburSheet.getLastRow() > 1) {
+        opsiKetLiburSheet.getRange(2, 1, opsiKetLiburSheet.getLastRow() - 1, 1).getValues().flat().forEach(item => {
+            if(item && String(item).trim()) opsiKetLiburList.push(String(item).trim().toLowerCase());
+        });
+    }
+    const nonWorkingManualReasons = opsiKetLiburList.filter(
+        reason => reason.includes("hari libur sekolah") || reason.includes("libur sekolah")
+    );
+    const excusedAbsenceReasons = opsiKetLiburList.filter(
+        reason => !nonWorkingManualReasons.includes(reason)
+    );
+
+    const yearData = {};
+    const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+                        "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const currentEvalYear = today.getFullYear();
+    const currentEvalMonth = today.getMonth() + 1; 
+    const namaHariIndonesia = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
+    for (let monthIdx = 0; monthIdx < 12; monthIdx++) {
+      const monthName = monthNames[monthIdx];
+      yearData[monthName] = [];
+      const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(year, monthIdx, day);
+        dateObj.setHours(0,0,0,0);
+        const dateStr_ddMMyyyy = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "dd/MM/yyyy");
+        
+        let status = "white"; 
+        let detailMessage = "Di Luar Periode Aktif / Masa Depan";
+        let isNonWorkingScheduled = false;
+        const targetMonthInLoop = monthIdx + 1;
+
+        if (year < ceklokStartDateSetting.year || (year === ceklokStartDateSetting.year && targetMonthInLoop < ceklokStartDateSetting.month)) {
+          status = "white";
+          detailMessage = "Sebelum periode ceklok aktif";
+          isNonWorkingScheduled = true;
+        } else if (year > currentEvalYear || (year === currentEvalYear && targetMonthInLoop > currentEvalMonth)) {
+          status = "white";
+          detailMessage = "Periode masa depan";
+          isNonWorkingScheduled = true;
+        } else {
+          const dayOfWeek = dateObj.getDay();
+          const ceklokEntry = teacherCeklokEntries[dateStr_ddMMyyyy];
+          const jamMasuk = ceklokEntry ? ceklokEntry.jamMasuk : "";
+          const jamPulang = ceklokEntry ? ceklokEntry.jamPulang : "";
+          const ketManualOriginal = ceklokEntry ? ceklokEntry.ketManual : "";
+          const ketManualLower = ketManualOriginal.toLowerCase();
+
+          if (dayOfWeek === 0) { // Minggu -> jadi PUTIH
+            status = "white";
+            detailMessage = "Hari Minggu"; // Pesan detail untuk Minggu (meskipun tidak diklik)
+            isNonWorkingScheduled = true;
+          } else if (dayOfWeek === 7) { // Sabtu -> tetap BIRU
+            status = "blue";
+            detailMessage = "Hari Libur: Sabtu";
+            isNonWorkingScheduled = true;
+          } else if (kalenderLiburMap[dateStr_ddMMyyyy]) { // Libur Nasional/Kalender
+            status = "blue";
+            detailMessage = `Hari Libur: ${kalenderLiburMap[dateStr_ddMMyyyy]}`;
+            isNonWorkingScheduled = true;
+          } else if (ketManualLower && nonWorkingManualReasons.includes(ketManualLower)) { // Manual "Libur Sekolah"
+            status = "blue";
+            detailMessage = `Keterangan: ${ketManualOriginal}`;
+            isNonWorkingScheduled = true;
+          } else if (ketManualLower && excusedAbsenceReasons.includes(ketManualLower)) { // Sakit, Izin, dll.
+            status = "blue"; 
+            detailMessage = `Keterangan: ${ketManualOriginal}`;
+            isNonWorkingScheduled = true; 
+          } else if (dateObj <= today) { 
+            if (jamMasuk && jamPulang) {
+              status = "green";
+              detailMessage = "Hadir (Jam Masuk & Pulang Terisi)";
+            } else if (jamMasuk && !jamPulang) {
+              status = "yellow";
+              detailMessage = "Jam Pulang Kosong";
+            } else if (!jamMasuk && jamPulang) {
+              status = "yellow";
+              detailMessage = "Jam Masuk Kosong";
+            } else { 
+              status = "red"; 
+              detailMessage = "Alpa (Tidak Ada Data)";
+            }
+          } else { 
+             status = "white"; 
+             detailMessage = "Jadwal Mendatang";
+          }
+        }
+        yearData[monthName].push({ 
+            date: day, 
+            status: status, 
+            isNonWorkingScheduled: isNonWorkingScheduled,
+            detailMessage: detailMessage 
+        });
+      }
+    }
+    return { success: true, yearData: yearData };
+  } catch (e) {
+    Logger.log(`Error in getYearlyAttendanceData (teacher: ${teacherName}, year: ${year}): ${e.toString()}\nStack: ${e.stack}`);
+    return { success: false, error: `Gagal memproses data kehadiran tahunan: ${e.message}` };
   }
 }
