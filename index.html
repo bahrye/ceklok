@@ -854,10 +854,29 @@
     </div>
     <div id="profileDropdown" class="profile-dropdown-content">
       <div id="dropdownUsernameDisplay">Username</div> 
+      <a href="#" id="menuRequestUsernameChange">Ajukan Perubahan Username</a>
       <a href="#" id="menuChangePrimaryEmail">Ganti Email Utama</a>
       <a href="#" id="menuChangePassword">Ubah Password</a>
       <a href="#" id="menuTutorial">Petunjuk Penggunaan</a>
       <a href="#" id="menuLogoutProfile">Logout</a>
+    </div>
+  </div>
+
+  <div id="requestUsernameChangeModal" class="modal-overlay" style="display:none; z-index: 20001;">
+    <div class="modal-content" style="max-width: 480px;">
+      <span class="modal-close-button" onclick="closeRequestUsernameChangeModal()">&times;</span>
+      <h3>Ajukan Perubahan Username</h3>
+      <p>Username Anda saat ini: <strong id="currentUsernameForChangeRequest"></strong></p>
+      <div class="form-group">
+        <label for="requestedNewUsernameInput">Username Baru yang Diinginkan:</label>
+        <input type="text" id="requestedNewUsernameInput" placeholder="Minimal 4 karakter">
+      </div>
+      <small>Perubahan username akan membuat Anda perlu login ulang jika disetujui.</small>
+      <div id="requestUsernameChangeError" class="error-message" style="display:none; margin-top:10px;"></div>
+      <div class="btn-container" style="margin-top:20px;">
+        <button id="btnSubmitUsernameChangeRequest" onclick="handleSubmitUsernameChangeRequest()">Kirim Pengajuan</button>
+        <button type="button" onclick="closeRequestUsernameChangeModal()" style="background-color: #777;">Batal</button>
+      </div>
     </div>
   </div>
 
@@ -1007,7 +1026,7 @@
   </div>
 
   <footer>
-    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v1.2</p>
+    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v1.7</p>
   </footer>
 
   <script>
@@ -1237,6 +1256,10 @@
                 htmlFile = 'overall_summary_content.html';
                 setupFunction = setupOverallSummaryView;
                 break;
+            case 'username_requests_view': // Nama view baru
+                htmlFile = 'username_requests_content.html';
+                setupFunction = setupUsernameRequestsView;
+                break;
             default:
                 console.error("Tampilan tidak dikenal:", viewName);
                 const appEl = document.getElementById('app');
@@ -1286,6 +1309,16 @@
             toggleProfileDropdown();
           }
         };
+      }
+
+      const menuRequestUsernameChange = document.getElementById('menuRequestUsernameChange');
+      if (menuRequestUsernameChange) {
+          menuRequestUsernameChange.onclick = function(e) {
+              e.preventDefault();
+              openRequestUsernameChangeModal();
+              const profileMenuContainer = document.getElementById('profileMenuContainer');
+              if (profileMenuContainer) profileMenuContainer.classList.remove('show-dropdown');
+          };
       }
 
       const menuChangePrimaryEmail = document.getElementById('menuChangePrimaryEmail');
@@ -5381,6 +5414,242 @@
         // renderView('login');
         // ...
     */
+
+    // --- JavaScript untuk Fitur Pengajuan Perubahan Username (GURU) ---
+    function openRequestUsernameChangeModal() {
+        if (!loggedInUser || loggedInUser.role !== ROLE_USER) {
+            showAlert("Fitur ini hanya untuk guru.", "warning");
+            return;
+        }
+        const currentUsernameEl = document.getElementById('currentUsernameForChangeRequest');
+        const newUsernameInputEl = document.getElementById('requestedNewUsernameInput');
+        const errorEl = document.getElementById('requestUsernameChangeError');
+        const modal = document.getElementById('requestUsernameChangeModal');
+        const submitButton = document.getElementById('btnSubmitUsernameChangeRequest');
+
+        if (!modal || !currentUsernameEl || !newUsernameInputEl || !errorEl || !submitButton) {
+            console.error("Elemen modal untuk pengajuan username tidak lengkap.");
+            showAlert("Gagal membuka form pengajuan. Komponen tidak lengkap.", "error");
+            return;
+        }
+
+        currentUsernameEl.textContent = loggedInUser.username;
+        newUsernameInputEl.value = '';
+        newUsernameInputEl.disabled = true; // Nonaktifkan input dulu selama pengecekan
+        errorEl.textContent = '';
+        errorEl.style.display = 'none';
+        clearInputError(newUsernameInputEl);
+        
+        submitButton.disabled = true; // Nonaktifkan tombol submit selama pengecekan awal
+        submitButton.textContent = "Memeriksa..."; // Teks tombol saat loading awal
+
+        modal.style.display = 'flex'; // Tampilkan modalnya dulu
+        showLoading("Memeriksa status pengajuan Anda..."); // Tampilkan spinner global
+
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading(); // Sembunyikan spinner global
+                newUsernameInputEl.disabled = false; // Aktifkan input setelah pengecekan
+
+                if (response.success && response.hasPendingRequest) {
+                    showAlert("Anda sudah memiliki pengajuan perubahan username yang sedang diproses. Mohon tunggu.", "info");
+                    newUsernameInputEl.disabled = true;
+                    submitButton.disabled = true;
+                    submitButton.textContent = "Pengajuan Diproses";
+                    errorEl.textContent = "Anda sudah memiliki pengajuan yang sedang diproses. Mohon tunggu hingga selesai.";
+                    errorEl.style.display = 'block';
+                } else if (response.success && !response.hasPendingRequest) {
+                    newUsernameInputEl.disabled = false;
+                    newUsernameInputEl.focus();
+                    submitButton.disabled = false;
+                    submitButton.textContent = "Kirim Pengajuan";
+                } else {
+                    showAlert(response.error || "Gagal memeriksa status pengajuan. Silakan coba lagi nanti.", "error");
+                    errorEl.textContent = response.error || "Gagal memeriksa status pengajuan. Silakan tutup dan coba lagi.";
+                    errorEl.style.display = 'block';
+                    newUsernameInputEl.disabled = true;
+                    submitButton.disabled = true;
+                    submitButton.textContent = "Error";
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading(); // Sembunyikan spinner global
+                newUsernameInputEl.disabled = true;
+                submitButton.disabled = true;
+                submitButton.textContent = "Error";
+                showAlert("Error server saat memeriksa status pengajuan: " + err.message, "error");
+                errorEl.textContent = "Error server. Silakan tutup dan coba lagi.";
+                errorEl.style.display = 'block';
+            })
+            .checkUserPendingUsernameRequest(loggedInUser.username);
+    }
+
+    function closeRequestUsernameChangeModal() {
+        const modal = document.getElementById('requestUsernameChangeModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function handleSubmitUsernameChangeRequest() {
+        const newUsernameInputEl = document.getElementById('requestedNewUsernameInput');
+        const errorEl = document.getElementById('requestUsernameChangeError');
+        const submitButton = document.getElementById('btnSubmitUsernameChangeRequest'); // Ambil tombol submit
+        
+        if (!newUsernameInputEl || !errorEl || !submitButton) {
+            console.error("Elemen form pengajuan username tidak lengkap saat submit.");
+            showAlert("Gagal mengirim pengajuan. Komponen form hilang.", "error");
+            return;
+        }
+        const newUsername = newUsernameInputEl.value.trim();
+
+        clearInputError(newUsernameInputEl);
+        errorEl.style.display = 'none';
+
+        if (!newUsername) {
+            errorEl.textContent = "Username baru tidak boleh kosong.";
+            errorEl.style.display = 'block'; showInputError(newUsernameInputEl); return;
+        }
+        if (newUsername.length < 4) {
+            errorEl.textContent = "Username baru minimal 4 karakter.";
+            errorEl.style.display = 'block'; showInputError(newUsernameInputEl); return;
+        }
+        if (newUsername.toLowerCase() === loggedInUser.username.toLowerCase()) {
+            errorEl.textContent = "Username baru tidak boleh sama dengan username Anda saat ini.";
+            errorEl.style.display = 'block'; showInputError(newUsernameInputEl); return;
+        }
+        if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) {
+            errorEl.textContent = "Username baru hanya boleh berisi huruf, angka, dan underscore (_).";
+            errorEl.style.display = 'block'; showInputError(newUsernameInputEl); return;
+        }
+
+        showLoading("Mengirim pengajuan perubahan username..."); // Tampilkan spinner global
+        submitButton.disabled = true; // Nonaktifkan tombol selama proses kirim
+        submitButton.textContent = "Mengirim...";
+
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading(); // Sembunyikan spinner global
+                if (response.success) {
+                    showAlert(response.message, "success");
+                    closeRequestUsernameChangeModal();
+                } else {
+                    errorEl.textContent = response.error || "Gagal mengirim pengajuan.";
+                    errorEl.style.display = 'block';
+                    submitButton.disabled = false; // Aktifkan kembali jika gagal
+                    submitButton.textContent = "Kirim Pengajuan";
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading(); // Sembunyikan spinner global
+                errorEl.textContent = "Error server: " + err.message;
+                errorEl.style.display = 'block';
+                submitButton.disabled = false; // Aktifkan kembali jika gagal
+                submitButton.textContent = "Kirim Pengajuan";
+            })
+            .submitUsernameChangeRequest(loggedInUser.username, newUsername, loggedInUser.teacherName, loggedInUser.role);
+    }
+
+
+    function navigateToUsernameChangeRequests() {
+        if (loggedInUser && (loggedInUser.role === ROLE_ADMIN || loggedInUser.role === ROLE_SUPERADMIN)) {
+            renderView('username_requests_view');
+        } else {
+            showAlert("Akses ditolak.", "error");
+        }
+    }
+
+    function setupUsernameRequestsView() {
+        window.scrollTo(0, 0);
+        const tableBody = document.getElementById('usernameRequestsTableBody');
+        if (tableBody) tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Memuat pengajuan...</td></tr>';
+
+        showLoading("Memuat daftar pengajuan...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success) {
+                    renderUsernameRequestsTable(response.requests);
+                } else {
+                    if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">${response.error || 'Gagal memuat data.'}</td></tr>`;
+                    showAlert(response.error || "Gagal memuat pengajuan.", "error");
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Error server: ${err.message}</td></tr>`;
+                showAlert("Error server: " + err.message, "error");
+            })
+            .getPendingUsernameChangeRequests(loggedInUser.username, loggedInUser.role);
+    }
+
+    function renderUsernameRequestsTable(requests) {
+        const tableBody = document.getElementById('usernameRequestsTableBody');
+        if (!tableBody) return;
+        let html = '';
+        if (requests && requests.length > 0) {
+            requests.forEach(req => {
+                html += `<tr>
+                    <td data-label="ID">${req.requestID.substring(0,8)}...</td>
+                    <td data-label="Username Saat Ini">${req.currentUsername}</td>
+                    <td data-label="Nama Guru">${req.teacherName}</td>
+                    <td data-label="Username Baru">${req.requestedUsername}</td>
+                    <td data-label="Tgl. Pengajuan">${req.requestDate}</td>
+                    <td data-label="Aksi" class="actions-cell">
+                        <button class="btn-success" onclick="promptForUsernameRequestNotes('${req.requestID}', 'approve', 'Setujui Pengajuan ${req.requestedUsername}?')">Setujui</button>
+                        <button class="btn-danger" onclick="promptForUsernameRequestNotes('${req.requestID}', 'reject', 'Tolak Pengajuan ${req.requestedUsername}?')">Tolak</button>
+                    </td>
+                </tr>`;
+            });
+        } else {
+            html = '<tr><td colspan="6" style="text-align:center;">Tidak ada pengajuan perubahan username yang pending.</td></tr>';
+        }
+        tableBody.innerHTML = html;
+    }
+
+    function promptForUsernameRequestNotes(requestID, action, modalTitle) {
+        document.getElementById('processRequestIdHidden').value = requestID;
+        document.getElementById('processRequestActionHidden').value = action;
+        document.getElementById('usernameRequestNotesTitle').textContent = modalTitle;
+        document.getElementById('adminNotesForUsernameRequest').value = ''; // Kosongkan catatan
+        document.getElementById('usernameRequestNotesModal').style.display = 'flex';
+    }
+
+    function closeUsernameRequestNotesModal() {
+        document.getElementById('usernameRequestNotesModal').style.display = 'none';
+    }
+
+    function submitProcessUsernameRequestWithNotes() {
+        const requestID = document.getElementById('processRequestIdHidden').value;
+        const action = document.getElementById('processRequestActionHidden').value;
+        const notes = document.getElementById('adminNotesForUsernameRequest').value.trim();
+        
+        closeUsernameRequestNotesModal(); // Tutup modal dulu
+        handleProcessUsernameRequest(requestID, action, notes);
+    }
+
+    function handleProcessUsernameRequest(requestID, action, notes = "") {
+        const confirmMsg = action === 'approve' ? 
+            `Anda yakin ingin MENYETUJUI pengajuan perubahan username dengan ID: ${requestID.substring(0,8)}...? Pengguna mungkin perlu login ulang.` :
+            `Anda yakin ingin MENOLAK pengajuan perubahan username dengan ID: ${requestID.substring(0,8)}...?`;
+
+        if (!confirm(confirmMsg)) return;
+
+        showLoading("Memproses pengajuan...");
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading();
+                if (response.success) {
+                    showAlert(response.message, "success");
+                    setupUsernameRequestsView(); // Muat ulang daftar
+                } else {
+                    showAlert(response.error || "Gagal memproses pengajuan.", "error");
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                showAlert("Error server: " + err.message, "error");
+            })
+            .processUsernameChangeRequest(requestID, action, loggedInUser.username, loggedInUser.role, notes);
+    }
   </script>
 </body>
 </html>
