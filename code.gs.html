@@ -33,6 +33,7 @@ const ROLE_USER = "user";
 
 const ACTIVITY_LOG_SHEET_NAME = "Activity_Log"; // Nama untuk sheet log baru
 
+const USERNAME_CHANGE_REQUESTS_SHEET_NAME = "UsernameChangeRequests";
 const IN_APP_NOTIFICATIONS_SHEET_NAME = "InAppNotifications";
 const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -100,8 +101,11 @@ function setBulanTahunSetting(newBulanTahun, actingUserUsername, actingUserRole)
       logUserActivity(actingUserUsername, actingUserRole, "SET_GLOBAL_MONTH_ERROR", newBulanTahun, `Sheet '${SETTING_SHEET_NAME}' tidak ditemukan`, "ERROR");
       return { success: false, error: `Sheet '${SETTING_SHEET_NAME}' tidak ditemukan.` };
     }
+
+    const oldValue = settingSheet.getRange('A1').getDisplayValue(); // <-- AMBIL NILAI LAMA DI SINI
+
     settingSheet.getRange('A1').setValue(newBulanTahun);
-    logUserActivity(actingUserUsername, actingUserRole, "SET_GLOBAL_MONTH_SUCCESS", newBulanTahun, `Nilai lama: ${oldValue}, Nilai baru: ${newBulanTahun}`, "SUCCESS");
+    logUserActivity(actingUserUsername, actingUserRole, "SET_GLOBAL_MONTH_SUCCESS", newBulanTahun, `Nilai lama: ${oldValue}, Nilai baru: ${newBulanTahun}`, "SUCCESS"); // <-- SEKARANG oldValue TERDEFINISI
     return { success: true, message: `Batas Bawah Periode Ceklok berhasil diubah menjadi ${newBulanTahun}.`, newBulanTahun: newBulanTahun };
   } catch (e) {
     Logger.log(`Error di setBulanTahunSetting: ${e.toString()}; Input: ${newBulanTahun}`);
@@ -811,7 +815,7 @@ function getKalenderPendidikanEntries() {
   }
 }
 
-function addKalenderPendidikanEntry(entryData) {
+function addKalenderPendidikanEntry(entryData, actingUserUsername, actingUserRole) { // Tambahkan parameter
   try {
     if (!entryData || !entryData.date || !entryData.description) {
       logUserActivity(actingUserUsername, actingUserRole, "ADD_CALENDAR_ENTRY_FAIL", entryData.date || "N/A", "Data tidak lengkap (tanggal/deskripsi)", "FAIL");
@@ -898,7 +902,7 @@ function getUsersForAdmin() { // Tidak ada perubahan signifikan di sini, UI clie
 }
 
 // Modifikasi addNewUser
-function addNewUser(userData, actingUserRole) { // Tambahkan actingUserRole
+function addNewUser(userData, actingUserUsername, actingUserRole) { // Tambahkan actingUserUsername
   try {
     if (!userData.username || !userData.password || !userData.role) {
       logUserActivity(actingUserUsername, actingUserRole, "CREATE_USER_FAIL", userData.username || "N/A", "Data tidak lengkap (username/password/role)", "FAIL");
@@ -964,7 +968,7 @@ function addNewUser(userData, actingUserRole) { // Tambahkan actingUserRole
 }
 
 // Modifikasi updateUserByUsername
-function updateUserByUsername(usernameToUpdate, userDataToUpdate, actingUserRole) { // Tambahkan actingUserRole
+function updateUserByUsername(usernameToUpdate, userDataToUpdate, actingUserUsername, actingUserRole) { // Tambahkan actingUserUsername
   try {
     if (!usernameToUpdate || !userDataToUpdate || !userDataToUpdate.newRole) {
       logUserActivity(actingUserUsername, actingUserRole, "UPDATE_USER_FAIL", usernameToUpdate, "Data tidak lengkap (username/newRole)", "FAIL");
@@ -1087,7 +1091,7 @@ function updateUserByUsername(usernameToUpdate, userDataToUpdate, actingUserRole
 }
 
 // Modifikasi deleteUserByUsername
-function deleteUserByUsername(usernameToDelete, actingUserRole) { // Tambahkan actingUserRole
+function deleteUserByUsername(usernameToDelete, actingUserUsername, actingUserRole) { // Tambahkan actingUserUsername
   try {
     if (!usernameToDelete) {
         logUserActivity(actingUserUsername, actingUserRole, "DELETE_USER_FAIL", "N/A", "Username target tidak diberikan", "FAIL");
@@ -4665,4 +4669,253 @@ function markAllInAppNotificationsAsRead(teacherName) {
         Logger.log(`Error in markAllInAppNotificationsAsRead for ${teacherName}: ${e.toString()}`);
         return { success: false, error: `Gagal menandai semua notifikasi: ${e.message}` };
     }
+}
+
+/**
+ * Guru mengajukan permintaan perubahan username.
+ * @param {string} currentUsername Username guru saat ini.
+ * @param {string} requestedUsername Username baru yang diinginkan.
+ * @param {string} teacherName Nama asli guru.
+ * @param {string} actorRole Peran pengguna yang mengajukan (seharusnya 'user').
+ * @return {object} Hasil operasi {success: boolean, message/error: string}.
+ */
+function submitUsernameChangeRequest(currentUsername, requestedUsername, teacherName, actorRole) {
+  try {
+    if (!currentUsername || !requestedUsername || !teacherName) {
+      return { success: false, error: "Informasi tidak lengkap (username saat ini, username baru, nama guru)." };
+    }
+    if (requestedUsername.trim().length < 4) {
+         return { success: false, error: "Username baru minimal 4 karakter."};
+    }
+    if (currentUsername.toLowerCase() === requestedUsername.trim().toLowerCase()) {
+        return { success: false, error: "Username baru tidak boleh sama dengan username saat ini." };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
+    const requestsSheet = ensureSheet(USERNAME_CHANGE_REQUESTS_SHEET_NAME, [
+      "RequestID", "CurrentUsername", "RequestedUsername", "TeacherName", 
+      "RequestDate", "Status", "Notes", "ProcessedBy", "ProcessedDate"
+    ]);
+
+    // Cek apakah username baru sudah digunakan di Users sheet
+    const usersData = usersSheet.getDataRange().getValues();
+    const usernamesInUsers = usersData.slice(1).map(row => String(row[0]).trim().toLowerCase());
+    if (usernamesInUsers.includes(requestedUsername.trim().toLowerCase())) {
+      logUserActivity(currentUsername, actorRole, "SUBMIT_USERNAME_CHANGE_FAIL", requestedUsername, `Username baru sudah ada di Users`, "FAIL");
+      return { success: false, error: `Username '${requestedUsername}' sudah digunakan. Pilih username lain.` };
+    }
+
+    // Cek apakah username baru sudah ada di pengajuan PENDING atau APPROVED LAINNYA
+    const requestsData = requestsSheet.getDataRange().getValues();
+    for (let i = 1; i < requestsData.length; i++) {
+        const reqUser = String(requestsData[i][2]).trim().toLowerCase(); // RequestedUsername
+        const reqStatus = String(requestsData[i][5]).trim().toLowerCase(); // Status
+        if (reqUser === requestedUsername.trim().toLowerCase() && (reqStatus === "pending" || reqStatus === "approved")) {
+            logUserActivity(currentUsername, actorRole, "SUBMIT_USERNAME_CHANGE_FAIL", requestedUsername, `Username baru sudah ada di pengajuan lain (ID: ${requestsData[i][0]})`, "FAIL");
+            return { success: false, error: `Username '${requestedUsername}' sudah diajukan atau digunakan. Pilih username lain.` };
+        }
+    }
+
+    // Cek apakah pengguna sudah memiliki pengajuan PENDING
+    for (let i = 1; i < requestsData.length; i++) {
+        const reqCurrentUsername = String(requestsData[i][1]).trim().toLowerCase(); // CurrentUsername
+        const reqStatus = String(requestsData[i][5]).trim().toLowerCase(); // Status
+        if (reqCurrentUsername === currentUsername.toLowerCase() && reqStatus === "pending") {
+            logUserActivity(currentUsername, actorRole, "SUBMIT_USERNAME_CHANGE_FAIL", requestedUsername, `Sudah ada pengajuan pending (ID: ${requestsData[i][0]})`, "FAIL");
+            return { success: false, error: "Anda sudah memiliki pengajuan perubahan username yang sedang diproses." };
+        }
+    }
+
+    const requestId = Utilities.getUuid();
+    const requestDate = new Date();
+    requestsSheet.appendRow([
+      requestId, currentUsername, requestedUsername.trim(), teacherName,
+      requestDate, "pending", "", "", ""
+    ]);
+
+    logUserActivity(currentUsername, actorRole, "SUBMIT_USERNAME_CHANGE_SUCCESS", requestedUsername, `Dari: ${currentUsername}`, "SUCCESS");
+    return { success: true, message: "Pengajuan perubahan username berhasil dikirim. Mohon tunggu persetujuan Admin." };
+
+  } catch (e) {
+    Logger.log(`Error in submitUsernameChangeRequest: ${e.toString()}`);
+    logUserActivity(currentUsername || "N/A", actorRole || "N/A", "SUBMIT_USERNAME_CHANGE_ERROR", requestedUsername || "N/A", e.message, "ERROR");
+    return { success: false, error: `Gagal mengirim pengajuan: ${e.message}` };
+  }
+}
+
+/**
+ * Mengambil daftar pengajuan perubahan username yang masih pending.
+ * @param {string} adminUsername Username admin yang melakukan aksi.
+ * @param {string} adminRole Peran admin.
+ * @return {object} Objek berisi {success: boolean, requests?: object[], error?: string}.
+ */
+function getPendingUsernameChangeRequests(adminUsername, adminRole) {
+  if (adminRole !== ROLE_ADMIN && adminRole !== ROLE_SUPERADMIN) {
+    return { success: false, error: "Akses ditolak." };
+  }
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const requestsSheet = ss.getSheetByName(USERNAME_CHANGE_REQUESTS_SHEET_NAME);
+    if (!requestsSheet || requestsSheet.getLastRow() < 2) {
+      return { success: true, requests: [] };
+    }
+
+    const data = requestsSheet.getDataRange().getValues();
+    const headers = data[0].map(h => String(h).trim());
+    const pendingRequests = [];
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const status = String(row[headers.indexOf("Status")]).trim().toLowerCase();
+      if (status === "pending") {
+        pendingRequests.push({
+          requestID: String(row[headers.indexOf("RequestID")]),
+          currentUsername: String(row[headers.indexOf("CurrentUsername")]),
+          requestedUsername: String(row[headers.indexOf("RequestedUsername")]),
+          teacherName: String(row[headers.indexOf("TeacherName")]),
+          requestDate: row[headers.indexOf("RequestDate")] instanceof Date ? Utilities.formatDate(new Date(row[headers.indexOf("RequestDate")]), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm") : String(row[headers.indexOf("RequestDate")])
+        });
+      }
+    }
+    return { success: true, requests: pendingRequests };
+  } catch (e) {
+    Logger.log(`Error in getPendingUsernameChangeRequests: ${e.toString()}`);
+    return { success: false, error: `Gagal mengambil daftar pengajuan: ${e.message}` };
+  }
+}
+
+/**
+ * Admin memproses pengajuan perubahan username (setujui/tolak).
+ * @param {string} requestID ID pengajuan yang akan diproses.
+ * @param {string} action "approve" atau "reject".
+ * @param {string} adminUsername Username admin yang memproses.
+ * @param {string} adminRole Peran admin yang memproses.
+ * @param {string} [notes=""] Catatan dari admin (opsional, misal alasan penolakan).
+ * @return {object} Hasil operasi {success: boolean, message/error: string}.
+ */
+function processUsernameChangeRequest(requestID, action, adminUsername, adminRole, notes = "") {
+  if (adminRole !== ROLE_ADMIN && adminRole !== ROLE_SUPERADMIN) {
+    return { success: false, error: "Akses ditolak." };
+  }
+  action = String(action).toLowerCase();
+  if (action !== "approve" && action !== "reject") {
+    return { success: false, error: "Aksi tidak valid." };
+  }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const requestsSheet = ss.getSheetByName(USERNAME_CHANGE_REQUESTS_SHEET_NAME);
+    const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
+
+    if (!requestsSheet || !usersSheet) {
+      return { success: false, error: "Sheet penting tidak ditemukan." };
+    }
+
+    const requestsData = requestsSheet.getDataRange().getValues();
+    const reqHeaders = requestsData[0].map(h => String(h).trim());
+    let requestRowIndex = -1;
+    let requestDetails = {};
+
+    for (let i = 1; i < requestsData.length; i++) {
+      if (String(requestsData[i][reqHeaders.indexOf("RequestID")]) === requestID) {
+        requestRowIndex = i + 1;
+        requestDetails = {
+          currentUsername: String(requestsData[i][reqHeaders.indexOf("CurrentUsername")]),
+          requestedUsername: String(requestsData[i][reqHeaders.indexOf("RequestedUsername")]),
+          status: String(requestsData[i][reqHeaders.indexOf("Status")]).toLowerCase()
+        };
+        break;
+      }
+    }
+
+    if (requestRowIndex === -1) {
+      return { success: false, error: "Pengajuan tidak ditemukan." };
+    }
+    if (requestDetails.status !== "pending") {
+      return { success: false, error: `Pengajuan ini sudah ${requestDetails.status}.` };
+    }
+
+    const processedDate = new Date();
+    let message = "";
+
+    if (action === "approve") {
+      // Cek sekali lagi apakah username baru sudah digunakan
+      const usersData = usersSheet.getDataRange().getValues();
+      const usernamesInUsers = usersData.slice(1).map(row => String(row[0]).trim().toLowerCase());
+      if (usernamesInUsers.includes(requestDetails.requestedUsername.toLowerCase())) {
+        // Otomatis tolak jika sudah diambil
+        requestsSheet.getRange(requestRowIndex, reqHeaders.indexOf("Status") + 1).setValue("rejected");
+        requestsSheet.getRange(requestRowIndex, reqHeaders.indexOf("Notes") + 1).setValue("Ditolak otomatis: Username baru sudah digunakan saat proses approval.");
+        requestsSheet.getRange(requestRowIndex, reqHeaders.indexOf("ProcessedBy") + 1).setValue(adminUsername);
+        requestsSheet.getRange(requestRowIndex, reqHeaders.indexOf("ProcessedDate") + 1).setValue(processedDate);
+        logUserActivity(adminUsername, adminRole, "REJECT_USERNAME_CHANGE_AUTO", requestDetails.requestedUsername, `ReqID: ${requestID}, Dari: ${requestDetails.currentUsername}, Alasan: Username sudah digunakan`, "SUCCESS");
+        return { success: false, error: `Gagal menyetujui: Username '${requestDetails.requestedUsername}' sudah digunakan. Pengajuan ditolak otomatis.` };
+      }
+
+      // Update username di Users sheet
+      let userUpdatedInUsersSheet = false;
+      const userHeaders = usersData[0].map(h=>String(h).trim().toLowerCase());
+      const userUsernameColIdx = userHeaders.indexOf("username");
+
+      for (let i = 1; i < usersData.length; i++) {
+        if (String(usersData[i][userUsernameColIdx]).trim().toLowerCase() === requestDetails.currentUsername.toLowerCase()) {
+          usersSheet.getRange(i + 1, userUsernameColIdx + 1).setValue(requestDetails.requestedUsername);
+          userUpdatedInUsersSheet = true;
+          break;
+        }
+      }
+
+      if (!userUpdatedInUsersSheet) {
+         logUserActivity(adminUsername, adminRole, "APPROVE_USERNAME_CHANGE_FAIL", requestDetails.requestedUsername, `ReqID: <span class="math-inline">\{requestID\}, User lama '</span>{requestDetails.currentUsername}' tidak ditemukan di Users sheet`, "FAIL");
+        return { success: false, error: `Gagal update: Pengguna '${requestDetails.currentUsername}' tidak ditemukan di sheet Users.` };
+      }
+
+      requestsSheet.getRange(requestRowIndex, reqHeaders.indexOf("Status") + 1).setValue("approved");
+      message = `Pengajuan username untuk '${requestDetails.currentUsername}' ke '${requestDetails.requestedUsername}' telah disetujui.`;
+      logUserActivity(adminUsername, adminRole, "APPROVE_USERNAME_CHANGE_SUCCESS", requestDetails.requestedUsername, `ReqID: ${requestID}, Dari: ${requestDetails.currentUsername}, Catatan: ${notes}`, "SUCCESS");
+
+    } else { // action === "reject"
+      requestsSheet.getRange(requestRowIndex, reqHeaders.indexOf("Status") + 1).setValue("rejected");
+      message = `Pengajuan username untuk '${requestDetails.currentUsername}' ke '${requestDetails.requestedUsername}' telah ditolak.`;
+      logUserActivity(adminUsername, adminRole, "REJECT_USERNAME_CHANGE_SUCCESS", requestDetails.requestedUsername, `ReqID: ${requestID}, Dari: ${requestDetails.currentUsername}, Catatan: ${notes}`, "SUCCESS");
+    }
+
+    requestsSheet.getRange(requestRowIndex, reqHeaders.indexOf("Notes") + 1).setValue(notes);
+    requestsSheet.getRange(requestRowIndex, reqHeaders.indexOf("ProcessedBy") + 1).setValue(adminUsername);
+    requestsSheet.getRange(requestRowIndex, reqHeaders.indexOf("ProcessedDate") + 1).setValue(processedDate);
+
+    SpreadsheetApp.flush();
+    return { success: true, message: message };
+
+  } catch (e) {
+    Logger.log(`Error in processUsernameChangeRequest (ID: ${requestID}, Action: ${action}): ${e.toString()}`);
+    logUserActivity(adminUsername, adminRole, "PROCESS_USERNAME_CHANGE_ERROR", requestID, `Aksi: ${action}, Error: ${e.message}`, "ERROR");
+    return { success: false, error: `Gagal memproses pengajuan: ${e.message}` };
+  }
+}
+
+function checkUserPendingUsernameRequest(username) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const requestsSheet = ss.getSheetByName(USERNAME_CHANGE_REQUESTS_SHEET_NAME);
+    if (!requestsSheet || requestsSheet.getLastRow() < 2) {
+      return { success: true, hasPendingRequest: false };
+    }
+    const data = requestsSheet.getDataRange().getValues();
+    const headers = data[0].map(h => String(h).trim());
+    const currentUsernameCol = headers.indexOf("CurrentUsername");
+    const statusCol = headers.indexOf("Status");
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][currentUsernameCol]).trim().toLowerCase() === username.toLowerCase() &&
+          String(data[i][statusCol]).trim().toLowerCase() === "pending") {
+        return { success: true, hasPendingRequest: true };
+      }
+    }
+    return { success: true, hasPendingRequest: false };
+  } catch (e) {
+    Logger.log("Error checking pending username request for " + username + ": " + e.toString());
+    return { success: false, error: "Gagal memeriksa status pengajuan."};
+  }
 }
