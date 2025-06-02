@@ -3756,56 +3756,7 @@ function createOrEnsureDailyReminderTrigger() {
   }
 }
 
-// ============== AKHIR FUNGSI BARU UNTUK NOTIFIKASI PENGINGAT ABSENSI ==============
-
-
-// Pastikan fungsi `ensureSheet` Anda sudah ada dan berfungsi dengan baik
-// Jika belum, ini contoh sederhananya:
-/*
-function ensureSheet(sheetName, headers = []) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
-    if (headers.length > 0) {
-      sheet.appendRow(headers);
-      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setHorizontalAlignment("center");
-      if (sheetName === REMINDER_LOG_SHEET_NAME) { // Auto-adjust column widths for log sheet
-        sheet.autoResizeColumn(1); sheet.autoResizeColumn(2); sheet.autoResizeColumn(3);
-        sheet.setColumnWidth(4, 180); // Tanggal Notifikasi
-        sheet.autoResizeColumn(5);
-      }
-    }
-  } else if (sheet.getLastRow() === 0 && headers.length > 0) { // Sheet ada tapi kosong
-      sheet.appendRow(headers);
-      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setHorizontalAlignment("center");
-       if (sheetName === REMINDER_LOG_SHEET_NAME) {
-        sheet.autoResizeColumn(1); sheet.autoResizeColumn(2); sheet.autoResizeColumn(3);
-        sheet.setColumnWidth(4, 180);
-        sheet.autoResizeColumn(5);
-      }
-  }
-  return sheet;
-}
-*/
-// Pastikan Anda sudah memiliki fungsi `ensureSheet` yang serupa.
-// Jika Anda menggunakan versi `ensureSheet` dari kode sebelumnya, itu sudah cukup.
-
-// Anda perlu menjalankan fungsi `createOrEnsureDailyReminderTrigger()` sekali secara manual
-// dari editor Apps Script untuk mengaktifkan pemicu otomatisnya.
-// Contoh:
-// function setupMyTriggers() {
-//   createOrEnsureDailyReminderTrigger();
-//   createOrEnsureCleanupTrigger(); // Jika Anda punya fungsi cleanup lain
-//   createTriggerForCleanupIfNotExists(); // Jika Anda punya fungsi cleanup lain
-// }
-
 // Di dalam file code.gs.html
-
-// Variabel global untuk nama sheet (pastikan sudah ada atau tambahkan jika belum)
-// const CEKLOK_MANUAL_SHEET_NAME = "Ceklok_Manual";
-// const KALENDER_SHEET_NAME = "Kalender_Pendidikan";
-// const OPSIKETLIBUR_SHEET_NAME = "Opsi_Keterangan_Libur";
 
 /**
  * Mengambil ringkasan kehadiran bulanan untuk seorang guru.
@@ -3820,12 +3771,12 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
     }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const ceklokManualSheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME); //
-    const kalenderSheet = ss.getSheetByName(KALENDER_SHEET_NAME); //
-    const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME); //
+    const ceklokManualSheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
+    const kalenderSheet = ss.getSheetByName(KALENDER_SHEET_NAME);
+    const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME);
 
-    if (!ceklokManualSheet) return { success: false, error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` }; //
-    if (!kalenderSheet) return { success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` }; //
+    if (!ceklokManualSheet) return { success: false, error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` };
+    if (!kalenderSheet) return { success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` };
 
     const [mmStr, yyyyStr] = monthYear.split("/");
     const mm = parseInt(mmStr, 10);
@@ -3837,7 +3788,7 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
 
     const liburMap = {};
     if (kalenderSheet.getLastRow() > 1) {
-      const kalenderData = kalenderSheet.getRange(2, 1, kalenderSheet.getLastRow() - 1, 2).getDisplayValues(); //
+      const kalenderData = kalenderSheet.getRange(2, 1, kalenderSheet.getLastRow() - 1, 2).getDisplayValues();
       kalenderData.forEach(row => {
         if (row[0] && String(row[0]).trim() !== "") {
           liburMap[String(row[0]).trim()] = String(row[1]).trim() || "Hari Libur Nasional";
@@ -3848,10 +3799,10 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
     let allValidReasonsFromSheet = [];
     if (opsiKetLiburSheet && opsiKetLiburSheet.getLastRow() > 1) {
       allValidReasonsFromSheet = opsiKetLiburSheet.getRange(2, 1, opsiKetLiburSheet.getLastRow() - 1, 1)
-                                      .getValues().flat().filter(String).map(o => String(o).trim().toLowerCase()); //
+                                      .getValues().flat().filter(String).map(o => String(o).trim().toLowerCase());
     }
 
-    const allCeklokData = ceklokManualSheet.getDataRange().getValues(); //
+    const allCeklokData = ceklokManualSheet.getDataRange().getValues();
     const ceklokHeaders = allCeklokData[0].map(h => String(h).trim().toLowerCase());
     const idxNama = ceklokHeaders.indexOf("nama_guru");
     const idxTanggal = ceklokHeaders.indexOf("tanggal");
@@ -3860,7 +3811,7 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
     const idxKetManual = ceklokHeaders.indexOf("ket_libur_manual");
 
     if ([idxNama, idxTanggal, idxMasuk, idxPulang, idxKetManual].includes(-1)) {
-      return { success: false, error: "Header kolom di 'Ceklok_Manual' tidak lengkap." }; //
+      return { success: false, error: "Header kolom di 'Ceklok_Manual' tidak lengkap." };
     }
 
     let summary = {
@@ -3868,13 +3819,15 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
       monthYear: monthYear,
       totalWorkingDaysInMonth: 0,
       effectiveWorkingDaysPassed: 0,
-      completedChecklok: 0, // Akan dihitung nanti dari penjumlahan
+      completedChecklok: 0,
       present: 0,
       schoolHoliday: 0,
       otherValidReason: 0,
       absent: 0,
       incomplete: 0,
-      attendancePercentage: 0
+      attendancePercentage: 0,
+      absentDates: [], // BARU: Untuk menyimpan tanggal alpa
+      incompleteEntries: [] // BARU: Untuk menyimpan detail tanggal tidak lengkap
     };
 
     for (let day = 1; day <= lastDayOfMonth; day++) {
@@ -3884,9 +3837,9 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
       const dayOfWeek = currentDate.getDay();
 
       let isWorkingDay = true;
-      if (dayOfWeek === 0) { // Minggu
+      if (dayOfWeek === 0) { 
         isWorkingDay = false;
-      } else if (liburMap[dateStr]) { // Libur Nasional/Sekolah dari Kalender_Pendidikan
+      } else if (liburMap[dateStr]) { 
         isWorkingDay = false;
       }
 
@@ -3914,13 +3867,19 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
                   } else { 
                        if (isWorkingDay && currentDate < today) {
                           summary.absent++;
+                          summary.absentDates.push(dateStr); // BARU
                        }
                   }
               } else if ((jamMasuk && !jamPulang) || (!jamMasuk && jamPulang)) {
-                  if(isWorkingDay) summary.incomplete++; 
+                  if(isWorkingDay) {
+                    summary.incomplete++; 
+                    let missingDetail = jamMasuk ? "Jam Pulang Kosong" : "Jam Masuk Kosong";
+                    summary.incompleteEntries.push({ date: dateStr, missing: missingDetail }); // BARU
+                  }
               } else { 
                   if (isWorkingDay && currentDate < today) {
                       summary.absent++;
+                      summary.absentDates.push(dateStr); // BARU
                   }
               }
               entryProcessedForDay = true;
@@ -3935,20 +3894,18 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
             summary.effectiveWorkingDaysPassed++;
             if (!entryProcessedForDay && currentDate < today) {
                 summary.absent++;
+                summary.absentDates.push(dateStr); // BARU
             }
         }
       }
     }
 
-    // --- HITUNG completedChecklok DARI STATISTIK YANG SUDAH ADA ---
-    summary.completedChecklok = summary.present + summary.schoolHoliday + summary.otherValidReason; //
-    // --- AKHIR PERHITUNGAN completedChecklok ---
-
-    // Kalkulasi Persentase Pengisian Ceklok BARU
+    summary.completedChecklok = summary.present + summary.schoolHoliday + summary.otherValidReason;
+    
     if (summary.totalWorkingDaysInMonth > 0) {
       summary.attendancePercentage = parseFloat(((summary.completedChecklok / summary.totalWorkingDaysInMonth) * 100).toFixed(2));
     } else {
-      summary.attendancePercentage = 0; // Jika tidak ada hari kerja dalam sebulan, persentase 0
+      summary.attendancePercentage = 0;
     }
 
     return { success: true, summary: summary };
