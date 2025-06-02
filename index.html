@@ -1251,6 +1251,10 @@
                 htmlFile = 'username_requests_content.html';
                 setupFunction = setupUsernameRequestsView;
                 break;
+            case 'cek_data_kehadiran': // Nama view baru
+                htmlFile = 'cek_data_kehadiran_content.html';
+                setupFunction = setupCekDataKehadiranView;
+                break;
             default:
                 console.error("Tampilan tidak dikenal:", viewName);
                 const appEl = document.getElementById('app');
@@ -1353,6 +1357,30 @@
               e.preventDefault();
               navigateToTutorial();
           };
+      }
+
+      if (loggedInUser && loggedInUser.role === ROLE_USER) {
+          const profileDropdownContent = document.getElementById('profileDropdown');
+          const existingCekDataLink = document.getElementById('menuCekDataKehadiran'); // Cek apakah sudah ada
+
+          if (profileDropdownContent && !existingCekDataLink) {
+              const cekDataLink = document.createElement('a');
+              cekDataLink.href = "#";
+              cekDataLink.id = "menuCekDataKehadiran"; // ID untuk referensi
+              cekDataLink.textContent = "Cek Data Kehadiran Tahunan";
+              cekDataLink.onclick = function(e) {
+                  e.preventDefault();
+                  navigateToCekDataKehadiran();
+                  toggleProfileDropdown(); // Tutup dropdown
+              };
+              // Sisipkan sebelum link Tutorial atau Logout
+              const referenceNode = menuTutorial || document.getElementById('menuLogoutProfile');
+              if (referenceNode) {
+                  profileDropdownContent.insertBefore(cekDataLink, referenceNode);
+              } else {
+                  profileDropdownContent.appendChild(cekDataLink);
+              }
+          }
       }
     }
 
@@ -1717,6 +1745,14 @@
                 }
             });
         }
+        const cdkDetailModalEl = document.getElementById('cdkDetailModal');
+        if (cdkDetailModalEl) {
+            cdkDetailModalEl.addEventListener('click', function(event) {
+                if (event.target === cdkDetailModalEl) {
+                    closeCdkDetailModal();
+                }
+            });
+        }
         document.addEventListener('keydown', function(event) {
             if (event.key === "Escape" || event.key === "Esc") {
                 if (primaryEmailModal && primaryEmailModal.style.display === 'flex') {
@@ -1735,6 +1771,9 @@
                 }
                 if (summaryDetailModalEl && summaryDetailModalEl.style.display === 'flex') {
                     closeSummaryDetailModal();
+                }
+                if (cdkDetailModalEl && cdkDetailModalEl.style.display === 'flex') {
+                    closeCdkDetailModal();
                 }
             }
         });
@@ -5450,7 +5489,247 @@
             showAlert(`Tanggal ${dateString} tidak ditemukan dalam data ceklok saat ini.`, "warning");
         }
     }
+    // Di dalam <script> di index.html
 
+    // ... (fungsi-fungsi lain) ...
+
+    // Fungsi baru untuk navigasi ke halaman "Cek Data Kehadiran"
+    function navigateToCekDataKehadiran() {
+        if (loggedInUser && loggedInUser.role === ROLE_USER) {
+            renderView('cek_data_kehadiran'); // Nama view baru
+        } else {
+            showAlert("Fitur ini hanya untuk guru.", "error");
+        }
+    }
+
+    // Setup function untuk halaman baru
+    function setupCekDataKehadiranView() {
+        window.scrollTo(0, 0);
+        const teacherNameEl = document.getElementById('cdkTeacherName');
+        const yearSelectEl = document.getElementById('cdkYearSelect');
+        const calendarContainerEl = document.getElementById('cdkYearlyCalendarContainer');
+
+        if (teacherNameEl) {
+            teacherNameEl.textContent = loggedInUser.teacherName || "Tidak Diketahui";
+        }
+
+        if (yearSelectEl) {
+            const currentYear = new Date().getFullYear();
+            // Menggunakan globalAdminMinMonthYear untuk batas bawah tahun
+            let minYear;
+            if (globalAdminMinMonthYear && globalAdminMinMonthYear.includes('/')) {
+                minYear = parseInt(globalAdminMinMonthYear.split('/')[1]);
+            } else {
+                minYear = currentYear - 5; // Fallback
+            }
+            
+            yearSelectEl.innerHTML = ''; // Kosongkan opsi lama
+            for (let y = currentYear; y >= minYear; y--) {
+                let option = new Option(y, y);
+                yearSelectEl.add(option);
+            }
+            if (yearSelectEl.options.length > 0) {
+              yearSelectEl.value = currentYear; // Default ke tahun ini
+            } else {
+                showAlert("Tidak ada tahun yang valid untuk dipilih.", "warning");
+                document.getElementById('btnCdkCekData').disabled = true;
+            }
+        }
+        if(calendarContainerEl) calendarContainerEl.innerHTML = '<p style="text-align:center; color: var(--grey-text);"><i>Pilih tahun dan klik "CEK DATA" untuk melihat rekap kehadiran.</i></p>';
+    }
+
+
+    function fetchAndDisplayYearlyAttendance() {
+        const selectedYear = document.getElementById('cdkYearSelect').value;
+        const teacherName = loggedInUser.teacherName; 
+        const calendarContainerEl = document.getElementById('cdkYearlyCalendarContainer');
+        const loadingEl = document.getElementById('cdkLoadingIndicator');
+        const errorEl = document.getElementById('cdkErrorMessage');
+
+        if (!selectedYear) {
+            showAlert("Silakan pilih tahun terlebih dahulu.", "warning");
+            return;
+        }
+
+        calendarContainerEl.innerHTML = ''; 
+        if(loadingEl) loadingEl.style.display = 'block';
+        if(errorEl) errorEl.style.display = 'none';
+
+        google.script.run
+            .withSuccessHandler(response => {
+                if(loadingEl) loadingEl.style.display = 'none';
+                if (response.success && response.yearData) {
+                    renderYearlyCalendar(response.yearData, parseInt(selectedYear));
+                } else {
+                    if(errorEl) {
+                        errorEl.textContent = response.error || "Gagal memuat data kehadiran tahunan.";
+                        errorEl.style.display = 'block';
+                    }
+                    showAlert(response.error || "Gagal memuat data.", "error");
+                }
+            })
+            .withFailureHandler(err => {
+                if(loadingEl) loadingEl.style.display = 'none';
+                if(errorEl) {
+                    errorEl.textContent = "Terjadi kesalahan server: " + err.message;
+                    errorEl.style.display = 'block';
+                }
+                showAlert("Error server: " + err.message, "error");
+            })
+            .getYearlyAttendanceData(teacherName, parseInt(selectedYear));
+    }
+
+    function renderYearlyCalendar(yearData, year) {
+        const calendarContainerEl = document.getElementById('cdkYearlyCalendarContainer');
+        calendarContainerEl.innerHTML = ''; 
+
+        const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+                            "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+        const dayHeaders = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+
+        monthNames.forEach((monthName, monthIndex) => { 
+            const monthDataForDisplay = yearData[monthName];
+            
+            const monthContainer = document.createElement('div');
+            monthContainer.className = 'cdk-month-container';
+            monthContainer.innerHTML = `<h4>${monthName} ${year}</h4>`;
+
+            const daysGrid = document.createElement('div');
+            daysGrid.className = 'cdk-days-grid';
+
+            dayHeaders.forEach(header => {
+                const dayHeaderEl = document.createElement('div');
+                dayHeaderEl.className = 'cdk-day-header';
+                dayHeaderEl.textContent = header;
+                daysGrid.appendChild(dayHeaderEl);
+            });
+            
+            let firstDayOfMonth = new Date(year, monthIndex, 1).getDay(); 
+            let dayOffset = (firstDayOfMonth === 0) ? 6 : firstDayOfMonth - 1; 
+
+            for (let i = 0; i < dayOffset; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'cdk-day-cell empty-offset';
+                daysGrid.appendChild(emptyCell);
+            }
+
+            if (monthDataForDisplay && monthDataForDisplay.length > 0) {
+                monthDataForDisplay.forEach(dayEntry => {
+                    const dayCell = document.createElement('div');
+                    dayCell.className = 'cdk-day-cell';
+                    if (dayEntry.isNonWorkingScheduled) {
+                        dayCell.classList.add('is-non-working-scheduled');
+                    }
+
+                    const dateNumber = document.createElement('span');
+                    dateNumber.className = 'cdk-date-number';
+                    dateNumber.textContent = dayEntry.date;
+                    dayCell.appendChild(dateNumber);
+
+                    const statusDot = document.createElement('span');
+                    statusDot.className = `cdk-status-dot ${dayEntry.status}`;
+                    
+                    // Tambahkan event listener jika status bukan 'white'
+                    if (dayEntry.status !== 'white') {
+                        statusDot.classList.add('clickable');
+                        const dateForModal = `${String(dayEntry.date).padStart(2, '0')}/${String(monthIndex + 1).padStart(2, '0')}/${year}`;
+                        let statusTextForModal = "";
+                        switch(dayEntry.status) {
+                            case "green": statusTextForModal = "Hadir"; break;
+                            case "yellow": statusTextForModal = "Tidak Lengkap"; break;
+                            case "red": statusTextForModal = "Alpa"; break;
+                            case "blue": statusTextForModal = "Hari Libur/Keterangan"; break;
+                            default: statusTextForModal = "Info";
+                        }
+                        statusDot.onclick = function() {
+                            openCdkDetailModal(dateForModal, statusTextForModal, dayEntry.detailMessage);
+                        };
+                    }
+                    dayCell.appendChild(statusDot);
+                    daysGrid.appendChild(dayCell);
+                });
+            } else {
+                const daysInCurrentMonth = new Date(year, monthIndex + 1, 0).getDate();
+                for(let d = 1; d <= daysInCurrentMonth; d++){
+                    const dayCell = document.createElement('div');
+                    dayCell.className = 'cdk-day-cell';
+                    const dateNumberSpan = document.createElement('span');
+                    dateNumberSpan.className = 'cdk-date-number';
+                    dateNumberSpan.textContent = d;
+                    dayCell.appendChild(dateNumberSpan);
+                    const statusDotSpan = document.createElement('span');
+                    statusDotSpan.className = `cdk-status-dot white`; 
+                    dayCell.appendChild(statusDotSpan);
+                    daysGrid.appendChild(dayCell);
+                }
+            }
+            monthContainer.appendChild(daysGrid);
+            calendarContainerEl.appendChild(monthContainer);
+        });
+    }
+
+
+    // Modifikasi renderView untuk menambahkan case baru
+    /*
+    function renderView(viewName, data, postRenderCallback) {
+        // ...
+        case 'cek_data_kehadiran': // Nama view baru
+            htmlFile = 'cek_data_kehadiran_content.html';
+            setupFunction = setupCekDataKehadiranView;
+            break;
+        // ...
+    }
+    */
+
+    // Modifikasi menu untuk guru, misalnya di dalam setupProfileMenuEventListeners atau
+    // jika Anda memiliki fungsi terpisah untuk membangun menu guru:
+    /*
+    // Contoh di setupProfileMenuEventListeners jika menu ada di dropdown profil
+    const profileDropdown = document.getElementById('profileDropdown');
+    if (loggedInUser && loggedInUser.role === ROLE_USER && profileDropdown) {
+        const cekDataLink = document.createElement('a');
+        cekDataLink.href = "#";
+        cekDataLink.textContent = "Cek Data Kehadiran Tahunan";
+        cekDataLink.onclick = function(e) {
+            e.preventDefault();
+            navigateToCekDataKehadiran();
+            toggleProfileDropdown(); // Tutup dropdown setelah klik
+        };
+        // Sisipkan sebelum link logout atau di posisi yang sesuai
+        const logoutLink = document.getElementById('menuLogoutProfile');
+        if(logoutLink) {
+            profileDropdown.insertBefore(cekDataLink, logoutLink);
+        } else {
+            profileDropdown.appendChild(cekDataLink);
+        }
+    }
+    */
+    // Fungsi baru untuk menampilkan modal detail Cek Data Kehadiran
+    function openCdkDetailModal(dateString, statusText, detailMessage) {
+        const modal = document.getElementById('cdkDetailModal');
+        const modalTitle = document.getElementById('cdkDetailModalTitle');
+        const modalDateEl = document.getElementById('cdkDetailModalDate');
+        const modalBody = document.getElementById('cdkDetailModalBody');
+
+        if (!modal || !modalTitle || !modalDateEl || !modalBody) {
+            showAlert("Komponen modal detail CDK tidak ditemukan.", "error");
+            return;
+        }
+
+        modalTitle.textContent = `Detail Kehadiran - ${statusText}`;
+        modalDateEl.textContent = `Tanggal: ${dateString}`;
+        modalBody.textContent = detailMessage;
+        
+        modal.style.display = 'flex';
+    }
+
+    // Fungsi baru untuk menutup modal detail Cek Data Kehadiran
+    function closeCdkDetailModal() {
+        const modal = document.getElementById('cdkDetailModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
   </script>
 </body>
 </html>
