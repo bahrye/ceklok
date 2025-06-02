@@ -34,7 +34,7 @@ const ROLE_USER = "user";
 const ACTIVITY_LOG_SHEET_NAME = "Activity_Log"; // Nama untuk sheet log baru
 
 const USERNAME_CHANGE_REQUESTS_SHEET_NAME = "UsernameChangeRequests";
-const IN_APP_NOTIFICATIONS_SHEET_NAME = "InAppNotifications";
+
 const ss = SpreadsheetApp.getActiveSpreadsheet();
 
 
@@ -3441,38 +3441,6 @@ function processIncompleteAttendanceReminder(teacher, allCeklokData, ceklokHeade
             const tanggalAbsenStr = Utilities.formatDate(tanggalAbsen, Session.getScriptTimeZone(), "dd/MM/yyyy");
             const notifType = "tidak_lengkap"; // Tipe notifikasi untuk email dan in-app
 
-            // --- AWAL PENAMBAHAN KODE UNTUK NOTIFIKASI LONCENG ---
-            try {
-                const inAppNotifSheet = ensureSheet(IN_APP_NOTIFICATIONS_SHEET_NAME, ["NotificationID", "TeacherName", "Message", "TimestampCreated", "IsRead", "NotificationType", "TargetDate", "Link"]); //
-                const notificationId = Utilities.getUuid();
-                let inAppMessage = `Absensi Anda pada tanggal ${tanggalAbsenStr} belum lengkap. `;
-                if (jamMasuk && !jamPulang) {
-                    inAppMessage += `Jam pulang masih kosong.`;
-                } else { // !jamMasuk && jamPulang
-                    inAppMessage += `Jam masuk masih kosong.`;
-                }
-
-                // Anda bisa menambahkan pengecekan di sini jika tidak ingin membuat notifikasi in-app
-                // jika notifikasi email dengan tipe dan target tanggal yang sama sudah dikirim hari ini
-                // (menggunakan helper_hasSentNotificationToday atau logika serupa untuk in-app)
-                // Untuk sekarang, kita buat saja notifikasinya.
-
-                inAppNotifSheet.appendRow([
-                    notificationId,
-                    teacher.name,       // Menggunakan teacher.name
-                    inAppMessage,
-                    new Date(),         // TimestampCreated
-                    false,              // IsRead (default false)
-                    notifType,          // "tidak_lengkap"
-                    tanggalAbsenStr,    // TargetDate
-                    ""                  // Link (opsional)
-                ]);
-                Logger.log(`In-app notification (bell) created for ${teacher.name} for date ${tanggalAbsenStr} (incomplete).`);
-            } catch (e) {
-                Logger.log(`Failed to create in-app notification for ${teacher.name} (incomplete, date: ${tanggalAbsenStr}): ${e.toString()}`);
-            }
-            // --- AKHIR PENAMBAHAN KODE UNTUK NOTIFIKASI LONCENG ---
-
             // Logika pengiriman email yang sudah ada:
             if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, tanggalAbsenStr, notifType)) { //
               Logger.log(`Guru ${teacher.name} memiliki absensi tidak lengkap pada ${tanggalAbsenStr}. Mengirim email.`);
@@ -3617,35 +3585,6 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
   if (shouldSendToday) {
     const specificNotifTypeForLogEmail = `${reminderTypeBase}_${newSequence}`; // e.g., "berkala_kosong_1" - untuk log email
     const inAppNotifType = `MISSING_CEKLOK_PERIODIC_${newSequence}`; // Tipe spesifik untuk in-app
-
-    // --- AWAL PENAMBAHAN KODE UNTUK NOTIFIKASI LONCENG ---
-    try {
-        const inAppNotifSheet = ensureSheet(IN_APP_NOTIFICATIONS_SHEET_NAME, ["NotificationID", "TeacherName", "Message", "TimestampCreated", "IsRead", "NotificationType", "TargetDate", "Link"]); //
-        const notificationId = Utilities.getUuid();
-        const actualLastFilledDateStrForInApp = lastEffectivelyFilledDate ? Utilities.formatDate(lastEffectivelyFilledDate, Session.getScriptTimeZone(), "dd/MM/yyyy") : "belum ada catatan";
-        let inAppMessage = `Anda diingatkan untuk mengisi absensi Ceklok yang kosong, setidaknya untuk tanggal ${targetEmptyDateStr}. `;
-        if (lastEffectivelyFilledDate) {
-            inAppMessage += `Absen terakhir Anda pada ${actualLastFilledDateStrForInApp}.`;
-        } else {
-            inAppMessage += `Belum ada catatan absensi dari Anda sejak ${Utilities.formatDate(globalMinDateToCheck, Session.getScriptTimeZone(), "dd/MM/yyyy")}.`;
-        }
-
-        inAppNotifSheet.appendRow([
-            notificationId,
-            teacher.name,
-            inAppMessage,
-            new Date(),
-            false,
-            inAppNotifType, // Menggunakan tipe notifikasi in-app yang baru
-            targetEmptyDateStr,
-            ""
-        ]);
-        Logger.log(`In-app notification (bell) created for ${teacher.name} for missing attendance (target: ${targetEmptyDateStr}, sequence: ${newSequence}).`);
-    } catch (e) {
-        Logger.log(`Failed to create in-app notification for ${teacher.name} (missing, target: ${targetEmptyDateStr}, sequence: ${newSequence}): ${e.toString()}`);
-    }
-    // --- AKHIR PENAMBAHAN KODE UNTUK NOTIFIKASI LONCENG ---
-
 
     // Logika pengiriman email yang sudah ada:
     if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, targetEmptyDateStr, specificNotifTypeForLogEmail)) { //
@@ -4543,132 +4482,6 @@ function getOverallMonthlySummaryForAllTeachers(monthYear, actingUserRole) {
     logUserActivity(Session.getActiveUser().getEmail(), actingUserRole, "GET_OVERALL_SUMMARY_ERROR", monthYear, e.message, "ERROR");
     return { success: false, error: `Gagal mengambil ringkasan keseluruhan: ${e.message}` };
   }
-}
-
-
-function getUnreadInAppNotifications(teacherName) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet(); // <--- TAMBAHKAN BARIS INI
-    if (!teacherName) return { success: false, error: "Nama guru diperlukan." };
-
-    const notifSheet = ss.getSheetByName(IN_APP_NOTIFICATIONS_SHEET_NAME);
-    if (!notifSheet || notifSheet.getLastRow() < 2) {
-      return { success: true, notifications: [], unreadCount: 0 };
-    }
-
-    const data = notifSheet.getDataRange().getValues();
-    const headers = data[0].map(h => String(h).trim());
-    const teacherNameColIdx = headers.indexOf("TeacherName");
-    const messageColIdx = headers.indexOf("Message");
-    const timestampColIdx = headers.indexOf("TimestampCreated");
-    const isReadColIdx = headers.indexOf("IsRead");
-    const idColIdx = headers.indexOf("NotificationID");
-
-    if (teacherNameColIdx === -1 || isReadColIdx === -1 || idColIdx === -1) {
-      return { success: false, error: "Struktur sheet InAppNotifications tidak sesuai." };
-    }
-
-    const unreadNotifications = [];
-    let unreadCount = 0;
-
-    for (let i = data.length - 1; i >= 1; i--) { // Iterasi dari terbaru
-      const row = data[i];
-      if (String(row[teacherNameColIdx]).trim() === teacherName) {
-        const isRead = row[isReadColIdx];
-        if (isRead === false || String(isRead).toUpperCase() === "FALSE") {
-          unreadCount++;
-          if (unreadNotifications.length < 10) {
-            unreadNotifications.push({
-              id: row[idColIdx],
-              message: row[messageColIdx],
-              timestamp: row[timestampColIdx] ? new Date(row[timestampColIdx]).toLocaleString('id-ID') : 'N/A',
-            });
-          }
-        }
-      }
-    }
-    return { success: true, notifications: unreadNotifications, unreadCount: unreadCount };
-  } catch (e) {
-    Logger.log(`Error in getUnreadInAppNotifications for ${teacherName}: ${e.toString()}`);
-    return { success: false, error: `Gagal mengambil notifikasi: ${e.message}` };
-  }
-}
-
-// Di dalam file code.gs.html
-
-function markInAppNotificationAsRead(notificationId, teacherName) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet(); // <--- TAMBAHKAN BARIS INI
-    if (!notificationId || !teacherName) {
-      return { success: false, error: "ID Notifikasi dan Nama Guru diperlukan." };
-    }
-    const notifSheet = ss.getSheetByName(IN_APP_NOTIFICATIONS_SHEET_NAME);
-    if (!notifSheet || notifSheet.getLastRow() < 2) {
-      return { success: false, error: "Sheet notifikasi tidak ditemukan atau kosong." };
-    }
-
-    const data = notifSheet.getDataRange().getValues();
-    const headers = data[0].map(h => String(h).trim());
-    const idColIdx = headers.indexOf("NotificationID");
-    const teacherNameColIdx = headers.indexOf("TeacherName");
-    const isReadColIdx = headers.indexOf("IsRead");
-
-    if (idColIdx === -1 || teacherNameColIdx === -1 || isReadColIdx === -1) {
-      return { success: false, error: "Struktur kolom sheet InAppNotifications tidak sesuai." };
-    }
-
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][idColIdx]) === String(notificationId) && String(data[i][teacherNameColIdx]).trim() === teacherName) {
-        notifSheet.getRange(i + 1, isReadColIdx + 1).setValue(true);
-        SpreadsheetApp.flush();
-        return { success: true, message: "Notifikasi ditandai sudah dibaca." };
-      }
-    }
-    return { success: false, error: "Notifikasi tidak ditemukan atau tidak cocok dengan pengguna." };
-  } catch (e) {
-    Logger.log(`Error marking notification read (${notificationId}): ${e.toString()}`);
-    return { success: false, error: `Gagal menandai notifikasi: ${e.message}` };
-  }
-}
-
-// Di dalam file code.gs.html
-
-function markAllInAppNotificationsAsRead(teacherName) {
-    try {
-        const ss = SpreadsheetApp.getActiveSpreadsheet(); // <--- TAMBAHKAN BARIS INI
-        if (!teacherName) return { success: false, error: "Nama guru diperlukan." };
-
-        const notifSheet = ss.getSheetByName(IN_APP_NOTIFICATIONS_SHEET_NAME);
-        if (!notifSheet || notifSheet.getLastRow() < 2) {
-            return { success: true, message: "Tidak ada notifikasi untuk ditandai." };
-        }
-
-        const data = notifSheet.getDataRange().getValues();
-        const headers = data[0].map(h => String(h).trim());
-        const teacherNameColIdx = headers.indexOf("TeacherName");
-        const isReadColIdx = headers.indexOf("IsRead");
-
-        if (teacherNameColIdx === -1 || isReadColIdx === -1) {
-            return { success: false, error: "Struktur kolom sheet InAppNotifications tidak sesuai." };
-        }
-
-        let markedCount = 0;
-        for (let i = 1; i < data.length; i++) {
-            if (String(data[i][teacherNameColIdx]).trim() === teacherName) {
-                const isRead = data[i][isReadColIdx];
-                if (isRead === false || String(isRead).toUpperCase() === "FALSE") {
-                    notifSheet.getRange(i + 1, isReadColIdx + 1).setValue(true);
-                    markedCount++;
-                }
-            }
-        }
-        if (markedCount > 0) SpreadsheetApp.flush();
-        return { success: true, message: `${markedCount} notifikasi ditandai sudah dibaca.` };
-
-    } catch (e) {
-        Logger.log(`Error in markAllInAppNotificationsAsRead for ${teacherName}: ${e.toString()}`);
-        return { success: false, error: `Gagal menandai semua notifikasi: ${e.message}` };
-    }
 }
 
 /**
