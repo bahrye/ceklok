@@ -841,6 +841,83 @@
       background-color: #ccc !important;
       color: #666 !important;
     }
+
+    /* CSS untuk Export Excel Collapsible */
+    .collapsible-excel-export {
+      margin-top: 30px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      background-color: #f9f9f9;
+    }
+
+    .collapsible-trigger {
+      background-color: var(--secondary);
+      color: var(--white);
+      padding: 12px 20px;
+      width: 100%;
+      text-align: left;
+      border: none;
+      outline: none;
+      font-size: 1.1em;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+      transition: background-color 0.3s ease;
+    }
+
+    .collapsible-trigger:hover {
+      background-color: var(--primary);
+    }
+
+    .arrow-icon {
+      transition: transform 0.3s ease;
+      font-size: 1em;
+      margin-left: 10px;
+    }
+
+    .arrow-icon.down::before {
+      content: "\25BC"; /* Panah ke bawah */
+      display: inline-block;
+    }
+
+    .arrow-icon.up::before {
+      content: "\25B2"; /* Panah ke atas */
+      display: inline-block;
+    }
+
+    .collapsible-content {
+      padding: 20px;
+      border-top: 1px solid #ddd;
+      /* display: none; /* Konten disembunyikan via JS awalnya */
+    }
+
+    .collapsible-content .form-group {
+        margin-bottom: 15px;
+    }
+    .collapsible-content .form-group label {
+        font-weight: bold;
+        display: block;
+        margin-bottom: 5px;
+    }
+    .collapsible-content .form-group input[type="text"] {
+        width: auto;
+        max-width: 250px;
+        display: inline-block;
+        margin-right: 10px;
+        vertical-align: middle;
+    }
+    .collapsible-content .form-group button {
+        vertical-align: middle;
+    }
+    .collapsible-content .form-group small {
+        display: block;
+        margin-top: 8px;
+        font-style: italic;
+        color: var(--grey-text);
+    }
   </style>
 </head>
 <body>
@@ -5911,6 +5988,26 @@
                 }
             })
             .resetActivityLog(timeframeIdentifier); // Memanggil fungsi di Google Apps Script
+    }
+
+    function toggleExcelExportSection(triggerButton) {
+        const content = triggerButton.nextElementSibling;
+        const arrowIcon = triggerButton.querySelector('.arrow-icon');
+
+        if (!content || !arrowIcon) {
+            console.error("Element collapsible atau arrow icon tidak ditemukan.");
+            return;
+        }
+
+        if (content.style.display === "none" || content.style.display === "") {
+            content.style.display = "block";
+            arrowIcon.classList.remove('down');
+            arrowIcon.classList.add('up');
+        } else {
+            content.style.display = "none";
+            arrowIcon.classList.remove('up');
+            arrowIcon.classList.add('down');
+        }
     }
   </script>
 </body>
