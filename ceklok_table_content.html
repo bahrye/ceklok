@@ -53,18 +53,18 @@
     <label style="font-weight: bold; font-size: 1.1em; color: var(--text);">Pilih Bulan dan Tahun Ceklok</label>
   </div>
 
-  <div class="form-row" 
-       style="justify-content: center; 
-              align-items: center;    
-              margin-bottom: 20px; 
-              gap: 8px; 
+  <div class="form-row"
+       style="justify-content: center;
+              align-items: center;
+              margin-bottom: 20px;
+              gap: 8px;
               ">
-      
-      <select id="ceklokBulanSelect" title="Pilih Bulan" 
-              style="padding: 8px 10px; 
-                     border-radius: 5px; 
-                     border: 1px solid var(--border-color); 
-                     min-width: 130px; 
+
+      <select id="ceklokBulanSelect" title="Pilih Bulan"
+              style="padding: 8px 10px;
+                     border-radius: 5px;
+                     border: 1px solid var(--border-color);
+                     min-width: 130px;
                      font-size: 1em;">
         <option value="01">Januari</option>
         <option value="02">Februari</option>
@@ -79,30 +79,30 @@
         <option value="11">November</option>
         <option value="12">Desember</option>
       </select>
-      
+
       <span style="font-weight: bold;
-                     font-size: 1.5em; 
+                     font-size: 1.5em;
                      color: var(--grey-text);
-                     line-height: 1; 
-                     padding: 0 2px; 
+                     line-height: 1;
+                     padding: 0 2px;
                      ">/</span>
-      
-      <select id="ceklokTahunSelect" title="Pilih Tahun" 
-              style="padding: 8px 10px; 
-                     border-radius: 5px; 
-                     border: 1px solid var(--border-color); 
-                     min-width: 110px; 
+
+      <select id="ceklokTahunSelect" title="Pilih Tahun"
+              style="padding: 8px 10px;
+                     border-radius: 5px;
+                     border: 1px solid var(--border-color);
+                     min-width: 110px;
                      font-size: 1em;">
         </select>
-      
-      <button id="btnLoadCeklokDataByMonth" onclick="loadCeklokDataForSelectedMonth()" 
-              style="margin-left: 12px; 
-                     padding: 9px 15px; 
+
+      <button id="btnLoadCeklokDataByMonth" onclick="loadCeklokDataForSelectedMonth()"
+              style="margin-left: 12px;
+                     padding: 9px 15px;
                      font-size: 0.95em;">Muat Data</button>
   </div>
   <p style="text-align:center;"><strong>Data untuk Bulan:</strong> <span id="ceklokBulanTahunDisplay">Bulan/Tahun</span></p>
   <div id="ceklokLockMessage" style="display:none; color:var(--danger); text-align:center; margin-bottom:10px; font-weight:bold; padding:8px; background-color:#ffebee; border:1px solid var(--danger); border-radius:4px;"></div>
-  
+
   <div class="table-container">
     <table>
       <thead>
@@ -117,36 +117,40 @@
       </tbody>
     </table>
   </div>
-  
+
   <div class="btn-container">
     <button id="btnSimpanCeklok" onclick="submitCeklokData()">Simpan Data Ceklok</button>
     <span id="ceklokTombolKembaliContainer" style="display:inline-block;">
-      <button onclick="goBackToAdminDashboard()">Kembali ke Dashboard</button> 
+      <button onclick="goBackToAdminDashboard()">Kembali ke Dashboard</button>
     </span>
     <button onclick="navigateToHasilCeklok()">Lihat Hasil Ceklok</button>
   </div>
 
-  <div style="margin-top: 30px; padding-top:20px; border-top: 1px solid #eee; background-color: #f9f9f9; border-radius: 8px; padding: 20px;">
-    <h4 style="margin-top:0; color: var(--primary);">== Export File Excel ==</h4>
-    <p style="font-size:0.9em; color: var(--grey-text);">Fitur ini bisa digunakan untuk membuat file excel yang dapat di UPLOAD EXCEL ke absensi aplikasi EMIS sehingga tidak perlu menginput absensi 2X. Tinggal download, upload, dan otomatis jam masuk dan jam pulang di EMIS terisi.
-    <br><br>Langkah-langkahnya:
-    <br>1. Silahkan Download Template Absensi EMIS terlebih dahulu (EMIS : Absensi > Aksi > Lihat Detail > DOWNLOAD TEMPLATE), kemudian buka dan catat LOCK ID yang paling pertama.
-    <br>2. Jika sudah dicatat LOCK ID-nya, silahkan dimasukkan di kotak LOCK_ID di bawah lalu klik Simpan Lock_ID.
-    <br>3. Setelah diklik dan berhasil, maka tombol Download File Excel bisa diklik. Silahkan di klik.
-    <br>4. Jika sudah terdownload, silahkan upload ke Aplikasi EMIS : Absensi > Aksi > Lihat Detail > UPLOAD EXCEL.</p>
-    
-    <div class="form-group" style="margin-bottom:15px;">
-      <label for="lockIdInput" style="font-weight:bold;">LOCK_ID (Ambil Dari Template EMIS):</label>
-      <input type="text" id="lockIdInput" placeholder="Masukkan LOCK ID disini" style="max-width: 250px; display: inline-block; margin-right: 10px; vertical-align: middle;">
-      <button id="btnSimpanLockIdClient" onclick="handleSimpanLockIdClientSite()" style="vertical-align: middle;">Simpan LOCK ID</button>
-    </div>
-    
-    <div class="form-group">
-      <button id="btnExportExcelClient" onclick="handleExportExcelClientSite()" class="btn-greyed-out" disabled style="padding: 10px 15px;">Download File Excel</button>
-      <small id="lockIdStatusMessage" style="display: block; margin-top: 8px; font-style: italic;"></small>
+  <div class="collapsible-excel-export">
+    <button class="collapsible-trigger" onclick="toggleExcelExportSection(this)">
+      Export File Excel Ke EMIS
+      <span class="arrow-icon down"></span>
+    </button>
+    <div class="collapsible-content" style="display: none;">
+      <p style="font-size:0.9em; color: var(--grey-text); margin-top:0;">Fitur ini bisa digunakan untuk membuat file excel yang dapat di UPLOAD EXCEL ke absensi aplikasi EMIS sehingga tidak perlu menginput absensi 2X. Tinggal download, upload, dan otomatis jam masuk dan jam pulang di EMIS terisi.
+      <br><br>Langkah-langkahnya:
+      <br>1. Silahkan Download Template Absensi EMIS terlebih dahulu (EMIS : Absensi > Aksi > Lihat Detail > DOWNLOAD TEMPLATE), kemudian buka dan catat LOCK ID yang paling pertama.
+      <br>2. Jika sudah dicatat LOCK ID-nya, silahkan dimasukkan di kotak LOCK_ID di bawah lalu klik Simpan Lock_ID.
+      <br>3. Setelah diklik dan berhasil, maka tombol Download File Excel bisa diklik. Silahkan di klik.
+      <br>4. Jika sudah terdownload, silahkan upload ke Aplikasi EMIS : Absensi > Aksi > Lihat Detail > UPLOAD EXCEL.</p>
+
+      <div class="form-group" style="margin-bottom:15px;">
+        <label for="lockIdInput" style="font-weight:bold;">LOCK_ID (Ambil Dari Template EMIS):</label>
+        <input type="text" id="lockIdInput" placeholder="Masukkan LOCK ID disini" style="max-width: 250px; display: inline-block; margin-right: 10px; vertical-align: middle;">
+        <button id="btnSimpanLockIdClient" onclick="handleSimpanLockIdClientSite()" style="vertical-align: middle;">Simpan LOCK ID</button>
+      </div>
+
+      <div class="form-group">
+        <button id="btnExportExcelClient" onclick="handleExportExcelClientSite()" class="btn-greyed-out" disabled style="padding: 10px 15px;">Download File Excel</button>
+        <small id="lockIdStatusMessage" style="display: block; margin-top: 8px; font-style: italic;"></small>
+      </div>
     </div>
   </div>
-
   <div id="summaryDetailModal" class="modal-overlay" style="display:none; z-index: 20003;"> <div class="modal-content" style="max-width: 500px;">
       <span class="modal-close-button" onclick="closeSummaryDetailModal()">&times;</span>
       <h3 id="summaryDetailModalTitle">Detail</h3>
@@ -165,30 +169,30 @@
     background-color: #ccc !important;
     color: #666 !important;
     cursor: not-allowed !important;
-    border: 1px solid #bbb; 
+    border: 1px solid #bbb;
   }
   .btn-greyed-out:hover {
-    background-color: #ccc !important; 
+    background-color: #ccc !important;
     color: #666 !important;
   }
   .btn-ready-export {
-    background-color: var(--success) !important; 
+    background-color: var(--success) !important;
     color: white !important;
     cursor: pointer !important;
     border: 1px solid var(--success-hover);
   }
   .btn-ready-export:hover {
-    background-color: var(--success-hover) !important; 
+    background-color: var(--success-hover) !important;
   }
 
-  /* BARU: Style untuk item ringkasan yang bisa diklik */
+  /* Style untuk item ringkasan yang bisa diklik */
   .clickable-summary-item {
     cursor: pointer;
   }
   .clickable-summary-item:hover {
     background-color: #e9ecef; /* Warna hover ringan */
   }
-  /* BARU: Style untuk list di dalam modal */
+  /* Style untuk list di dalam modal */
   #summaryDetailModalBody ul {
     list-style-type: none;
     padding-left: 0;
@@ -207,5 +211,84 @@
   }
   #summaryDetailModalBody li span.modal-item-date:hover {
     color: var(--secondary);
+  }
+
+  /* CSS untuk Export Excel Collapsible (Tambahkan ini jika belum ada di style global) */
+  .collapsible-excel-export {
+    margin-top: 30px;
+    border: 1px solid #ddd; /* Border lebih halus */
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: #f9f9f9; /* Latar belakang untuk keseluruhan collapsible */
+  }
+
+  .collapsible-trigger {
+    background-color: var(--secondary); /* Warna trigger sedikit beda atau sama dg primary */
+    color: var(--white);
+    padding: 12px 20px; /* Padding konsisten */
+    width: 100%;
+    text-align: left;
+    border: none;
+    outline: none;
+    font-size: 1.1em;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+  }
+
+  .collapsible-trigger:hover {
+    background-color: var(--primary); /* Warna hover */
+  }
+
+  .arrow-icon {
+    transition: transform 0.3s ease;
+    font-size: 1em; /* Ukuran panah sedikit lebih besar */
+    margin-left: 10px;
+  }
+
+  .arrow-icon.down::before {
+    content: "\25BC"; /* Panah ke bawah */
+    display: inline-block;
+  }
+
+  .arrow-icon.up::before {
+    content: "\25B2"; /* Panah ke atas */
+    display: inline-block;
+  }
+
+  .collapsible-content {
+    padding: 20px;
+    /* background-color: #f9f9f9; Dihapus karena sudah di .collapsible-excel-export */
+    border-top: 1px solid #ddd; /* Garis pemisah jika trigger dan konten beda bg */
+    /* display: none; /* Konten disembunyikan via JS awalnya */
+  }
+
+  /* Pastikan elemen form di dalam konten collapsible tetap terlihat baik */
+  .collapsible-content .form-group {
+      margin-bottom: 15px;
+  }
+  .collapsible-content .form-group label {
+      font-weight: bold;
+      display: block; /* Pastikan label adalah block untuk layout yang baik */
+      margin-bottom: 5px;
+  }
+  .collapsible-content .form-group input[type="text"] {
+      width: auto; /* Sesuaikan jika perlu, atau 100% jika ingin mengisi penuh */
+      max-width: 250px; /* Seperti sebelumnya */
+      display: inline-block;
+      margin-right: 10px;
+      vertical-align: middle;
+  }
+  .collapsible-content .form-group button {
+      vertical-align: middle;
+  }
+  .collapsible-content .form-group small {
+      display: block;
+      margin-top: 8px;
+      font-style: italic;
+      color: var(--grey-text);
   }
 </style>
