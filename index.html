@@ -2351,38 +2351,64 @@
         if (!rekapInfoBulanEl || !rekapTableTheadEl || !rekapTableTbodyEl || !rekapControlsContainer || !rekapBulanSelectEl || !rekapTahunSelectEl) {
             console.error("Elemen UI penting untuk rekap bulanan tidak ditemukan.");
             showAlert("Gagal memuat komponen halaman rekap.", "error");
-            hideLoading();
+            hideLoading(); // Pastikan loading disembunyikan jika ada error di awal
             return;
         }
         
-        // Jika ada data defaultMonthForRekap, gunakan itu, jika tidak, gunakan activeCeklokMonthYear, fallback ke globalServerCurrentMonthYear
-        const monthYearToLoad = data.defaultMonthForRekap || activeCeklokMonthYear || globalServerCurrentMonthYear;
-        activeRekapMonthYear = null;
+        activeRekapMonthYear = null; // Reset periode rekap aktif
 
-        if (monthYearToLoad && /^\d{2}\/\d{4}$/.test(monthYearToLoad)) {
-            rekapControlsContainer.style.display = 'none'; 
-            if(rekapInfoBulanEl) rekapInfoBulanEl.textContent = monthYearToLoad;
-            if(rekapTableTheadEl) rekapTableTheadEl.innerHTML = "";
-            if(rekapTableTbodyEl) rekapTableTbodyEl.innerHTML = `<tr><td colspan="1" style="text-align:center; padding:20px;">Memuat data rekap untuk ${monthYearToLoad}...</td></tr>`;
-            window.scrollTo(0, 0);
-            loadMonthlyRekap(monthYearToLoad);
-        } else {
-            hideLoading(); 
+        // Periksa peran pengguna
+        const isAdminOrSuperAdmin = loggedInUser && (loggedInUser.role === ROLE_ADMIN || loggedInUser.role === ROLE_SUPERADMIN);
+
+        if (isAdminOrSuperAdmin) {
+            // Untuk Admin/Superadmin: selalu tampilkan kontrol pemilihan periode
+            hideLoading(); // Sembunyikan loading jika ada yang aktif sebelumnya
             rekapControlsContainer.style.display = 'block'; 
-            showAlert("Periode default tidak dapat ditentukan. Silakan pilih periode manual.", "warning");
             if(rekapInfoBulanEl) rekapInfoBulanEl.textContent = "Periode Belum Dipilih";
+            if(rekapTableTheadEl) rekapTableTheadEl.innerHTML = ""; // Kosongkan header tabel lama
             if(rekapTableTbodyEl) rekapTableTbodyEl.innerHTML = `<tr><td colspan="1" style="text-align:center; padding:15px;">Silakan pilih Bulan dan Tahun, lalu klik "Tampilkan Rekap".</td></tr>`;
 
-            const fallbackYear = getYearFromMMYYYY(globalServerCurrentMonthYear) || new Date().getFullYear();
-            const fallbackMonth = getMonthStrFromMMYYYY(globalServerCurrentMonthYear) || String(new Date().getMonth() + 1).padStart(2, '0');
-            const minAllowedYearPopulate = getYearFromMMYYYY(globalAdminMinMonthYear) || new Date().getFullYear() - 5;
-            const maxAllowedYearPopulate = getYearFromMMYYYY(globalServerCurrentMonthYear) || new Date().getFullYear();
+            // Ambil tahun dan bulan default (misalnya, bulan server saat ini)
+            // dan batas minimum/maksimum untuk dropdown
+            const defaultYearForDropdown = getYearFromMMYYYY(globalServerCurrentMonthYear) || new Date().getFullYear();
+            const defaultMonthForDropdown = getMonthStrFromMMYYYY(globalServerCurrentMonthYear) || String(new Date().getMonth() + 1).padStart(2, '0');
+            
+            const minAllowedYearForDropdown = getYearFromMMYYYY(globalAdminMinMonthYear) || (new Date().getFullYear() - 5); // Batas bawah dari Setting A1
+            const maxAllowedYearForDropdown = getYearFromMMYYYY(globalServerCurrentMonthYear) || new Date().getFullYear(); // Batas atas adalah bulan server
 
-            populateYearSelect('rekapTahunSelect', minAllowedYearPopulate, maxAllowedYearPopulate, fallbackYear);
-            if(rekapBulanSelectEl) rekapBulanSelectEl.value = fallbackMonth;
+            populateYearSelect('rekapTahunSelect', minAllowedYearForDropdown, maxAllowedYearForDropdown, defaultYearForDropdown);
+            if(rekapBulanSelectEl) rekapBulanSelectEl.value = defaultMonthForDropdown;
+            
+            // Validasi rentang bulan yang bisa dipilih berdasarkan tahun yang terpilih dan batasan global
             validateMonthRange('rekapBulanSelect', 'rekapTahunSelect');
-            window.scrollTo(0, 0);
+
+        } else { // Untuk pengguna biasa (ROLE_USER)
+            // Muat rekap untuk periode default pengguna (perilaku lama)
+            const monthYearToLoadForUser = data.defaultMonthForRekap || activeCeklokMonthYear || globalServerCurrentMonthYear;
+            if (monthYearToLoadForUser && /^\d{2}\/\d{4}$/.test(monthYearToLoadForUser)) {
+                rekapControlsContainer.style.display = 'none'; // Sembunyikan kontrol pemilihan
+                if(rekapInfoBulanEl) rekapInfoBulanEl.textContent = monthYearToLoadForUser;
+                if(rekapTableTheadEl) rekapTableTheadEl.innerHTML = "";
+                if(rekapTableTbodyEl) rekapTableTbodyEl.innerHTML = `<tr><td colspan="1" style="text-align:center; padding:20px;">Memuat data rekap untuk ${monthYearToLoadForUser}...</td></tr>`;
+                loadMonthlyRekap(monthYearToLoadForUser); // Fungsi ini akan memanggil showLoading() di dalamnya
+            } else {
+                // Fallback jika periode default pengguna tidak valid (seharusnya jarang terjadi)
+                hideLoading();
+                rekapControlsContainer.style.display = 'block'; 
+                showAlert("Periode default tidak dapat ditentukan. Silakan pilih periode manual.", "warning");
+                if(rekapInfoBulanEl) rekapInfoBulanEl.textContent = "Periode Belum Dipilih";
+                if(rekapTableTbodyEl) rekapTableTbodyEl.innerHTML = `<tr><td colspan="1" style="text-align:center; padding:15px;">Kesalahan: Periode tidak valid.</td></tr>`;
+                 // Anda bisa memilih untuk mengisi dropdown di sini juga sebagai fallback
+                const fallbackYear = getYearFromMMYYYY(globalServerCurrentMonthYear) || new Date().getFullYear();
+                const fallbackMonth = getMonthStrFromMMYYYY(globalServerCurrentMonthYear) || String(new Date().getMonth() + 1).padStart(2, '0');
+                const minAllowedYearPopulate = getYearFromMMYYYY(globalAdminMinMonthYear) || new Date().getFullYear() - 5;
+                const maxAllowedYearPopulate = getYearFromMMYYYY(globalServerCurrentMonthYear) || new Date().getFullYear();
+                populateYearSelect('rekapTahunSelect', minAllowedYearPopulate, maxAllowedYearPopulate, fallbackYear);
+                if(rekapBulanSelectEl) rekapBulanSelectEl.value = fallbackMonth;
+                validateMonthRange('rekapBulanSelect', 'rekapTahunSelect');
+            }
         }
+        window.scrollTo(0, 0); // Scroll ke atas halaman
     }
 
 
@@ -4679,13 +4705,19 @@
     let currentLogFiltersGlobal = {}; // Untuk menyimpan state filter saat ini
 
     // Fungsi setupActivityLogView (diperbarui)
+    // Fungsi setupActivityLogView (diperbarui)
     function setupActivityLogView() {
         window.scrollTo(0, 0);
         currentLogPage = 1; 
         currentLogSortColumn = 'timestamp_internal_sort'; // Reset ke default sort saat view dimuat
-        currentLogSortDirection = 'desc';
+        currentLogSortDirection = 'desc'; // Default direction (newest first)
 
+        // Panggil fungsi untuk mereset filter ke keadaan default
+        // false berarti tidak langsung memuat data, karena loadActivityLogWithFilters() akan dipanggil setelah ini
         resetActivityLogFilters(false); 
+
+        // Panggil loadActivityLogWithFilters() untuk memuat data log awal dengan filter default (jika ada) dan sorting
+        // Fungsi ini juga akan menangani tampilan loading dan error jika ada
         loadActivityLogWithFilters();   
 
         // Tambahkan event listener ke header yang bisa disortir
@@ -4697,6 +4729,19 @@
                 }
             };
         });
+
+        // Menampilkan atau menyembunyikan bagian reset log berdasarkan peran pengguna
+        const resetLogSection = document.getElementById('resetLogSectionContainer');
+        if (resetLogSection) {
+            if (loggedInUser && loggedInUser.role === ROLE_SUPERADMIN) {
+                resetLogSection.style.display = 'block';
+            } else {
+                resetLogSection.style.display = 'none';
+            }
+        }
+        // Jika loadActivityLogWithFilters() tidak dipanggil di atas (misalnya, jika resetActivityLogFilters(true) digunakan),
+        // maka pemanggilan eksplisit loadActivityLogWithFilters() atau loadActivityLogData() (jika ada) diperlukan di sini.
+        // Namun, berdasarkan implementasi sebelumnya, resetActivityLogFilters(false) diikuti loadActivityLogWithFilters() sudah cukup.
     }
 
     // Fungsi loadActivityLogWithFilters yang sudah dimodifikasi
@@ -5729,6 +5774,143 @@
         if (modal) {
             modal.style.display = 'none';
         }
+    }
+
+    // Fungsi untuk memuat dan menampilkan daftar bulan yang terkunci
+    // di dashboard admin. (Letakkan di dalam tag <script> di index.html)
+    function loadLockedMonthsForAdminDisplay() {
+        const displayDiv = document.getElementById('lockedMonthsDisplay');
+        if (!displayDiv) {
+            console.error("Elemen 'lockedMonthsDisplay' tidak ditemukan.");
+            return;
+        }
+
+        displayDiv.innerHTML = '<i>Memuat daftar bulan terkunci...</i>';
+        // Tidak perlu showLoading() global jika hanya memuat bagian kecil ini,
+        // kecuali jika prosesnya dirasa cukup lama.
+
+        google.script.run
+            .withSuccessHandler(response => {
+                if (response.success) {
+                    const lockedMonths = response.months;
+                    if (lockedMonths && lockedMonths.length > 0) {
+                        // Sortir bulan, misalnya dari yang terbaru
+                        lockedMonths.sort((a, b) => {
+                            const [m1, y1] = a.split('/').map(Number);
+                            const [m2, y2] = b.split('/').map(Number);
+                            if (y1 !== y2) return y2 - y1;
+                            return m2 - m1;
+                        });
+
+                        let html = '<ul style="list-style-type: none; padding-left: 0; margin-top:0;">';
+                        lockedMonths.forEach(monthYear => {
+                            html += `<li style="padding: 6px 0; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center;">
+                                       <span>${monthYear}</span>
+                                       <button onclick="handleUnlockThisMonth('${monthYear}')" class="btn-danger" style="font-size:0.85em; padding:4px 8px; margin-left:10px;">Buka Kunci</button>
+                                     </li>`;
+                        });
+                        html += '</ul>';
+                        displayDiv.innerHTML = html;
+                    } else {
+                        displayDiv.innerHTML = '<p style="text-align:center; color: #555; font-style:italic;">Tidak ada bulan yang terkunci saat ini.</p>';
+                    }
+                } else {
+                    displayDiv.innerHTML = `<p style="color:red;">Gagal memuat daftar: ${response.error}</p>`;
+                    // showAlert(response.error || "Gagal memuat daftar bulan terkunci.", 'error'); // Opsional, tergantung preferensi notifikasi
+                }
+            })
+            .withFailureHandler(err => {
+                displayDiv.innerHTML = `<p style="color:red;">Error server: ${err.message}</p>`;
+                // showAlert(`Error server: ${err.message}`, 'error'); // Opsional
+            })
+            .getLockedMonths();
+    }
+
+    // Fungsi untuk menampilkan dialog konfirmasi sebelum mereset log aktivitas
+    function confirmResetActivityLog(timeframeIdentifier) {
+        let message = "Apakah Anda yakin ingin menghapus log aktivitas";
+        let timeframeText = "";
+
+        switch (timeframeIdentifier) {
+            case 'today': timeframeText = "yang dibuat HARI INI"; break;
+            case 'yesterday': timeframeText = "yang dibuat KEMARIN"; break;
+            case 'older_than_3_days': timeframeText = "yang berumur 3 HARI ATAU LEBIH LAMA"; break;
+            case 'older_than_5_days': timeframeText = "yang berumur 5 HARI ATAU LEBIH LAMA"; break;
+            case 'older_than_1_week': timeframeText = "yang berumur 1 MINGGU ATAU LEBIH LAMA"; break;
+            case 'older_than_3_weeks': timeframeText = "yang berumur 3 MINGGU ATAU LEBIH LAMA"; break;
+            case 'older_than_1_month': timeframeText = "yang berumur 1 BULAN ATAU LEBIH LAMA"; break;
+            case 'older_than_3_months': timeframeText = "yang berumur 3 BULAN ATAU LEBIH LAMA"; break;
+            case 'older_than_6_months': timeframeText = "yang berumur 6 BULAN ATAU LEBIH LAMA"; break;
+            case 'older_than_9_months': timeframeText = "yang berumur 9 BULAN ATAU LEBIH LAMA"; break;
+            case 'older_than_1_year': timeframeText = "yang berumur 1 TAHUN ATAU LEBIH LAMA"; break;
+            case 'all': timeframeText = "SEMUA LOG AKTIVITAS"; break;
+            default:
+                // Menggunakan customAlert yang sudah ada di proyek Anda
+                if (typeof customAlert === "function") {
+                    customAlert("Periode reset tidak dikenal.", "error");
+                } else {
+                    alert("Periode reset tidak dikenal."); // Fallback ke alert standar
+                }
+                return;
+        }
+
+        message += ` ${timeframeText}? Tindakan ini permanen dan tidak dapat diurungkan.`;
+
+        // Menggunakan customConfirm yang sudah ada di proyek Anda
+        if (typeof customConfirm === "function") {
+            customConfirm(message, function(isConfirmed) {
+                if (isConfirmed) {
+                    performResetActivityLog(timeframeIdentifier);
+                }
+            });
+        } else { // Fallback ke confirm standar jika customConfirm tidak ada
+            if (confirm(message)) {
+                performResetActivityLog(timeframeIdentifier);
+            }
+        }
+    }
+
+    // Fungsi untuk memanggil backend dan melakukan reset log aktivitas
+    function performResetActivityLog(timeframeIdentifier) {
+        showLoading("Sedang mereset log aktivitas..."); // Asumsi showLoading sudah ada
+        google.script.run
+            .withSuccessHandler(response => {
+                hideLoading(); // Asumsi hideLoading sudah ada
+                if (response.success) {
+                    // Menggunakan customAlert yang sudah ada
+                    if (typeof customAlert === "function") {
+                        customAlert(response.message || "Log aktivitas berhasil direset.", "success");
+                    } else {
+                        alert(response.message || "Log aktivitas berhasil direset.");
+                    }
+                    
+                    // Muat ulang data log untuk melihat perubahan
+                    // Panggil fungsi yang sesuai untuk memuat ulang tabel log Anda
+                    if (typeof loadActivityLogData === "function") { // Jika Anda punya fungsi spesifik ini
+                        loadActivityLogData();
+                    } else if (typeof loadActivityLogWithFilters === "function") { // Atau fungsi ini
+                        loadActivityLogWithFilters();
+                    } else {
+                        // Jika tidak ada fungsi spesifik, mungkin render ulang view activity_log
+                        renderView('activity_log');
+                    }
+                } else {
+                    if (typeof customAlert === "function") {
+                        customAlert(response.error || "Gagal mereset log aktivitas.", "error");
+                    } else {
+                        alert(response.error || "Gagal mereset log aktivitas.");
+                    }
+                }
+            })
+            .withFailureHandler(err => {
+                hideLoading();
+                if (typeof customAlert === "function") {
+                    customAlert(`Error server saat mereset log: ${err.message}`, "error");
+                } else {
+                    alert(`Error server saat mereset log: ${err.message}`);
+                }
+            })
+            .resetActivityLog(timeframeIdentifier); // Memanggil fungsi di Google Apps Script
     }
   </script>
 </body>
