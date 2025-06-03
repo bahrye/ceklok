@@ -4905,3 +4905,207 @@ function getYearlyAttendanceData(teacherName, year) {
     return { success: false, error: `Gagal memproses data kehadiran tahunan: ${e.message}` };
   }
 }
+
+// Letakkan ini di dalam file .gs atau di dalam tag <script> di code.gs.html
+
+// Pastikan konstanta ini sudah didefinisikan secara global di skrip Anda
+// const ROLE_SUPERADMIN = "superadmin"; // Contoh, sesuaikan dengan definisi di proyek Anda
+// const USERS_SHEET_NAME = "Users"; // Pastikan ini nama sheet pengguna Anda
+// const ACTIVITY_LOG_SHEET_NAME = "Activity_Log"; // Contoh, sesuaikan
+
+/**
+ * Mereset (menghapus) log aktivitas berdasarkan periode waktu yang dipilih.
+ * Hanya bisa diakses oleh Superadmin.
+ *
+ * @param {string} timeframeIdentifier String yang mengidentifikasi periode penghapusan.
+ * @return {object} Objek hasil operasi {success: boolean, message/error: string}.
+ */
+function resetActivityLog(timeframeIdentifier) {
+  let lock; // Deklarasikan lock di sini agar bisa diakses di finally
+  let currentUser = { email: '', role: '', username: '' }; // Inisialisasi objek currentUser
+
+  try {
+    lock = LockService.getScriptLock();
+
+    if (!lock) {
+      Logger.log("resetActivityLog: LockService.getScriptLock() gagal mengembalikan objek lock.");
+      return { success: false, error: "Gagal menginisialisasi mekanisme penguncian internal." };
+    }
+
+    if (!lock.tryLock(30000)) { // Coba kunci selama 30 detik
+      Logger.log("resetActivityLog: Gagal mendapatkan lock (timeout atau sudah terkunci oleh proses lain).");
+      return { success: false, error: "Server sedang sibuk atau ada proses lain yang berjalan. Coba beberapa saat lagi." };
+    }
+    Logger.log(`resetActivityLog: Lock diperoleh. Memproses timeframe: ${timeframeIdentifier}`);
+
+    // Ambil informasi pengguna yang sedang aktif
+    const activeUserEmail = Session.getActiveUser().getEmail();
+    currentUser.email = activeUserEmail; // Simpan email aktif
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const usersSheetForRole = ss.getSheetByName(USERS_SHEET_NAME); 
+    if (usersSheetForRole && activeUserEmail) {
+        const usersData = usersSheetForRole.getDataRange().getValues();
+        const userHeaders = usersData[0].map(h => String(h).trim().toLowerCase());
+        const usernameColIdx = userHeaders.indexOf("username");
+        const roleColIdx = userHeaders.indexOf("role");
+        const googleEmailColIdx = userHeaders.indexOf("googleemail"); 
+        const primaryEmailColIdx = userHeaders.indexOf("primaryemail");
+
+        let foundUserForRole = false;
+        for (let i = 1; i < usersData.length; i++) {
+            const sheetUsername = usersData[i][usernameColIdx] ? String(usersData[i][usernameColIdx]).trim().toLowerCase() : "";
+            const sheetGoogleEmail = (googleEmailColIdx > -1 && usersData[i][googleEmailColIdx]) ? String(usersData[i][googleEmailColIdx]).trim().toLowerCase() : "";
+            const sheetPrimaryEmail = (primaryEmailColIdx > -1 && usersData[i][primaryEmailColIdx]) ? String(usersData[i][primaryEmailColIdx]).trim().toLowerCase() : "";
+
+            if ((sheetGoogleEmail && sheetGoogleEmail === activeUserEmail.toLowerCase()) ||
+                (sheetPrimaryEmail && sheetPrimaryEmail === activeUserEmail.toLowerCase()) ||
+                sheetUsername === activeUserEmail.toLowerCase()) {
+                currentUser.role = String(usersData[i][roleColIdx]).trim();
+                currentUser.username = sheetUsername; // Simpan username asli pengguna
+                foundUserForRole = true;
+                break;
+            }
+        }
+        if (!foundUserForRole) {
+             Logger.log(`resetActivityLog: Tidak dapat menemukan peran untuk pengguna aktif ${activeUserEmail}. Menganggap peran tidak memadai.`);
+             // Jika peran tidak ditemukan, anggap bukan superadmin untuk keamanan
+             currentUser.role = "unknown"; 
+        }
+        Logger.log(`DEBUG resetActivityLog - Email Aktif: ${activeUserEmail}, Username Ditemukan dari Sheet: '${currentUser.username}', Peran Ditemukan dari Sheet: '${currentUser.role}', Konstanta ROLE_SUPERADMIN: '${ROLE_SUPERADMIN}'`);
+    } else {
+        Logger.log("resetActivityLog: Sheet Users atau email pengguna aktif tidak tersedia untuk verifikasi peran.");
+        currentUser.role = "unknown"; // Default jika tidak bisa verifikasi
+        Logger.log(`DEBUG resetActivityLog (Sheet/Email tidak ada) - Email Aktif: ${activeUserEmail}, Peran Ditemukan: '${currentUser.role}', Konstanta ROLE_SUPERADMIN: '${ROLE_SUPERADMIN}'`);
+    }
+
+    if (currentUser.role !== ROLE_SUPERADMIN) {
+      Logger.log(`resetActivityLog: Akses ditolak. Pengguna aktual: ${currentUser.email}, Peran aktual terdeteksi: '${currentUser.role}', Peran yang diharapkan untuk akses: '${ROLE_SUPERADMIN}'`);
+      return { success: false, error: "Akses ditolak. Hanya Superadmin yang dapat mereset log." };
+    }
+
+    const logSheet = ss.getSheetByName(ACTIVITY_LOG_SHEET_NAME);
+    if (!logSheet) {
+      Logger.log(`resetActivityLog: Sheet log '${ACTIVITY_LOG_SHEET_NAME}' tidak ditemukan.`);
+      return { success: false, error: `Sheet log aktivitas dengan nama '${ACTIVITY_LOG_SHEET_NAME}' tidak ditemukan.` };
+    }
+
+    const dataRange = logSheet.getDataRange();
+    const logs = dataRange.getValues();
+    
+    if (logs.length <= 1) { 
+      return { success: true, message: "Tidak ada log aktivitas untuk direset." };
+    }
+
+    const header = logs[0]; 
+    const timestampColIndex = 0; // Kolom pertama (indeks 0) adalah 'Waktu' atau Timestamp
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); 
+    let deletePredicate; 
+
+    Logger.log(`Menentukan predikat hapus untuk: ${timeframeIdentifier}`);
+
+    switch (timeframeIdentifier) {
+      case 'today':
+        deletePredicate = (logTimestamp) => {
+          const d = new Date(logTimestamp);
+          return d.getFullYear() === todayStart.getFullYear() &&
+                 d.getMonth() === todayStart.getMonth() &&
+                 d.getDate() === todayStart.getDate();
+        };
+        break;
+      case 'yesterday':
+        const yesterdayStart = new Date(todayStart);
+        yesterdayStart.setDate(todayStart.getDate() - 1);
+        deletePredicate = (logTimestamp) => {
+          const d = new Date(logTimestamp);
+          return d.getFullYear() === yesterdayStart.getFullYear() &&
+                 d.getMonth() === yesterdayStart.getMonth() &&
+                 d.getDate() === yesterdayStart.getDate();
+        };
+        break;
+      default: 
+        let cutoffDateLimit; 
+        if (timeframeIdentifier === 'all') {
+            deletePredicate = () => true; 
+        } else {
+            cutoffDateLimit = new Date(todayStart); 
+            if (timeframeIdentifier === 'older_than_3_days') cutoffDateLimit.setDate(todayStart.getDate() - (3 - 1));
+            else if (timeframeIdentifier === 'older_than_5_days') cutoffDateLimit.setDate(todayStart.getDate() - (5 - 1));
+            else if (timeframeIdentifier === 'older_than_1_week') cutoffDateLimit.setDate(todayStart.getDate() - (7 - 1));
+            else if (timeframeIdentifier === 'older_than_3_weeks') cutoffDateLimit.setDate(todayStart.getDate() - (21 - 1));
+            else if (timeframeIdentifier === 'older_than_1_month') { cutoffDateLimit.setMonth(todayStart.getMonth() - 1); cutoffDateLimit.setDate(cutoffDateLimit.getDate() + 1); }
+            else if (timeframeIdentifier === 'older_than_3_months') { cutoffDateLimit.setMonth(todayStart.getMonth() - 3); cutoffDateLimit.setDate(cutoffDateLimit.getDate() + 1); }
+            else if (timeframeIdentifier === 'older_than_6_months') { cutoffDateLimit.setMonth(todayStart.getMonth() - 6); cutoffDateLimit.setDate(cutoffDateLimit.getDate() + 1); }
+            else if (timeframeIdentifier === 'older_than_9_months') { cutoffDateLimit.setMonth(todayStart.getMonth() - 9); cutoffDateLimit.setDate(cutoffDateLimit.getDate() + 1); }
+            else if (timeframeIdentifier === 'older_than_1_year') { cutoffDateLimit.setFullYear(todayStart.getFullYear() - 1); cutoffDateLimit.setDate(cutoffDateLimit.getDate() + 1); }
+            else {
+                Logger.log(`resetActivityLog: Periode reset tidak valid: ${timeframeIdentifier}`);
+                return { success: false, error: "Periode reset tidak valid." };
+            }
+            Logger.log(`resetActivityLog: Cutoff date limit untuk '${timeframeIdentifier}' adalah ${cutoffDateLimit.toISOString()}`);
+            deletePredicate = (logTimestamp) => new Date(logTimestamp) < cutoffDateLimit;
+        }
+    }
+
+    let rowsToDeleteIndices = [];
+    for (let i = 1; i < logs.length; i++) { // Mulai dari 1 untuk melewati header
+      const logTimestampValue = logs[i][timestampColIndex];
+      if (!logTimestampValue) { 
+          Logger.log(`resetActivityLog: Timestamp kosong di baris sheet ${i + 1}`);
+          continue;
+      }
+      let logTimestamp;
+      if (logTimestampValue instanceof Date) {
+          logTimestamp = logTimestampValue;
+      } else {
+          logTimestamp = new Date(logTimestampValue); // Coba parsing jika string
+      }
+      
+      if (isNaN(logTimestamp.getTime())) {
+        Logger.log(`resetActivityLog: Format tanggal tidak valid di log baris sheet ${i + 1}. Nilai: '${logTimestampValue}'`);
+        continue; 
+      }
+      if (deletePredicate(logTimestamp)) {
+        rowsToDeleteIndices.push(i + 1); 
+      }
+    }
+
+    if (rowsToDeleteIndices.length === 0) {
+      Logger.log("resetActivityLog: Tidak ada log yang cocok dengan kriteria untuk dihapus.");
+      return { success: true, message: "Tidak ada log yang cocok dengan kriteria untuk dihapus." };
+    }
+
+    Logger.log(`resetActivityLog: Akan menghapus ${rowsToDeleteIndices.length} baris. Indeks: ${JSON.stringify(rowsToDeleteIndices)}`);
+    rowsToDeleteIndices.sort((a, b) => b - a); // Hapus dari bawah ke atas
+    for (const rowIndex of rowsToDeleteIndices) {
+      logSheet.deleteRow(rowIndex);
+    }
+    
+    if (typeof logUserActivity === "function") {
+        const actorToLog = currentUser.username || currentUser.email; // Gunakan username jika ada, fallback ke email
+        logUserActivity(actorToLog, ROLE_SUPERADMIN, "RESET_LOG_AKTIVITAS", `Periode: ${timeframeIdentifier}`, `Jumlah log dihapus: ${rowsToDeleteIndices.length}`, "SUCCESS");
+    }
+    Logger.log(`resetActivityLog: Sebanyak ${rowsToDeleteIndices.length} log aktivitas telah dihapus untuk periode '${timeframeIdentifier}'.`);
+    return { success: true, message: `Sebanyak ${rowsToDeleteIndices.length} log aktivitas telah dihapus.` };
+
+  } catch (e) {
+    Logger.log("Error di resetActivityLog: " + e.toString() + "\nStack: " + e.stack);
+     if (typeof logUserActivity === "function") {
+        const actorToLog = (currentUser && currentUser.username) ? currentUser.username : ((currentUser && currentUser.email) ? currentUser.email : "SYSTEM_ERROR_USER_UNDEFINED");
+        const actorRoleToLog = (currentUser && currentUser.role) ? currentUser.role : "N/A";
+        logUserActivity(actorToLog, actorRoleToLog, "RESET_LOG_ERROR", timeframeIdentifier || "N/A", e.message, "ERROR");
+    }
+    return { success: false, error: "Terjadi kesalahan internal server saat mereset log: " + e.message };
+  } finally {
+    if (lock && lock.hasLock()) { 
+      lock.releaseLock();
+      Logger.log("resetActivityLog: Lock dilepas.");
+    } else if (lock) { 
+        Logger.log("resetActivityLog: Lock diinisialisasi tapi tidak dipegang pada blok finally (mungkin tryLock gagal atau lock tidak valid).");
+    } else { 
+        Logger.log("resetActivityLog: Objek lock tidak diinisialisasi pada blok finally.");
+    }
+  }
+}
