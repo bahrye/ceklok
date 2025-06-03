@@ -23,6 +23,33 @@
     .sort-icon.desc::before {
       content: " \25BC"; /* Panah ke bawah */
     }
+    /* Styling dasar untuk tombol outline-danger (margin dihilangkan) */
+    .btn-outline-danger {
+        color: #dc3545;
+        background-color: transparent;
+        background-image: none;
+        border-color: #dc3545;
+        padding: 0.25rem 0.5rem; /* Ukuran lebih kecil (btn-sm) */
+        font-size: .875rem;    /* Ukuran font lebih kecil */
+        line-height: 1.5;
+        border-radius: .2rem;
+        cursor:pointer;
+        /* margin: 2px; Dihilangkan */
+    }
+    .btn-outline-danger:hover {
+        color: #fff;
+        background-color: #dc3545;
+        border-color: #dc3545;
+    }
+    /* Styling untuk btn-danger btn-sm (margin dihilangkan) */
+    .btn-danger.btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: .875rem;
+        line-height: 1.5;
+        border-radius: .2rem;
+         /* margin: 2px; Dihilangkan */
+    }
+
   </style>
 </head>
 <body>
@@ -55,7 +82,31 @@
       </div>
     </div>
 
-    <div class="table-container" style="max-height: 50vh; overflow-y: auto;"> <table id="activityLogTable">
+    <div id="resetLogSectionContainer" class="filter-controls" style="margin-top: 20px; margin-bottom: 20px; border-top: 1px solid #ccc; padding-top: 20px; display:none;">
+      <h4><i class="fas fa-eraser" style="margin-right: 5px;"></i> Hapus Log Aktivitas (Permanen)</h4>
+      <p style="margin-bottom:10px; font-size:0.9em; color: #d9534f;">
+        Pilih periode untuk menghapus log aktivitas. Tindakan ini akan menghapus log secara permanen dan tidak dapat diurungkan.
+      </p>
+      
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('today')">Hari Ini</button>
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('yesterday')">Kemarin</button>
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('older_than_3_days')">3 Hari Lalu & Lebih Lama</button>
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('older_than_5_days')">5 Hari Lalu & Lebih Lama</button>
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('older_than_1_week')">1 Ming. Lalu & Lebih Lama</button>
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('older_than_3_weeks')">3 Ming. Lalu & Lebih Lama</button>
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('older_than_1_month')">1 Bln. Lalu & Lebih Lama</button>
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('older_than_3_months')">3 Bln. Lalu & Lebih Lama</button>
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('older_than_6_months')">6 Bln. Lalu & Lebih Lama</button>
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('older_than_9_months')">9 Bln. Lalu & Lebih Lama</button>
+        <button class="btn-outline-danger" onclick="confirmResetActivityLog('older_than_1_year')">1 Thn. Lalu & Lebih Lama</button>
+        <button class="btn-danger btn-sm" style="font-weight: bold;" onclick="confirmResetActivityLog('all')">HAPUS SEMUA LOG</button>
+      </div>
+    </div>
+
+
+    <div class="table-container" style="max-height: 60vh; overflow-y: auto;">
+      <table id="activityLogTable">
         <thead>
           <tr>
             <th style="width: 18%;" class="sortable-header" data-column-key="timestamp_internal_sort">Waktu <span class="sort-icon" id="sortIcon-timestamp_internal_sort"></span></th>
