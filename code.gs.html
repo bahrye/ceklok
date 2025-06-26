@@ -3255,41 +3255,52 @@ function maskEmail(email) {
 /**
  * Fungsi utama yang akan dipicu oleh trigger harian
  * untuk memeriksa dan mengirim notifikasi pengingat absensi.
+ * Sesuai permintaan baru, fungsi ini hanya akan memanggil notifikasi ringkasan
+ * jika tanggal saat ini berada dalam 7 hari terakhir di bulan berjalan.
  */
 function checkAndSendAttendanceReminders() {
   const today = new Date();
   today.setHours(0, 0, 0, 0); // Normalisasi tanggal hari ini ke awal hari
 
+  const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const dateOfMonth = today.getDate();
+
+  // Hanya jalankan notifikasi jika berada dalam 7 hari terakhir bulan ini.
+  // Contoh: Juni (30 hari), notifikasi berjalan dari tanggal 23 sampai 30.
+  // 30 - 7 = 23. Jadi notifikasi aktif jika tanggal >= 23.
+  if (dateOfMonth >= (lastDayOfMonth - 7)) {
+    // Panggil fungsi baru untuk mengirim ringkasan bulanan.
+    sendMonthlySummaryNotification(today);
+  } else {
+    // Di luar periode 7 hari terakhir, tidak ada notifikasi harian yang dikirim
+    // sesuai dengan permintaan pengguna.
+    Logger.log("Di luar periode notifikasi ringkasan akhir bulan, tidak ada email yang dikirim.");
+  }
+}
+
+/**
+ * Mengirimkan ringkasan kehadiran bulanan kepada setiap guru aktif.
+ * Fungsi ini dipanggil jika tanggal saat ini berada dalam 7 hari terakhir bulan berjalan.
+ * @param {Date} todayObj Objek Date untuk hari ini.
+ */
+function sendMonthlySummaryNotification(todayObj) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const usersSheet = ss.getSheetByName(USERS_SHEET_NAME);
-  const ceklokManualSheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
-  const kalenderSheet = ss.getSheetByName(KALENDER_SHEET_NAME);
-  const settingSheet = ss.getSheetByName(SETTING_SHEET_NAME);
-  
-  // Pastikan sheet log ada, jika tidak, buat dengan header yang benar
-  const reminderLogSheet = ensureSheet(REMINDER_LOG_SHEET_NAME, [
-    "Nama_Guru", 
-    "Target_Tanggal_Absen", // Tanggal yang kosong atau tidak lengkap
-    "Tipe_Notifikasi",      // "berkala_kosong" atau "tidak_lengkap"
-    "Tanggal_Notifikasi_Terkirim", 
-    "Urutan_Pengingat_Berkala" // Untuk tipe "berkala_kosong" (1, 2, 3, ...)
-  ]);
 
-  if (!usersSheet || !ceklokManualSheet || !kalenderSheet || !settingSheet) {
-    Logger.log("Peringatan: Salah satu sheet penting (Users, Ceklok_Manual, Kalender_Pendidikan, Setting) tidak ditemukan. Proses pengingat dibatalkan.");
+  if (!usersSheet) {
+    Logger.log("Peringatan: Sheet Users tidak ditemukan. Proses pengingat ringkasan dibatalkan.");
     return;
   }
 
-  // 1. Ambil data guru aktif (Nama_Guru_Asli, PrimaryEmail)
+  // Ambil daftar guru yang aktif dan memiliki email valid
   const usersData = usersSheet.getDataRange().getValues();
   const userHeaders = usersData[0].map(h => String(h).trim().toLowerCase());
-  const idxUserUsername = userHeaders.indexOf("username"); // Untuk referensi log
   const idxUserTeacherName = userHeaders.indexOf("nama_guru_asli");
   const idxUserPrimaryEmail = userHeaders.indexOf("primaryemail");
   const idxUserRole = userHeaders.indexOf("role");
 
-  if ([idxUserTeacherName, idxUserPrimaryEmail, idxUserRole, idxUserUsername].includes(-1)) {
-    Logger.log("Error: Kolom penting (username, nama_guru_asli, primaryemail, role) di sheet Users tidak ditemukan. Proses pengingat dibatalkan.");
+  if ([idxUserTeacherName, idxUserPrimaryEmail, idxUserRole].includes(-1)) {
+    Logger.log("Error: Kolom penting (nama_guru_asli, primaryemail, role) di sheet Users tidak ditemukan. Proses pengingat dibatalkan.");
     return;
   }
 
@@ -3298,7 +3309,6 @@ function checkAndSendAttendanceReminders() {
     const teacherName = usersData[i][idxUserTeacherName] ? String(usersData[i][idxUserTeacherName]).trim() : "";
     const primaryEmail = usersData[i][idxUserPrimaryEmail] ? String(usersData[i][idxUserPrimaryEmail]).trim() : "";
     const role = usersData[i][idxUserRole] ? String(usersData[i][idxUserRole]).trim().toLowerCase() : "";
-    // const username = usersData[i][idxUserUsername] ? String(usersData[i][idxUserUsername]).trim() : ""; // Jika diperlukan
 
     if (role === "user" && teacherName && primaryEmail && helper_isValidEmailFormat(primaryEmail)) {
       activeTeachers.push({ name: teacherName, email: primaryEmail });
@@ -3306,55 +3316,74 @@ function checkAndSendAttendanceReminders() {
   }
 
   if (activeTeachers.length === 0) {
-    Logger.log("Tidak ada guru aktif dengan email valid yang ditemukan untuk pengingat.");
+    Logger.log("Tidak ada guru aktif dengan email valid untuk dikirimi ringkasan.");
     return;
   }
 
-  // 2. Ambil data kalender libur
-  const liburMap = helper_getLiburMap(kalenderSheet);
+  const monthYearStr = Utilities.formatDate(todayObj, Session.getScriptTimeZone(), "MM/yyyy");
+  const monthName = Utilities.formatDate(todayObj, Session.getScriptTimeZone(), "MMMM");
+  const year = todayObj.getFullYear();
+  const reminderLogSheet = ensureSheet(REMINDER_LOG_SHEET_NAME, [
+    "Nama_Guru", "Target_Tanggal_Absen", "Tipe_Notifikasi", "Tanggal_Notifikasi_Terkirim", "Urutan_Pengingat_Berkala"
+  ]);
 
-  // 3. Ambil semua data dari Ceklok_Manual untuk efisiensi
-  const allCeklokData = ceklokManualSheet.getDataRange().getValues();
-  const ceklokHeaders = allCeklokData[0].map(h => String(h).trim().toLowerCase());
-  const idxCeklokNama = ceklokHeaders.indexOf("nama_guru");
-  const idxCeklokTanggal = ceklokHeaders.indexOf("tanggal");
-  const idxCeklokMasuk = ceklokHeaders.indexOf("jam_masuk");
-  const idxCeklokPulang = ceklokHeaders.indexOf("jam_pulang");
-  const idxCeklokKetManual = ceklokHeaders.indexOf("ket_libur_manual");
-
-  if ([idxCeklokNama, idxCeklokTanggal, idxCeklokMasuk, idxCeklokPulang, idxCeklokKetManual].includes(-1)) {
-    Logger.log("Error: Kolom penting di sheet Ceklok_Manual tidak lengkap. Proses pengingat dibatalkan.");
-    return;
-  }
-  
-  // 4. Ambil batas bawah periode dari Setting A1
-  const adminMinMonthYear = settingSheet.getRange('A1').getDisplayValue();
-  let globalMinDateToCheck; // Tanggal paling awal kita peduli untuk cek kekosongan
-  if (adminMinMonthYear && /^\d{2}\/\d{4}$/.test(adminMinMonthYear)) {
-    const [mm, yyyy] = adminMinMonthYear.split('/');
-    globalMinDateToCheck = new Date(parseInt(yyyy), parseInt(mm) - 1, 1);
-  } else {
-    // Default 2 bulan lalu dari hari ini jika setting tidak ada/valid
-    globalMinDateToCheck = new Date(today.getFullYear(), today.getMonth() - 2, 1);
-    Logger.log(`Peringatan: Setting A1 (mm/yyyy) tidak valid atau tidak ada, menggunakan default 2 bulan lalu: ${Utilities.formatDate(globalMinDateToCheck, Session.getScriptTimeZone(), "MM/yyyy")}.`);
-  }
-  globalMinDateToCheck.setHours(0,0,0,0);
-
-
-  // --- Mulai iterasi per guru ---
+  // Kirim email ke setiap guru
   activeTeachers.forEach(teacher => {
-    Logger.log(`Memeriksa pengingat absensi untuk guru: ${teacher.name} (${teacher.email})`);
+    // Gunakan tipe notifikasi unik agar tidak terkirim berulang kali di hari yang sama
+    const notifTypeForLog = `ringkasan_bulanan_${monthYearStr.replace('/', '-')}`;
+    const todayStr = Utilities.formatDate(todayObj, Session.getScriptTimeZone(), "dd/MM/yyyy");
 
-    // A. Logika untuk Pengingat Absensi Tidak Lengkap (Harian)
-    processIncompleteAttendanceReminder(teacher, allCeklokData, ceklokHeaders, liburMap, reminderLogSheet, today, globalMinDateToCheck);
+    if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, monthYearStr, notifTypeForLog)) {
+      Logger.log(`Menyiapkan ringkasan untuk ${teacher.name} untuk bulan ${monthYearStr}`);
 
-    // B. Logika untuk Pengingat Pengisian Absensi Berkala (Kosong)
-    processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHeaders, liburMap, reminderLogSheet, today, globalMinDateToCheck);
+      // Ambil data ringkasan menggunakan fungsi yang sudah ada
+      const summaryResult = getTeacherMonthlySummary(teacher.name, monthYearStr);
+
+      if (summaryResult.success) {
+        const summary = summaryResult.summary;
+        const subject = `Ringkasan Kehadiran Anda Bulan ${monthName} ${year}`;
+        
+        // Buat isi email
+        let body = `Yth. ${teacher.name},\n\n`;
+        body += `Ini adalah pemberitahuan harian Anda selama minggu terakhir bulan ini.\n`;
+        body += `Berikut adalah ringkasan kehadiran Anda untuk bulan ${monthName} ${year} (data per tanggal ${todayStr}):\n\n`;
+        body += `-------------------------------------------------\n`;
+        body += `Total Hari Kerja Sebulan: ${summary.totalWorkingDaysInMonth} hari\n`;
+        body += `Hari Kerja Efektif Berlalu: ${summary.effectiveWorkingDaysPassed} hari\n`;
+        body += `Ceklok Terisi Lengkap: ${summary.completedChecklok} hari\n`;
+        body += `   - Hadir (Jam Lengkap): ${summary.present} hari\n`;
+        body += `   - Hari Libur Sekolah (Input Guru): ${summary.schoolHoliday} hari\n`;
+        body += `   - Alasan Lain (Valid): ${summary.otherValidReason} hari\n`;
+        body += `Alpa (Kosong di Hari Kerja): ${summary.absent} hari\n`;
+        body += `Ceklok Tidak Lengkap (Salah Satu Jam): ${summary.incomplete} hari\n`;
+        body += `-------------------------------------------------\n`;
+        body += `Persentase Pengisian Ceklok Anda: ${summary.attendancePercentage}%\n\n`;
+        body += `Mohon diperiksa kembali dan lengkapi data Anda jika ada yang kurang sebelum akhir bulan.\n\n`;
+        body += `Terima kasih.\n${EMAIL_SENDER_NAME}`;
+
+        // Kirim email
+        try {
+          MailApp.sendEmail({
+            to: teacher.email,
+            subject: subject,
+            body: body,
+            name: EMAIL_SENDER_NAME
+          });
+          // Catat ke log agar tidak mengirim email yang sama di hari yang sama
+          helper_logSentNotification(reminderLogSheet, teacher.name, monthYearStr, notifTypeForLog, 0);
+          Logger.log(`Email ringkasan berhasil dikirim ke ${teacher.name} (${teacher.email})`);
+        } catch (e) {
+          Logger.log(`Gagal mengirim email ringkasan ke ${teacher.email}: ${e.toString()}`);
+        }
+
+      } else {
+        Logger.log(`Gagal mendapatkan data ringkasan untuk ${teacher.name}: ${summaryResult.error}`);
+      }
+    } else {
+      Logger.log(`Ringkasan untuk ${teacher.name} bulan ${monthYearStr} sudah dikirim hari ini. Tidak mengirim lagi.`);
+    }
   });
-
-  Logger.log("Proses pemeriksaan pengingat absensi selesai.");
 }
-
 
 /**
  * Helper: Memeriksa format email dasar.
