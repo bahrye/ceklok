@@ -918,6 +918,59 @@
         font-style: italic;
         color: var(--grey-text);
     }
+
+    /* CSS untuk memastikan modal terlihat */
+    .reminder-modal-overlay {
+      position: fixed; /* Tetap di layar bahkan saat di-scroll */
+      inset: 0;
+      background-color: rgba(0, 0, 0, 0.6); /* Latar belakang semi-transparan */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000; /* Pastikan berada di atas elemen lain */
+      padding: 1rem;
+    }
+    .reminder-modal-content {
+      background-color: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      width: 100%;
+      max-width: 450px; /* Lebar maksimum modal */
+      text-align: center;
+    }
+    .reminder-modal-icon {
+      width: 4rem; /* 64px */
+      height: 4rem; /* 64px */
+      margin-left: auto;
+      margin-right: auto;
+      color: #FBBF24; /* Warna kuning (amber-400) */
+    }
+    .reminder-modal-title {
+      font-size: 1.5rem; /* 24px */
+      font-weight: bold;
+      margin-top: 0.5rem;
+      color: #1F2937; /* Warna abu-abu gelap (gray-800) */
+    }
+    .reminder-modal-text {
+      margin-top: 1rem;
+      font-size: 1.125rem; /* 18px */
+      color: #4B5563; /* Warna abu-abu sedang (gray-600) */
+    }
+    .reminder-modal-button {
+      margin-top: 1.5rem;
+      padding: 0.75rem 1.5rem;
+      background-color: #3B82F6; /* Warna biru (blue-500) */
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .reminder-modal-button:hover {
+      background-color: #2563EB; /* Warna biru lebih gelap (blue-600) */
+    }
   </style>
 </head>
 <body>
@@ -1085,6 +1138,19 @@
       <div class="btn-container" style="margin-top: 20px;">
         <button onclick="closeOverallSummaryDetailModal()" style="background-color: #777;">Tutup</button>
       </div>
+    </div>
+  </div>
+
+  <div id="reminderModal" class="reminder-modal-overlay" style="display: none;">
+    <div class="reminder-modal-content">
+      <svg xmlns="http://www.w3.org/2000/svg" class="reminder-modal-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <h3 class="reminder-modal-title">Pengingat Pengisian Ceklok</h3>
+      <p id="reminderText" class="reminder-modal-text"></p>
+      <button id="closeReminderModal" class="reminder-modal-button">
+        Saya Mengerti
+      </button>
     </div>
   </div>
 
@@ -1269,6 +1335,9 @@
             .getHtmlContent(filename);
     }
 
+    // index.html di dalam tag <script>
+
+    // GANTI fungsi renderView LAMA Anda dengan yang BARU ini
     function renderView(viewName, data, postRenderCallback) {
         console.log("Merender tampilan:", viewName, "dengan data:", data);
         currentView = viewName;
@@ -1281,7 +1350,6 @@
         if (viewName === 'login') {
             document.body.classList.add('login-active');
         }
-
 
         switch(viewName) {
             case 'login':
@@ -1312,23 +1380,23 @@
                 htmlFile = 'hasil_ceklok_content.html';
                 setupFunction = setupHasilCeklokView;
                 break;
-            case 'tutorial': // TAMBAHKAN CASE INI
+            case 'tutorial':
                 htmlFile = 'tutorial_content.html';
-                setupFunction = setupTutorialView; // Akan kita buat di bawah
+                setupFunction = setupTutorialView;
                 break;
             case 'activity_log':
                 htmlFile = 'activity_log_content.html';
                 setupFunction = setupActivityLogView;
                 break;
-            case 'overall_teacher_summary': // Add this case
+            case 'overall_teacher_summary':
                 htmlFile = 'overall_summary_content.html';
                 setupFunction = setupOverallSummaryView;
                 break;
-            case 'username_requests_view': // Nama view baru
+            case 'username_requests_view':
                 htmlFile = 'username_requests_content.html';
                 setupFunction = setupUsernameRequestsView;
                 break;
-            case 'cek_data_kehadiran': // Nama view baru
+            case 'cek_data_kehadiran':
                 htmlFile = 'cek_data_kehadiran_content.html';
                 setupFunction = setupCekDataKehadiranView;
                 break;
@@ -1340,8 +1408,8 @@
                 return;
         }
 
-        if (viewName !== 'tutorial' && viewName !== 'login') { // Jangan simpan jika view login atau tutorial itu sendiri
-            previousViewBeforeTutorial = currentView; // Simpan view saat ini SEBELUM pindah ke tutorial
+        if (viewName !== 'tutorial' && viewName !== 'login') {
+            previousViewBeforeTutorial = currentView;
         }
 
         if (htmlFile) {
@@ -1350,9 +1418,18 @@
                     console.log("Menjalankan setupFunction untuk", viewName);
                     setupFunction(dataForSetupFunction);
                 }
-                initializeAllPasswordToggles(); // <--- PANGGIL DI SINI
-                // console.log("Memperbarui visibilitas tombol Google untuk view:", viewName); // Fungsi ini sudah tidak ada
-                // updateGoogleLinkButtonVisibility(); // Fungsi ini sudah tidak ada
+                initializeAllPasswordToggles();
+                
+                // ===== PENAMBAHAN LOGIKA POP-UP DI SINI =====
+                // Setelah view utama (dashboard admin atau tabel ceklok guru) selesai dirender,
+                // jalankan pengecekan untuk menampilkan pop-up pengingat.
+                if (viewName === 'admin_dashboard' || viewName === 'ceklok_table') {
+                    if (typeof showEndOfMonthReminder === 'function') {
+                        setTimeout(showEndOfMonthReminder, 100); 
+                    }
+                }
+                // ===========================================
+
                 if (postRenderCallback) {
                     postRenderCallback();
                 }
@@ -6009,6 +6086,64 @@
             arrowIcon.classList.add('down');
         }
     }
+
+    /**
+     * Menampilkan pop-up pengingat di akhir bulan.
+     * Pop-up akan selalu muncul setiap kali fungsi ini dipanggil
+     * selama dalam periode 7 hari terakhir bulan itu.
+     */
+    function showEndOfMonthReminder() {
+      console.log("Mencoba menjalankan showEndOfMonthReminder (versi selalu tampil)...");
+
+      // Periksa apakah pengguna sudah login
+      if (!loggedInUser) {
+        console.log("Pengingat dibatalkan: Pengguna belum login.");
+        return;
+      }
+
+      const today = new Date();
+      const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      const currentDay = today.getDate();
+      const reminderStartDate = lastDayOfMonth - 6;
+
+      // Cek apakah hari ini sudah masuk periode pengingat
+      if (currentDay >= reminderStartDate) {
+        console.log("Kondisi tanggal TERPENUHI. Menyiapkan pesan...");
+        
+        const daysRemaining = lastDayOfMonth - currentDay + 1;
+        let reminderMessage = '';
+        if (daysRemaining > 1) {
+          reminderMessage = `Tinggal ${daysRemaining} hari lagi untuk menyelesaikan pengisian ceklok bulan ini. Mohon segera lengkapi data Anda.`;
+        } else {
+          reminderMessage = `Ini adalah HARI TERAKHIR untuk melengkapi pengisian ceklok bulan ini. Segera selesaikan!`;
+        }
+
+        const reminderTextEl = document.getElementById('reminderText');
+        const reminderModalEl = document.getElementById('reminderModal');
+
+        if (reminderTextEl && reminderModalEl) {
+          console.log("MENAMPILKAN POP-UP PENGINGAT.");
+          reminderTextEl.innerText = reminderMessage;
+          reminderModalEl.style.display = 'flex'; // Tampilkan modal
+        } else {
+          console.error("Elemen modal (#reminderModal atau #reminderText) tidak ditemukan di DOM.");
+        }
+      } else {
+        console.log("Kondisi tanggal TIDAK TERPENUHI. Tidak ada pop-up yang ditampilkan.");
+      }
+    }
+
+    // Event listener untuk tombol 'Mengerti' pada modal.
+    // Pastikan ini berjalan setelah DOM siap.
+    document.addEventListener('DOMContentLoaded', (event) => {
+        const closeButton = document.getElementById('closeReminderModal');
+        const reminderModal = document.getElementById('reminderModal');
+        if (closeButton && reminderModal) {
+            closeButton.addEventListener('click', () => {
+                reminderModal.style.display = 'none';
+            });
+        }
+    });
   </script>
 </body>
 </html>
