@@ -3388,20 +3388,36 @@
             };
         });
 
-        showLoading("Menyimpan LOCK_ID, silahkan tunggu...");
+        // --- PERUBAHAN DI SINI ---
+        // Pesan loading diubah untuk mencakup kedua proses
+        showLoading("Menyimpan LOCK_ID & Menyiapkan Unduhan...");
         google.script.run
             .withSuccessHandler(response => {
-                hideLoading();
+                // JANGAN panggil hideLoading() di sini. Biarkan loading screen tetap aktif
+                // sampai proses unduh selesai atau gagal.
+
                 if (response.success) {
-                    showAlert(response.message || "LOCK_ID berhasil disimpan dan data disiapkan.", "success");
+                    // Simpan variabel global yang diperlukan untuk proses unduh
+                    currentLockIdValue = lockIdValue; 
+                    currentBackupSheetName = response.backupSheetName; 
+
+                    // Perbarui UI seperti biasa, tapi dengan pesan yang sedikit berbeda
+                    showAlert(response.message || "LOCK_ID berhasil disimpan. Memulai unduhan otomatis...", "info", 4000);
                     lockIdStatusMsg.textContent = `LOCK_ID '${lockIdValue}' aktif untuk periode ${activeCeklokMonthYear}. Sheet cadangan: ${response.backupSheetName}. Siap export.`;
                     lockIdStatusMsg.style.color = "green";
+                    
+                    // Tetap aktifkan tombol unduh manual untuk fallback
                     btnExportExcel.disabled = false;
                     btnExportExcel.classList.remove('btn-greyed-out');
                     btnExportExcel.classList.add('btn-ready-export');
-                    currentLockIdValue = lockIdValue; 
-                    currentBackupSheetName = response.backupSheetName; 
+                    
+                    // --- INI BAGIAN UTAMA PERUBAHANNYA ---
+                    // Langsung panggil fungsi unduh setelah berhasil menyimpan LOCK_ID
+                    // Kita beri flag 'true' untuk menandakan ini adalah unduhan otomatis
+                    handleExportExcelClientSite(true); 
+
                 } else {
+                    hideLoading(); // Sembunyikan loading JIKA penyimpanan gagal
                     showAlert(response.error || "Gagal menyimpan LOCK_ID.", "error");
                     lockIdStatusMsg.textContent = response.error || "Gagal memproses.";
                     lockIdStatusMsg.style.color = "red";
@@ -3411,7 +3427,7 @@
                 }
             })
             .withFailureHandler(err => {
-                hideLoading();
+                hideLoading(); // Sembunyikan loading jika ada error server
                 showAlert(`Error server saat menyimpan LOCK_ID: ${err.message}`, "error");
                 lockIdStatusMsg.textContent = `Error server: ${err.message}`;
                 lockIdStatusMsg.style.color = "red";
@@ -3422,7 +3438,9 @@
             .saveLockIdAndPrepareBackupSheet(namaGuru, activeCeklokMonthYear, lockIdValue, currentCeklokDataForBackup);
     }
 
-    function handleExportExcelClientSite() {
+    // --- PERUBAHAN DI SINI ---
+    // Tambahkan parameter isAutoDownload dengan nilai default false
+    function handleExportExcelClientSite(isAutoDownload = false) {
         const btnExportExcel = document.getElementById('btnExportExcelClient');
         const lockIdInputEl = document.getElementById('lockIdInput');
         const lockIdStatusMsg = document.getElementById('lockIdStatusMessage');
@@ -3450,10 +3468,15 @@
             return;
         }
 
-        showLoading("File sedang diekspor, silahkan tunggu...");
+        // --- PERUBAHAN DI SINI ---
+        // Hanya tampilkan loading jika fungsi ini dipanggil secara manual (bukan otomatis)
+        if (!isAutoDownload) {
+            showLoading("File sedang diekspor, silahkan tunggu...");
+        }
+
         google.script.run
             .withSuccessHandler(response => {
-                hideLoading();
+                hideLoading(); // Sembunyikan loading screen yang sudah ada
                 if (response.success && response.base64Data && response.fileName && response.mimeType) {
                     triggerClientSideDownload(response.base64Data, response.fileName, response.mimeType);
                     showAlert("Export Excel berhasil dimulai. File: " + response.fileName, "success", 5000); 
@@ -3461,9 +3484,11 @@
                     lockIdInputEl.value = ''; 
                     lockIdStatusMsg.textContent = "Export selesai. Sheet cadangan akan segera dihapus oleh server.";
                     lockIdStatusMsg.style.color = "var(--grey-text)"; 
-                    btnExportExcel.disabled = true;
-                    btnExportExcel.classList.remove('btn-ready-export');
-                    btnExportExcel.classList.add('btn-greyed-out');
+                    
+                    // Jangan disable tombol unduh manual lagi, biarkan aktif
+                    // btnExportExcel.disabled = true;
+                    // btnExportExcel.classList.remove('btn-ready-export');
+                    // btnExportExcel.classList.add('btn-greyed-out');
                     
                     currentLockIdValue = null; 
                     currentBackupSheetName = null; 
