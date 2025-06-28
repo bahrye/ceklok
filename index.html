@@ -25,20 +25,25 @@
     body {
       display: flex;
       flex-direction: column;
+      align-items: center; /* Pastikan baris ini ada */
       min-height: 100vh;
-      margin:0;
-      padding:0;
-      font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-      background:var(--bg);
-      color:var(--text);
+      margin: 0;
+      padding: 0;
+      font-family: "Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      background: var(--bg);
+      color: var(--text);
       padding-bottom: 70px; /* Space for fixed footer */
       padding-top: 60px; /* Space for fixed profile menu */
     }
     #app {
       flex-grow: 1;
       width: 100%;
-      padding: 10px; 
+      padding: 10px;
       box-sizing: border-box;
+      /* Tambahan untuk memaksa konten di dalamnya ke tengah */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     .login-active #app {
         display: flex; /* Tetap flex untuk centering loginContainer */
@@ -514,10 +519,16 @@
     #ceklokInputContainer .table-container th:nth-child(5),
     #ceklokInputContainer .table-container th:nth-child(6) { width: 18%; }
     #ceklokInputContainer .table-container th:nth-child(7) { width: 24%; }
+
     #ceklokInputContainer .table-container td .inline-input,
     #ceklokInputContainer .table-container td .inline-select {
-      width: 100%;
-      box-sizing: border-box;
+      height: 40px;           /* Menyamakan tinggi */
+      padding: 8px 10px;      /* Menyamakan padding */
+      font-size: 15px;        /* Menyamakan ukuran font */
+      width: 100%;            /* Memastikan lebar penuh di dalam sel */
+      margin: 0;              /* Menghapus margin default */
+      box-sizing: border-box; /* Memastikan kalkulasi tinggi konsisten */
+      vertical-align: middle; /* KUNCI UTAMA: Menyamakan posisi vertikal */
     }
 
     .modal-overlay {
@@ -1155,7 +1166,7 @@
   </div>
 
   <footer>
-    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v1.7</p>
+    <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v2.0</p>
   </footer>
 
   <script>
@@ -1685,22 +1696,24 @@
       changeEmailOtpTimerInterval = null;
       proposedNewPrimaryEmail = null;
       
-      // Di dalam fungsi logout()
       const dropdownUsernameDisplayEl = document.getElementById('dropdownUsernameDisplay');
       if (dropdownUsernameDisplayEl) {
           dropdownUsernameDisplayEl.textContent = ''; 
       }
-      // ... (sisa kode logout Anda, termasuk menyembunyikan profileMenuContainer) ...
+      
       const profileMenuContainer = document.getElementById('profileMenuContainer');
       if (profileMenuContainer) {
         profileMenuContainer.style.display = 'none';
         profileMenuContainer.classList.remove('show-dropdown'); 
       }
 
-      sessionStorage.removeItem('loggedInUserData');
+      // --- PERUBAHAN 3: Tambahkan baris ini untuk menghapus flag ---
+      sessionStorage.removeItem('reminderShownForSession');
+      
+      sessionStorage.removeItem('loggedInUserData'); // Baris ini sudah ada, biarkan saja.
       clearTimeout(idleTimer);
       removeIdleListeners();
-      document.body.classList.add('login-active'); // Tambahkan kelas login-active ke body
+      document.body.classList.add('login-active');
       renderView('login');
       window.scrollTo(0, 0);
       showAlert("Anda telah logout.", "info", 2000);
@@ -2182,15 +2195,10 @@
         }
     }
 
-    // Pastikan fungsi ini ada di dalam blok <script> di index.html Anda
-
-    // GANTI FUNGSI setupCeklokTableView YANG LAMA DENGAN YANG INI
-    // DI DALAM TAG <script> PADA FILE index.html
-
     function setupCeklokTableView(data) {
-        console.log("Data diterima oleh setupCeklokTableView:", data); // <-- Tambahkan ini
-        const { rows, options: ketLiburOptions, isUserRole, currentMonthYearForDisplay, isLocked } = data; // Ambil isLocked dari data
-        console.log("Status isLocked di frontend:", isLocked); // <-- Tambahkan ini
+        console.log("Data diterima oleh setupCeklokTableView:", data);
+        const { rows, options: ketLiburOptions, isUserRole, currentMonthYearForDisplay, isLocked } = data;
+        console.log("Status isLocked di frontend:", isLocked);
         const tableBody = document.getElementById('ceklokTableBody');
         const guruNameEl = document.getElementById('ceklokGuruName');
         const bulanTahunDisplayEl = document.getElementById('ceklokBulanTahunDisplay');
@@ -2199,20 +2207,17 @@
         const btnKembaliContainer = document.getElementById('ceklokTombolKembaliContainer');
         const summaryDashboardElement = document.getElementById('teacherDashboardSummary');
 
-        // --- AWAL PENAMBAHAN LOGIKA PENGUNCIAN ---
-        const isMonthLocked = isLocked; // Status kunci dari data yang diterima
-        const btnSimpanCeklok = document.getElementById('btnSimpanCeklok'); // Pastikan tombol simpan memiliki ID ini
-        const ceklokLockMessageDiv = document.getElementById('ceklokLockMessage'); // Div untuk pesan kunci
+        const isMonthLocked = isLocked;
+        const btnSimpanCeklok = document.getElementById('btnSimpanCeklok');
+        const ceklokLockMessageDiv = document.getElementById('ceklokLockMessage');
 
         if (btnSimpanCeklok) {
             if (isMonthLocked) {
                 btnSimpanCeklok.disabled = true;
-                btnSimpanCeklok.classList.add('btn-disabled'); // Tambahkan kelas untuk styling disabled
-                // Anda bisa juga menambahkan style langsung: btnSimpanCeklok.style.backgroundColor = '#ccc';
+                btnSimpanCeklok.classList.add('btn-disabled');
             } else {
                 btnSimpanCeklok.disabled = false;
                 btnSimpanCeklok.classList.remove('btn-disabled');
-                // btnSimpanCeklok.style.backgroundColor = ''; // Kembalikan ke style default
             }
         }
 
@@ -2275,15 +2280,15 @@
             if (rows && rows.length > 0) {
                 rows.forEach((row, i) => {
                     if (row.isLibur) {
+                        // MODIFIKASI COLSPAN DI SINI
                         bodyHtml += `<tr class="libur-row">
                             <td class="libur-text" data-label="Hari">${row.hari}</td>
                             <td class="libur-text" data-label="Tanggal">${row.tanggal}</td>
                             <td data-label="Data Masuk" style="text-align: center;">-</td>
                             <td data-label="Data Pulang" style="text-align: center;">-</td>
-                            <td colspan="3" class="libur-note" data-label="Keterangan"><span class="holiday-description">${row.keterangan || 'Hari Libur'}</span></td>
+                            <td colspan="4" class="libur-note" data-label="Keterangan"><span class="holiday-description">${row.keterangan || 'Hari Libur'}</span></td>
                         </tr>`;
                     } else {
-                        // Tambahkan atribut disabled pada dropdown keterangan jika bulan terkunci
                         let ketLiburDropdownHtml = `<select id="ketLiburManual${i}" class="inline-select ket-libur-manual-dropdown" data-rowindex="${i}" ${isMonthLocked ? 'disabled' : ''}>`;
                         ketLiburDropdownHtml += '<option value="">-- Alasan Tidak Hadir --</option>';
                         if (ketLiburOptions && ketLiburOptions.length > 0) {
@@ -2298,9 +2303,9 @@
                         const jamMasukInputValue = isKetLiburManualSelected ? "" : (row.dataMasuk || "");
                         const jamPulangInputValue = isKetLiburManualSelected ? "" : (row.dataPulang || "");
 
-                        // Atribut disabled untuk input jam, mempertimbangkan status kunci bulan dan apakah keterangan libur dipilih
                         const inputDisabledAttr = isMonthLocked ? 'disabled' : (isKetLiburManualSelected ? 'disabled' : '');
 
+                        // --- BARIS HTML UTAMA YANG DIMODIFIKASI ---
                         bodyHtml += `<tr>
                             <td data-label="Hari">${row.hari}</td>
                             <td data-label="Tanggal">${row.tanggal}</td>
@@ -2309,19 +2314,20 @@
                             <td data-label="Input Jam Masuk"><input type="text" class="inline-input" id="jamMasuk${i}" placeholder="HH.MM" value="${jamMasukInputValue}" ${inputDisabledAttr}></td>
                             <td data-label="Input Jam Pulang"><input type="text" class="inline-input" id="jamPulang${i}" placeholder="HH.MM" value="${jamPulangInputValue}" ${inputDisabledAttr}></td>
                             <td data-label="Keterangan Libur/Alasan">${ketLiburDropdownHtml}</td>
+                            <td data-label="Aksi" class="actions-cell">
+                                <button class="btn-danger" style="padding: 5px 10px; font-size: 0.9em;" onclick="clearCeklokRow(${i})" title="Hapus Isian Baris Ini" ${isMonthLocked ? 'disabled' : ''}>Hapus</button>
+                            </td>
                         </tr>`;
                     }
                 });
             } else {
-                bodyHtml = `<tr><td colspan="7" style="text-align:center;">Tidak ada data untuk periode ini atau periode belum dipilih.</td></tr>`;
+                // MODIFIKASI COLSPAN DI SINI
+                bodyHtml = `<tr><td colspan="8" style="text-align:center;">Tidak ada data untuk periode ini atau periode belum dipilih.</td></tr>`;
             }
             tableBody.innerHTML = bodyHtml;
             
-            // Listener harus tetap dipasang, tetapi logika disable/enable di atas (berdasarkan isMonthLocked)
-            // akan menjadi prioritas utama saat baris HTML dirender.
-            // Listener dropdown keterangan akan menghandle disable/enable input jam HANYA JIKA bulan TIDAK terkunci.
             attachTimeInputValidationToCeklok();
-            attachKetLiburDropdownListeners(); // Fungsi ini mungkin perlu sedikit modifikasi agar menghormati isMonthLocked
+            attachKetLiburDropdownListeners();
         }
 
         if (btnKembaliContainer) {
@@ -2483,6 +2489,40 @@
             })
             .withFailureHandler(err => { hideLoading(); showAlert(`Gagal menyimpan: ${err.message}`, 'error'); })
             .simpanData(namaGuru, dataToSave, loggedInUser.username, loggedInUser.role);
+    }
+
+    /**
+     * Membersihkan input pada baris ceklok tertentu.
+     * Ini adalah aksi di sisi klien dan tidak menyimpan data.
+     * @param {number} rowIndex Indeks baris yang akan dibersihkan.
+     */
+    function clearCeklokRow(rowIndex) {
+        // Ambil elemen-elemen input berdasarkan rowIndex
+        const jamMasukEl = document.getElementById(`jamMasuk${rowIndex}`);
+        const jamPulangEl = document.getElementById(`jamPulang${rowIndex}`);
+        const ketLiburManualEl = document.getElementById(`ketLiburManual${rowIndex}`);
+
+        // Bersihkan nilai input jam masuk
+        if (jamMasukEl) {
+            jamMasukEl.value = '';
+            jamMasukEl.disabled = false; // Aktifkan kembali
+            clearInputError(jamMasukEl); // Hapus style error jika ada
+        }
+
+        // Bersihkan nilai input jam pulang
+        if (jamPulangEl) {
+            jamPulangEl.value = '';
+            jamPulangEl.disabled = false; // Aktifkan kembali
+            clearInputError(jamPulangEl); // Hapus style error jika ada
+        }
+
+        // Reset dropdown keterangan ke pilihan default
+        if (ketLiburManualEl) {
+            ketLiburManualEl.value = ''; // Mengatur ke pilihan dengan value=""
+        }
+        
+        // Beri notifikasi ringan ke pengguna
+        showAlert("Isian baris telah dibersihkan. Klik 'Simpan Data Ceklok' untuk menyimpan perubahan.", "info", 2500);
     }
 
     function navigateToHasilCeklok() {
@@ -6114,11 +6154,17 @@
 
     /**
      * Menampilkan pop-up pengingat di akhir bulan.
-     * Pop-up akan selalu muncul setiap kali fungsi ini dipanggil
-     * selama dalam periode 7 hari terakhir bulan itu.
+     * LOGIKA BARU: Pop-up hanya akan ditampilkan sekali per sesi login menggunakan sessionStorage.
      */
     function showEndOfMonthReminder() {
-      console.log("Mencoba menjalankan showEndOfMonthReminder (versi selalu tampil)...");
+      // --- PERUBAHAN 1: Cek sessionStorage di awal ---
+      // Jika pengingat sudah ditampilkan di sesi ini, jangan jalankan sisa fungsi.
+      if (sessionStorage.getItem('reminderShownForSession') === 'true') {
+        console.log("Pengingat akhir bulan sudah ditampilkan pada sesi ini. Melewatkan.");
+        return;
+      }
+
+      console.log("Mencoba menjalankan showEndOfMonthReminder (pengecekan sesi lolos)...");
 
       // Periksa apakah pengguna sudah login
       if (!loggedInUser) {
@@ -6129,17 +6175,18 @@
       const today = new Date();
       const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
       const currentDay = today.getDate();
-      const reminderStartDate = lastDayOfMonth - 6;
+      const reminderStartDate = lastDayOfMonth - 6; // Pengingat mulai 7 hari sebelum akhir bulan
 
-      // Cek apakah hari ini sudah masuk periode pengingat
       if (currentDay >= reminderStartDate) {
         console.log("Kondisi tanggal TERPENUHI. Menyiapkan pesan...");
         
-        const daysRemaining = lastDayOfMonth - currentDay + 1;
+        const daysRemaining = lastDayOfMonth - currentDay;
         let reminderMessage = '';
         if (daysRemaining > 1) {
           reminderMessage = `Tinggal ${daysRemaining} hari lagi untuk menyelesaikan pengisian ceklok bulan ini. Mohon segera lengkapi data Anda.`;
-        } else {
+        } else if (daysRemaining === 1) {
+          reminderMessage = `Besok adalah HARI TERAKHIR untuk melengkapi pengisian ceklok bulan ini. Segera selesaikan!`;
+        } else { // daysRemaining === 0
           reminderMessage = `Ini adalah HARI TERAKHIR untuk melengkapi pengisian ceklok bulan ini. Segera selesaikan!`;
         }
 
@@ -6149,7 +6196,16 @@
         if (reminderTextEl && reminderModalEl) {
           console.log("MENAMPILKAN POP-UP PENGINGAT.");
           reminderTextEl.innerText = reminderMessage;
-          reminderModalEl.style.display = 'flex'; // Tampilkan modal
+          reminderModalEl.style.display = 'flex';
+
+          // --- PERUBAHAN 2: Set sessionStorage setelah tampil ---
+          // Tandai bahwa pengingat sudah ditampilkan untuk sesi ini.
+          try {
+            sessionStorage.setItem('reminderShownForSession', 'true');
+            console.log("Flag 'reminderShownForSession' telah diatur di sessionStorage.");
+          } catch (e) {
+            console.error("Gagal menyimpan flag pengingat ke sessionStorage:", e);
+          }
         } else {
           console.error("Elemen modal (#reminderModal atau #reminderText) tidak ditemukan di DOM.");
         }
