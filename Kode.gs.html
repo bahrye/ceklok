@@ -3355,7 +3355,7 @@ function sendMonthlySummaryNotification(todayObj) {
         body += `   - Hadir (Jam Lengkap): ${summary.present} hari\n`;
         body += `   - Hari Libur Sekolah (Input Guru): ${summary.schoolHoliday} hari\n`;
         body += `   - Alasan Lain (Valid): ${summary.otherValidReason} hari\n`;
-        body += `Alpa (Kosong di Hari Kerja): ${summary.absent} hari\n`;
+        body += `Alpa : ${summary.absent} hari\n`;
         body += `Ceklok Tidak Lengkap (Salah Satu Jam): ${summary.incomplete} hari\n`;
         body += `-------------------------------------------------\n`;
         body += `Persentase Pengisian Ceklok Anda: ${summary.attendancePercentage}%\n\n`;
@@ -3788,10 +3788,13 @@ function createOrEnsureDailyReminderTrigger() {
   }
 }
 
-// Di dalam file code.gs.html
-
 /**
  * Mengambil ringkasan kehadiran bulanan untuk seorang guru.
+ * LOGIKA BARU (Disempurnakan):
+ * 1. Alpa dihitung untuk seluruh hari kerja dalam sebulan.
+ * 2. Kondisi "Ceklok Tidak Lengkap" (salah satu jam terisi) DIHITUNG sebagai "Alpa".
+ * 3. Kategori "Ceklok Tidak Lengkap" TETAP DITAMPILKAN jumlahnya dan bisa diklik, namun hanya sebagai informasi tambahan dan tidak mempengaruhi perhitungan persentase.
+ *
  * @param {string} teacherName Nama guru.
  * @param {string} monthYear Periode bulan dan tahun (format "MM/YYYY").
  * @return {object} Objek yang berisi statistik ringkasan atau error.
@@ -3810,9 +3813,9 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
     if (!ceklokManualSheet) return { success: false, error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` };
     if (!kalenderSheet) return { success: false, error: `Sheet '${KALENDER_SHEET_NAME}' tidak ditemukan.` };
 
-    const [mmStr, yyyyStr] = monthYear.split("/");
+    const [mmStr, quadripleStr] = monthYear.split("/");
     const mm = parseInt(mmStr, 10);
-    const yyyy = parseInt(yyyyStr, 10);
+    const yyyy = parseInt(quadripleStr, 10);
 
     const lastDayOfMonth = new Date(yyyy, mm, 0).getDate();
     const today = new Date();
@@ -3856,10 +3859,10 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
       schoolHoliday: 0,
       otherValidReason: 0,
       absent: 0,
-      incomplete: 0,
+      incomplete: 0, // Dihitung kembali untuk ditampilkan
       attendancePercentage: 0,
-      absentDates: [], // BARU: Untuk menyimpan tanggal alpa
-      incompleteEntries: [] // BARU: Untuk menyimpan detail tanggal tidak lengkap
+      absentDates: [],
+      incompleteEntries: [] // Dihitung kembali untuk detail modal
     };
 
     for (let day = 1; day <= lastDayOfMonth; day++) {
@@ -3868,65 +3871,57 @@ function getTeacherMonthlySummary(teacherName, monthYear) {
       const dateStr = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), "dd/MM/yyyy");
       const dayOfWeek = currentDate.getDay();
 
-      let isWorkingDay = true;
-      if (dayOfWeek === 0) { 
-        isWorkingDay = false;
-      } else if (liburMap[dateStr]) { 
-        isWorkingDay = false;
-      }
-
-      let entryProcessedForDay = false; 
-      for (let k = 1; k < allCeklokData.length; k++) {
-          const row = allCeklokData[k];
-          if (String(row[idxNama]).trim() === teacherName &&
-              row[idxTanggal] instanceof Date &&
-              Utilities.formatDate(new Date(row[idxTanggal]), Session.getScriptTimeZone(), "dd/MM/yyyy") === dateStr) {
-
-              const jamMasuk = String(row[idxMasuk] || "").trim();
-              const jamPulang = String(row[idxPulang] || "").trim();
-              const ketManual = String(row[idxKetManual] || "").trim();
-
-              if (jamMasuk && jamPulang) {
-                  if(isWorkingDay) summary.present++; 
-              } else if (ketManual) {
-                  const ketManualLower = ketManual.toLowerCase();
-                  if (ketManualLower.includes("hari libur sekolah") || ketManualLower.includes("libur sekolah")) {
-                      summary.schoolHoliday++;
-                  } else if (allValidReasonsFromSheet.includes(ketManualLower)) {
-                      if (!(ketManualLower.includes("hari libur sekolah") || ketManualLower.includes("libur sekolah"))) {
-                          summary.otherValidReason++;
-                      }
-                  } else { 
-                       if (isWorkingDay && currentDate < today) {
-                          summary.absent++;
-                          summary.absentDates.push(dateStr); // BARU
-                       }
-                  }
-              } else if ((jamMasuk && !jamPulang) || (!jamMasuk && jamPulang)) {
-                  if(isWorkingDay) {
-                    summary.incomplete++; 
-                    let missingDetail = jamMasuk ? "Jam Pulang Kosong" : "Jam Masuk Kosong";
-                    summary.incompleteEntries.push({ date: dateStr, missing: missingDetail }); // BARU
-                  }
-              } else { 
-                  if (isWorkingDay && currentDate < today) {
-                      summary.absent++;
-                      summary.absentDates.push(dateStr); // BARU
-                  }
-              }
-              entryProcessedForDay = true;
-              break;
-          }
-      }
+      let isWorkingDay = (dayOfWeek !== 0 && !liburMap[dateStr]);
 
       if (isWorkingDay) {
         summary.totalWorkingDaysInMonth++;
-        let dayHasPassedOrIsToday = currentDate <= today;
-        if (dayHasPassedOrIsToday) {
+        if (currentDate <= today) {
             summary.effectiveWorkingDaysPassed++;
-            if (!entryProcessedForDay && currentDate < today) {
-                summary.absent++;
-                summary.absentDates.push(dateStr); // BARU
+        }
+
+        let isDayComplete = false;
+        let entryFound = false;
+
+        for (let k = 1; k < allCeklokData.length; k++) {
+            const row = allCeklokData[k];
+            if (String(row[idxNama]).trim() === teacherName &&
+                row[idxTanggal] instanceof Date &&
+                Utilities.formatDate(new Date(row[idxTanggal]), Session.getScriptTimeZone(), "dd/MM/yyyy") === dateStr) {
+                
+                entryFound = true;
+                const jamMasuk = String(row[idxMasuk] || "").trim();
+                const jamPulang = String(row[idxPulang] || "").trim();
+                const ketManual = String(row[idxKetManual] || "").trim();
+
+                if (jamMasuk && jamPulang) {
+                    summary.present++;
+                    isDayComplete = true;
+                } else if ((jamMasuk && !jamPulang) || (!jamMasuk && jamPulang)) {
+                    // --- PERUBAHAN LOGIKA DI SINI ---
+                    // Tetap hitung 'incomplete' untuk ditampilkan, tapi hari ini tidak dianggap 'complete'
+                    summary.incomplete++;
+                    let missingDetail = jamMasuk ? "Jam Pulang Kosong" : "Jam Masuk Kosong";
+                    summary.incompleteEntries.push({ date: dateStr, missing: missingDetail });
+                    isDayComplete = false; // Tetap false agar dihitung Alpa
+                } else if (ketManual) {
+                    const ketManualLower = ketManual.toLowerCase();
+                    if (ketManualLower.includes("hari libur sekolah") || ketManualLower.includes("libur sekolah")) {
+                        summary.schoolHoliday++;
+                        isDayComplete = true;
+                    } else if (allValidReasonsFromSheet.includes(ketManualLower)) {
+                        summary.otherValidReason++;
+                        isDayComplete = true;
+                    }
+                }
+                break;
+            }
+        }
+
+        if (!isDayComplete) {
+            summary.absent++;
+            // Hanya tambahkan ke absentDates jika BUKAN kasus incomplete, agar tidak duplikat di modal
+            if (!summary.incompleteEntries.some(e => e.date === dateStr)) {
+                summary.absentDates.push(dateStr);
             }
         }
       }
