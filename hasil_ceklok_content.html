@@ -1,7 +1,8 @@
 <div class="container" id="hasilCeklokContainer">
   <h2>Rekapitulasi Hasil Ceklok Bulanan</h2>
 
-  <div class="rekap-controls" id="rekapControlsContainer"> <div class="form-row" style="justify-content: center; align-items: center; margin-bottom: 20px; gap: 10px;">
+  <div class="rekap-controls" id="rekapControlsContainer">
+    <div class="form-row" style="justify-content: center; align-items: center; margin-bottom: 20px; gap: 10px;">
       <label for="rekapBulanSelect">Pilih Bulan:</label>
       <select id="rekapBulanSelect">
         <option value="01">Januari</option>
@@ -18,9 +19,9 @@
         <option value="12">Desember</option>
       </select>
       <label for="rekapTahunSelect">Pilih Tahun:</label>
-      <select id="rekapTahunSelect">
-        </select>
-      <button id="btnTampilkanRekap" onclick="loadMonthlyRekap()">Tampilkan Rekap</button> </div>
+      <select id="rekapTahunSelect"></select>
+      <button id="btnTampilkanRekap" onclick="loadMonthlyRekap()">Tampilkan Rekap</button>
+    </div>
   </div>
 
   <p style="text-align:center;"><strong>Rekapitulasi untuk Periode:</strong> <span id="rekapInfoBulanTahun">Memuat...</span></p>
@@ -34,93 +35,71 @@
 
   <div class="btn-container" style="margin-top: 30px;">
     <button id="btnPrintRekap" onclick="handlePrintRekap()">Cetak Rekap PDF</button>
-    <button onclick="backToPreviousCeklokView()">Kembali</button>
+    <!-- PERBAIKAN: Tombol kembali memanggil fungsi spesifik untuk kembali ke dasbor guru -->
+    <button onclick="goBackToUserDashboard()">Kembali ke Dasbor</button>
   </div>
 </div>
 
 <style>
+  /* (Style dari file asli tetap dipertahankan) */
   #dynamicRekapTable tr.pemisah-guru-atas td {
-      /* Untuk sel data, bukan sel nama guru yang rowspan */
-      border-top: 1px solid #888; /* Garis tebal di atas blok guru baru (kecuali guru pertama) */
+      border-top: 1px solid #888;
   }
-  /* Jika ingin border atasnya juga berlaku pada sel nama guru yang rowspan,
-    maka perlu penanganan khusus karena rowspan.
-    Alternatifnya, fokus pada border bawah saja. */
-
   #dynamicRekapTable tr.pemisah-guru-bawah td {
-      border-bottom: 1px solid #888; /* Garis tebal di bawah setiap blok guru */
+      border-bottom: 1px solid #888;
   }
-
-  /* Tambahan style untuk sel rekap jika diperlukan */
   #dynamicRekapTable td.libur-minggu { background-color: #fff0f0; color: #d9534f; font-weight: bold; text-align: center; }
   #dynamicRekapTable td.libur-kalender { background-color: #ffeaa7; color: #8c6d00; font-weight: bold; text-align: center; }
   #dynamicRekapTable td.keterangan-manual { background-color: #e7f3fe; color: #006cbe; font-style: italic; text-align: center; }
   #dynamicRekapTable td.hadir { text-align: center; }
   #dynamicRekapTable td.rekap-nama-guru { font-weight: bold; vertical-align: middle !important; text-align: left !important; }
-  #dynamicRekapTable th.rekap-tgl-header { min-width: 40px; /* Agar kolom tanggal tidak terlalu sempit */ }
-
-  /* Style untuk kontainer tabel rekap agar bisa di-scroll */
+  #dynamicRekapTable th.rekap-tgl-header { min-width: 40px; }
   #hasilCeklokContainer .table-container#rekapTableContainer {
-      max-height: 70vh; /* Tinggi maksimum, sesuaikan sesuai kebutuhan */
-      overflow: auto;   /* Ini PENTING untuk scroll vertikal dan horizontal */
-      position: relative; /* Kadang membantu untuk konteks sticky */
-      border: 1px solid #ccc; /* Tambahkan border agar jelas batasannya */
+      max-height: 70vh;
+      overflow: auto;
+      position: relative;
+      border: 1px solid #ccc;
       margin-top: 10px;
   }
-
   #dynamicRekapTable {
-      width: auto; /* Biarkan tabel mengambil lebar sesuai kontennya */
-      min-width: 100%; /* Minimal selebar kontainernya */
-      border-collapse: separate; /* PENTING untuk sticky agar border baik */
-      border-spacing: 0; /* Hilangkan spasi antar border sel */
-      /* Background dasar tabel jika ada sel transparan (seharusnya tidak jika sel diberi background) */
-      /* background-color: var(--white); */
+      width: auto;
+      min-width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
   }
-
-  /* Styling Umum untuk Semua Sel Header dan Data di Tabel Rekap */
   #dynamicRekapTable th,
   #dynamicRekapTable td {
       padding: 8px 10px;
-      text-align: center; /* Default alignment, bisa dioverride */
-      border: 1px solid #e0e0e0; /* Border tipis untuk semua sel */
-      white-space: nowrap; /* Mencegah teks panjang membungkus dan merusak layout sticky */
+      text-align: center;
+      border: 1px solid #e0e0e0;
+      white-space: nowrap;
   }
-
-  /* === STICKY HEADER (Baris Header Tanggal) === */
   #dynamicRekapTable thead th {
-      position: -webkit-sticky; /* Safari */
+      position: -webkit-sticky;
       position: sticky;
-      top: 0; /* Menempel di atas saat scroll vertikal */
-      background-color: var(--primary); /* Warna background header, sesuaikan */
+      top: 0;
+      background-color: var(--primary);
       color: var(--white);
-      z-index: 20; /* Lebih tinggi dari kolom nama guru di tbody */
-      /* border-bottom: 2px solid var(--secondary); */ /* Border bawah header yang lebih tebal */
+      z-index: 20;
   }
-
-  /* === STICKY KOLOM PERTAMA (Nama Guru) === */
-  /* Header "Nama Guru" (pojok kiri atas) */
   #dynamicRekapTable thead th:first-child {
-      position: -webkit-sticky; /* Safari */
+      position: -webkit-sticky;
       position: sticky;
-      left: 0; /* Menempel di kiri saat scroll horizontal */
-      top: 0; /* Juga menempel di atas, karena ini bagian dari header */
-      z-index: 30; /* PALING TINGGI, agar menutupi pertemuan header lain & kolom tbody */
-      background-color: var(--primary); /* Samakan dengan header lain */
-      min-width: 180px; /* Lebar minimum untuk kolom nama guru */
-      /* border-right: 2px solid var(--secondary); */ /* Pemisah dengan kolom tanggal */
+      left: 0;
+      top: 0;
+      z-index: 30;
+      background-color: var(--primary);
+      min-width: 180px;
   }
-
-  /* Sel Nama Guru di Body Tabel */
   #dynamicRekapTable tbody td.rekap-nama-guru {
-      position: -webkit-sticky; /* Safari */
+      position: -webkit-sticky;
       position: sticky;
-      left: 0; /* Menempel di kiri saat scroll horizontal */
-      background-color: #f8f9fa; /* Warna background untuk kolom nama guru, sesuaikan */
+      left: 0;
+      background-color: #f8f9fa;
       color: var(--text);
-      z-index: 10; /* Di bawah header, tapi di atas sel data biasa */
-      text-align: left !important; /* Pastikan nama guru rata kiri */
+      z-index: 10;
+      text-align: left !important;
       font-weight: bold;
-      min-width: 180px; /* Samakan dengan header nama guru */
-      /* border-right: 2px solid #ccc; */ /* Pemisah dengan kolom data */
+      min-width: 180px;
   }
 </style>
