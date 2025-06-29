@@ -1,176 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <!-- Impor Font Awesome untuk ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* Variabel Warna */
+        :root {
+            --primary: #0066cc;
+            --secondary: #004b99;
+            --accent: #f0f4f8;
+            --grey-light: #f1f3f5;
+            --text-dark: #333;
+            --text-light: #555;
+            --white: #fff;
+            --shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+
+        /* Kontainer Utama */
+        #tutorialContainer {
+            padding: 15px;
+            background-color: var(--white);
+        }
+
+        /* Header Tutorial */
+        .tutorial-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .tutorial-header h2 {
+            font-size: 2.2em;
+            color: var(--secondary);
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .tutorial-header p {
+            font-size: 1.1em;
+            color: var(--text-light);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Grid untuk Kartu Tutorial */
+        .tutorial-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 25px;
+        }
+        @media (min-width: 992px) {
+            .tutorial-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        /* Styling Kartu Tutorial */
+        .tutorial-card {
+            background-color: var(--grey-light);
+            border-radius: 12px;
+            border: 1px solid #e0e0e0;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .tutorial-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+
+        .card-header {
+            background-color: var(--primary);
+            color: var(--white);
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .card-header i {
+            font-size: 1.8em;
+        }
+        .card-header h3 {
+            margin: 0;
+            font-size: 1.5em;
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 25px;
+        }
+
+        .tutorial-point {
+            margin-bottom: 25px;
+        }
+        .tutorial-point:last-child {
+            margin-bottom: 0;
+        }
+        .tutorial-point h4 {
+            font-size: 1.2em;
+            color: var(--secondary);
+            margin: 0 0 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .tutorial-point h4 i {
+            color: var(--primary);
+        }
+        .tutorial-point p, .tutorial-point li {
+            font-size: 1em;
+            line-height: 1.6;
+            color: var(--text-dark);
+        }
+        .tutorial-point ul {
+            padding-left: 20px;
+            margin: 0;
+        }
+
+        .btn-container {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+    </style>
+</head>
+<body>
 <div class="container" id="tutorialContainer">
-  <h2>Petunjuk Penggunaan Aplikasi Ceklok Guru</h2>
-  <p style="text-align: center; margin-bottom: 25px;">Selamat datang di Aplikasi Ceklok Guru. Berikut adalah panduan singkat penggunaan aplikasi ini.</p>
+    <div class="tutorial-header">
+      <h2>Petunjuk Penggunaan Aplikasi Ceklok</h2>
+      <p>Panduan lengkap untuk setiap peran pengguna agar dapat memaksimalkan penggunaan aplikasi.</p>
+    </div>
 
-  <div class="tutorial-section">
-    <h3>Untuk Semua Pengguna</h3>
-    <div class="tutorial-subsection">
-      <h4>1. Login</h4>
-      <ul>
-        <li>Akses halaman login aplikasi.</li>
-        <li>Masukkan <strong>Username atau Email Utama</strong> Anda yang terdaftar.</li>
-        <li>Masukkan <strong>Password</strong> Anda.</li>
-        <li>Klik tombol "Login".</li>
-        <li>Jika Anda lupa password, klik tautan "Lupa Password?" dan ikuti instruksi untuk reset melalui OTP yang dikirim ke email utama Anda.</li>
-      </ul>
-    </div>
-    <div class="tutorial-subsection">
-      <h4>2. Email Utama</h4>
-      <ul>
-        <li>Saat pertama kali login (atau jika belum diatur), Anda akan diminta untuk mengatur <strong>Email Utama</strong>. Email ini sangat penting untuk fitur lupa password dan notifikasi.</li>
-        <li>Masukkan email aktif Anda dan lakukan verifikasi melalui OTP yang dikirimkan.</li>
-        <li>Anda dapat mengubah Email Utama melalui menu profil di pojok kanan atas.</li>
-      </ul>
-    </div>
-    <div class="tutorial-subsection">
-      <h4>3. Ubah Password</h4>
-      <ul>
-        <li>Anda dapat mengubah password melalui menu profil di pojok kanan atas.</li>
-        <li>Anda akan diminta memasukkan password lama dan password baru beserta konfirmasinya.</li>
-      </ul>
-    </div>
-    <div class="tutorial-subsection">
-      <h4>4. Logout</h4>
-      <ul>
-        <li>Untuk keluar dari aplikasi, klik ikon profil di pojok kanan atas, lalu pilih "Logout".</li>
-        <li>Sesi Anda juga akan otomatis berakhir setelah periode tidak aktif tertentu.</li>
-      </ul>
-    </div>
-  </div>
-
-  <hr style="margin: 30px 0;">
-
-  <div class="tutorial-section">
-    <h3>Untuk Guru</h3>
-    <div class="tutorial-subsection">
-      <h4>1. Mengisi Ceklok Harian</h4>
-      <ul>
-        <li>Setelah login, Anda akan diarahkan ke halaman Input Ceklok.</li>
-        <li>Nama Anda akan otomatis terpilih.</li>
-        <li>Pilih <strong>Bulan dan Tahun</strong> ceklok yang ingin diisi atau dilihat. Data untuk periode yang dipilih akan dimuat. Periode yang bisa dipilih dibatasi oleh pengaturan Admin dan bulan berjalan.</li>
-        <li>Untuk setiap tanggal hari kerja:
-          <ul>
-            <li>Isi <strong>Jam Masuk</strong> dengan format HH.MM (contoh: 07.15).</li>
-            <li>Isi <strong>Jam Pulang</strong> dengan format HH.MM (contoh: 14.30).</li>
-            <li>Jika Anda tidak masuk karena alasan tertentu (sakit, izin, dinas luar), pilih alasan dari dropdown <strong>Keterangan Libur/Alasan Tidak Masuk</strong>. Jika Anda memilih alasan, input jam masuk dan pulang akan otomatis dikosongkan/dinonaktifkan untuk hari itu.</li>
-            <li>Hari Minggu dan hari libur nasional/sekolah (yang sudah diinput Admin) akan ditandai dan input jam dinonaktifkan.</li>
-          </ul>
-        </li>
-        <li>Setelah selesai mengisi, klik tombol <strong>"Simpan Data Ceklok"</strong>.</li>
-      </ul>
-    </div>
-    <div class="tutorial-subsection">
-      <h4>2. Melihat Hasil Ceklok (Rekapitulasi)</h4>
-      <ul>
-        <li>Dari halaman Input Ceklok, Anda dapat mengklik tombol <strong>"Lihat Hasil Ceklok"</strong>.</li>
-        <li>Ini akan membawa Anda ke halaman rekapitulasi absensi bulanan.</li>
-        <li>Halaman rekapitulasi akan dimuat, silahkan menunggu sampai benar-benar tampil.</li>
-        <li>Anda juga dapat mencetak rekapitulasi tersebut ke format PDF dengan mengklik <strong>"Cetak Rekap PDF"</strong>.</li>
-      </ul>
-    </div>
-    <div class="tutorial-subsection">
-      <h4>3. Export Excel untuk EMIS</h4>
-      <ul>
-        <li>Di bagian bawah halaman Input Ceklok, terdapat fitur "Export File Excel".</li>
-        <li>Fitur ini berguna untuk mengunggah data absensi ke aplikasi EMIS.</li>
-        <li>Ikuti langkah-langkah yang tertera:
-          <ol>
-            <div class="tutorial-image-container">
-              <img src="https://uploadimage.io/images/2025/05/22/01-login-emis.jpg" alt="Login EMIS" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Login terlebih dahulu ke EMIS</i></p>
-              <img src="https://uploadimage.io/images/2025/05/22/Screenshot_20250522-231439.jpg" alt="Absensi" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Klik Absensi</i></p>
-              <img src="https://uploadimage.io/images/2025/05/22/Screenshot_20250522-231458.jpg" alt="Klik Detail" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Cari bulan yang akan diisi, lalu klik Aksi >> Lihat Detail</i></p>
-              <img src="https://uploadimage.io/images/2025/05/22/Screenshot_20250522-231507.jpg" alt="Download Template" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Silahkan klik Download Template</i></p>
-              <img src="https://uploadimage.io/images/2025/05/22/Screenshot_20250522-231531.jpg" alt="Salin Lock ID yang ada di tanggal 01" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Buka Template yang sudah di download lalu salin/catat Lock ID yang pertama tepat disamping tanggal satu (01) bulan template</i></p>
-              <img src="https://uploadimage.io/images/2025/05/22/Screenshot_20250522-231615.jpg" alt="Masukkan LOCK ID tersebut ke kotak input yang tersedia di aplikasi Ceklok" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Geser hingga paling bawah halaman ceklok. Masukkan LOCK ID yang sudah di copy/salin/catat di kotak input LOCK ID</i></p>
-              <img src="https://uploadimage.io/images/2025/05/22/Screenshot_20250522-231654.jpg" alt="Simpan LOCK ID dan tombol Download aktif" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Klik Simpan LOCK ID</i></p>
-              <img src="https://uploadimage.io/images/2025/05/22/Screenshot_20250522-231704.jpg" alt="Klik Download File Excel" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Selanjutnya, jika berhasil menyimpan, maka tombol Download File Excel bisa diklik. Silahkan diklik dan otomatis file Excel akan terdownload</i></p>
-              <img src="https://uploadimage.io/images/2025/05/22/Screenshot_20250522-231748.jpg" alt="Upload file ke EMIS" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Di bawah download template sebelumnya di EMIS, silahkan klik Upload Excel</i></p>
-              <img src="https://uploadimage.io/images/2025/05/22/Screenshot_20250522-231755.jpg" alt="Cari dan Pilih file yang sudah di download" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Cari dan Pilih file yang sudah didownload di Ceklok manual</i></p>
-              <img src="https://uploadimage.io/images/2025/05/22/Screenshot_20250522-231807.jpg" alt="Proses Upload berhasil" class="tutorial-image" style="width: 60%; height: auto;">
-              <p class="tutorial-image-caption"><i>Proses Upload Absensi berhasil dan semua ceklok absensi manual sudah masuk ke EMIS</i></p>
+    <div class="tutorial-grid">
+        <!-- Kartu Untuk Semua Pengguna -->
+        <div class="tutorial-card">
+            <div class="card-header">
+                <i class="fas fa-users"></i>
+                <h3>Untuk Semua Pengguna</h3>
             </div>
-          </ol>
-        </li>
-        <li><strong>PENTING:</strong> Pastikan data ceklok untuk bulan yang bersangkutan sudah lengkap dan benar sebelum melakukan export. Pastikan juga ketika mengupload file excel ke EMIS harus sama dengan bulan yang diisi di Ceklok Manual. Jika salah bulan, atau salah angka LOCK ID biasanya akan terjadi KESALAHAN/GAGAL. Jika seperti ini, maka silahkan ulangi kembali langkahnya dari awal.</li>
-      </ul>
-    </div>
-    <div class="tutorial-subsection">
-      <h4>4. Notifikasi Pengingat</h4>
-      <ul>
-        <li>Sistem akan mengirimkan email pengingat jika:
-          <ul>
-            <li>Ada absensi yang tidak lengkap (misalnya, hanya jam masuk yang terisi tanpa jam pulang, atau sebaliknya) pada hari kerja.</li>
-            <li>Ada hari kerja yang terlewat dan belum diisi absensinya sama sekali (baik jam maupun keterangan) setelah beberapa hari.</li>
-          </ul>
-        </li>
-        <li>Mohon untuk menambah email utama dan memeriksa email Anda secara berkala dan segera lengkapi absensi Anda jika menerima notifikasi.</li>
-      </ul>
-    </div>
-  </div>
+            <div class="card-body">
+                <div class="tutorial-point">
+                    <h4><i class="fas fa-sign-in-alt"></i> Login Aplikasi</h4>
+                    <p>Gunakan Username atau Email Utama beserta Password yang telah terdaftar untuk masuk ke sistem.</p>
+                </div>
+                <div class="tutorial-point">
+                    <h4><i class="fas fa-envelope-circle-check"></i> Verifikasi Email Utama</h4>
+                    <p>Email Utama sangat penting untuk notifikasi dan fitur lupa password. Pastikan Anda melakukan verifikasi saat pertama kali diminta.</p>
+                </div>
+                <div class="tutorial-point">
+                    <h4><i class="fas fa-key"></i> Lupa & Ubah Password</h4>
+                    <p>Gunakan tautan "Lupa Password?" di halaman login untuk reset via OTP. Anda juga dapat mengubah password kapan saja melalui menu profil.</p>
+                </div>
+                <div class="tutorial-point">
+                    <h4><i class="fas fa-user-edit"></i> Ajukan Perubahan Username</h4>
+                    <p>Jika perlu, Anda dapat mengajukan perubahan username melalui menu profil. Pengajuan akan ditinjau oleh Admin.</p>
+                </div>
+            </div>
+        </div>
 
-  <div class="btn-container" style="margin-top: 30px;">
-    <button onclick="goBackFromTutorial()">Kembali</button>
-  </div>
+        <!-- Kartu Untuk Guru -->
+        <div class="tutorial-card">
+            <div class="card-header">
+                <i class="fas fa-chalkboard-teacher"></i>
+                <h3>Untuk Guru</h3>
+            </div>
+            <div class="card-body">
+                <div class="tutorial-point">
+                    <h4><i class="fas fa-calendar-check"></i> Mengisi Ceklok Harian</h4>
+                    <p>Pada halaman "Mulai Isi Kehadiran", pilih periode yang diinginkan, lalu isi Jam Masuk dan Jam Pulang. Jika tidak masuk, pilih alasan dari dropdown yang tersedia.</p>
+                </div>
+                <div class="tutorial-point">
+                    <h4><i class="fas fa-chart-line"></i> Melihat Riwayat</h4>
+                    <p>Gunakan tombol "Rekapitulasi Bulanan" atau "Kalender Kehadiran Tahunan" di dasbor untuk melihat riwayat kehadiran Anda.</p>
+                </div>
+                <div class="tutorial-point">
+                    <h4><i class="fas fa-file-excel"></i> Export Excel ke EMIS</h4>
+                    <p>Fitur ini tersedia di halaman "Mulai Isi Kehadiran". Ikuti petunjuknya untuk mengunduh file Excel yang dapat langsung diunggah ke aplikasi EMIS.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kartu Untuk Admin -->
+        <div class="tutorial-card">
+            <div class="card-header">
+                <i class="fas fa-user-cog"></i>
+                <h3>Untuk Admin</h3>
+            </div>
+            <div class="card-body">
+                <div class="tutorial-point">
+                    <h4><i class="fas fa-tasks"></i> Dasbor Admin</h4>
+                    <p>Dasbor Admin adalah pusat kendali Anda. Dari sini, Anda dapat mengelola pengguna, daftar guru, kalender, dan melihat riwayat login.</p>
+                </div>
+                 <div class="tutorial-point">
+                    <h4><i class="fas fa-user-plus"></i> Kelola Pengguna & Guru</h4>
+                    <p>Tambah, edit, atau hapus akun login pengguna dan daftar nama guru melalui menu "Kelola Akun Login Pengguna" dan "Kelola Daftar Nama Guru".</p>
+                </div>
+                <div class="tutorial-point">
+                    <h4><i class="fas fa-calendar-alt"></i> Kelola Kalender</h4>
+                    <p>Tetapkan hari libur nasional atau acara sekolah melalui menu "Kelola Kalender Pendidikan". Tanggal yang ditambahkan di sini akan otomatis menjadi hari libur di tabel ceklok.</p>
+                </div>
+                <div class="tutorial-point">
+                    <h4><i class="fas fa-lock"></i> Kunci Bulan Ceklok</h4>
+                    <p>Anda dapat mengunci data ceklok pada bulan tertentu untuk mencegah perubahan lebih lanjut. Fitur ini tersedia di Dasbor Admin.</p>
+                </div>
+                 <div class="tutorial-point">
+                    <h4><i class="fas fa-history"></i> Log Aktivitas (Superadmin)</h4>
+                    <p>Superadmin dapat memantau semua aktivitas penting yang terjadi di dalam sistem melalui menu "Lihat Log Aktivitas Pengguna".</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="btn-container">
+        <button onclick="goBackFromTutorial()">Kembali</button>
+    </div>
 </div>
-
-<style>
-.tutorial-section {
-  margin-bottom: 25px;
-  padding: 15px;
-  background-color: #f9f9f9;
-  border-radius: 6px;
-  border: 1px solid #eee;
-}
-.tutorial-section h3 {
-  color: var(--primary);
-  border-bottom: 1px solid var(--secondary);
-  padding-bottom: 8px;
-  margin-top: 0;
-  margin-bottom: 15px;
-  text-align: left;
-}
-.tutorial-subsection {
-  margin-bottom: 15px;
-}
-.tutorial-subsection h4 {
-  color: var(--secondary);
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 1.1em;
-}
-.tutorial-section ul, .tutorial-section ol {
-  padding-left: 20px;
-  margin-bottom: 10px;
-}
-.tutorial-section li {
-  margin-bottom: 8px;
-  line-height: 1.6;
-}
-/* Style baru untuk gambar tutorial */
-.tutorial-image-container {
-  margin: 15px 0;
-  text-align: center; /* Agar gambar dan caption di tengah */
-}
-.tutorial-image {
-  max-width: 100%; /* Agar gambar responsif dan tidak melebihi lebar kontainer */
-  height: auto;    /* Menjaga rasio aspek gambar */
-  border: 1px solid #ddd; /* Opsional: border untuk gambar */
-  border-radius: 4px;   /* Opsional: sudut membulat */
-  margin-bottom: 5px;   /* Jarak antara gambar dan caption */
-}
-.tutorial-image-caption {
-  font-size: 0.9em;
-  color: #555;
-  margin-top: 0;
-}
-</style>
+</body>
+</html>
