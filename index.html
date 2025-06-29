@@ -1371,6 +1371,10 @@
                 htmlFile = 'admin_dashboard_content.html';
                 setupFunction = setupAdminDashboardView;
                 break;
+            case 'user_dashboard': // <-- TAMBAHKAN CASE BARU INI
+                htmlFile = 'user_dashboard_content.html';
+                setupFunction = setupUserDashboardView;
+                break;
             case 'ceklok_table':
                 htmlFile = 'ceklok_table_content.html';
                 setupFunction = setupCeklokTableView;
@@ -1829,12 +1833,7 @@
 
                 } else if (loggedInUser.role === ROLE_USER && loggedInUser.teacherName) {
                     namaGuru = loggedInUser.teacherName;
-                    // Pengguna (guru) akan diarahkan ke halaman input ceklok
-                    loadCeklokDataFromServer(namaGuru, activeCeklokMonthYear, true, () => {
-                        if (!loggedInUser.primaryEmail) {
-                            openPrimaryEmailModal();
-                        }
-                    });
+                    renderView('user_dashboard');
                 } else {
                     // Jika peran tidak dikenali atau data tidak lengkap (misalnya, user tapi tidak ada teacherName)
                     hideLoading();
@@ -2330,12 +2329,18 @@
             attachKetLiburDropdownListeners();
         }
 
-        if (btnKembaliContainer) {
-            btnKembaliContainer.style.display = isUserRole ? 'none' : 'inline-block';
-            if (!isUserRole) {
-                const btnBack = btnKembaliContainer.querySelector('button');
-                if (btnBack) btnBack.textContent = "Kembali ke Dashboard Admin";
-            }
+        // Kode baru untuk mengontrol tombol kembali
+        const btnKembaliAdminContainer = document.getElementById('ceklokTombolKembaliContainer');
+        const btnKembaliPengguna = document.getElementById('ceklokTombolKembaliPengguna');
+
+        if (isUserRole) {
+            // Jika yang login adalah GURU, tampilkan tombol kembali ke dasbor guru
+            if (btnKembaliPengguna) btnKembaliPengguna.style.display = 'inline-block';
+            if (btnKembaliAdminContainer) btnKembaliAdminContainer.style.display = 'none';
+        } else {
+            // Jika yang login adalah ADMIN, tampilkan tombol kembali ke dashboard admin
+            if (btnKembaliPengguna) btnKembaliPengguna.style.display = 'none';
+            if (btnKembaliAdminContainer) btnKembaliAdminContainer.style.display = 'inline-block';
         }
         setupLockIdAndExportClientFeatures();
         window.scrollTo(0, 0);
@@ -3530,8 +3535,8 @@
                     // btnExportExcel.classList.remove('btn-ready-export');
                     // btnExportExcel.classList.add('btn-greyed-out');
                     
-                    currentLockIdValue = null; 
-                    currentBackupSheetName = null; 
+                    // currentLockIdValue = null; 
+                    // currentBackupSheetName = null; 
                 } else {
                     showAlert(response.error || "Gagal mengekspor data.", "error");
                     lockIdStatusMsg.textContent = response.error || "Gagal mengekspor.";
@@ -4679,19 +4684,19 @@
         }
     }
 
-    // Di dalam file index.html, dalam blok <script>
-
+    /**
+     * (VERSI BARU) Memuat dan menampilkan ringkasan kehadiran guru pada kartu-kartu di dasbor.
+     */
     function loadAndDisplayTeacherSummary(teacherName, monthYear) {
         const summaryContainer = document.getElementById('teacherDashboardSummary');
         const summaryLoadingEl = document.getElementById('summaryContentLoading');
         const summaryDataEl = document.getElementById('summaryContentData');
         const summaryErrorEl = document.getElementById('summaryContentError');
 
-        // BARU: Elemen summary yang akan dibuat clickable
         const summaryItemAbsentEl = document.getElementById('summaryItemAbsent');
         const summaryItemIncompleteEl = document.getElementById('summaryItemIncomplete');
 
-        if (!summaryContainer || !summaryLoadingEl || !summaryDataEl || !summaryErrorEl || !summaryItemAbsentEl || !summaryItemIncompleteEl) {
+        if (!summaryContainer || !summaryLoadingEl || !summaryDataEl || !summaryErrorEl) {
             console.error("Elemen ringkasan atau item yang dapat diklik tidak ditemukan.");
             return;
         }
@@ -4699,64 +4704,58 @@
         summaryLoadingEl.style.display = 'block';
         summaryDataEl.style.display = 'none';
         summaryErrorEl.style.display = 'none';
-        summaryErrorEl.textContent = '';
 
-        // Hapus event listener lama jika ada, sebelum menambahkan yang baru
-        summaryItemAbsentEl.onclick = null;
-        summaryItemIncompleteEl.onclick = null;
+        if (summaryItemAbsentEl) summaryItemAbsentEl.onclick = null;
+        if (summaryItemIncompleteEl) summaryItemIncompleteEl.onclick = null;
 
         google.script.run
             .withSuccessHandler(response => {
                 summaryLoadingEl.style.display = 'none';
                 if (response.success && response.summary) {
                     const summary = response.summary;
-                    document.getElementById('summaryMonthYear').textContent = summary.monthYear;
+                    
+                    // Mengisi data ke kartu-kartu baru di dasbor
                     document.getElementById('summaryTotalWorkingDays').textContent = summary.totalWorkingDaysInMonth;
                     document.getElementById('summaryDaysPassed').textContent = summary.effectiveWorkingDaysPassed;
-                    document.getElementById('summaryCompletedChecklok').textContent = summary.completedChecklok;
                     document.getElementById('summaryPresent').textContent = summary.present;
                     document.getElementById('summarySchoolHoliday').textContent = summary.schoolHoliday;
                     document.getElementById('summaryOtherValidReason').textContent = summary.otherValidReason;
                     document.getElementById('summaryAbsent').textContent = summary.absent;
                     document.getElementById('summaryIncomplete').textContent = summary.incomplete;
                     document.getElementById('summaryAttendancePercentage').textContent = summary.attendancePercentage;
+                    document.getElementById('summaryCompletedDaysDisplay').textContent = `(${summary.completedChecklok} Hari)`;
                     
-                    // BARU: Simpan detail untuk modal dan tambahkan event listener
+                    // Elemen tersembunyi untuk kompatibilitas (jika masih diperlukan oleh fungsi lain)
+                    const hiddenCompletedEl = document.getElementById('summaryCompletedChecklok');
+                    if (hiddenCompletedEl) {
+                        hiddenCompletedEl.textContent = summary.completedChecklok;
+                    }
+
                     currentTeacherSummaryDetails.absentDates = summary.absentDates || [];
                     currentTeacherSummaryDetails.incompleteEntries = summary.incompleteEntries || [];
 
-                    if (summary.absent > 0) {
+                    if (summary.absent > 0 && summaryItemAbsentEl) {
                         summaryItemAbsentEl.onclick = function() {
                             openSummaryDetailModal('Detail Tanggal Alpa', currentTeacherSummaryDetails.absentDates, 'absent');
                         };
-                    } else {
-                        summaryItemAbsentEl.onclick = null; // Hapus listener jika tidak ada data
                     }
 
-                    if (summary.incomplete > 0) {
+                    if (summary.incomplete > 0 && summaryItemIncompleteEl) {
                         summaryItemIncompleteEl.onclick = function() {
                             openSummaryDetailModal('Detail Ceklok Tidak Lengkap', currentTeacherSummaryDetails.incompleteEntries, 'incomplete');
                         };
-                    } else {
-                        summaryItemIncompleteEl.onclick = null;
                     }
                     
                     summaryDataEl.style.display = 'block';
                 } else {
                     summaryErrorEl.textContent = response.error || "Gagal memuat ringkasan kehadiran.";
                     summaryErrorEl.style.display = 'block';
-                    // Kosongkan detail jika gagal
-                    currentTeacherSummaryDetails.absentDates = [];
-                    currentTeacherSummaryDetails.incompleteEntries = [];
                 }
             })
             .withFailureHandler(err => {
                 summaryLoadingEl.style.display = 'none';
                 summaryErrorEl.textContent = `Error server saat memuat ringkasan: ${err.message}`;
                 summaryErrorEl.style.display = 'block';
-                // Kosongkan detail jika gagal
-                currentTeacherSummaryDetails.absentDates = [];
-                currentTeacherSummaryDetails.incompleteEntries = [];
             })
             .getTeacherMonthlySummary(teacherName, monthYear);
     }
@@ -5154,16 +5153,6 @@
         tableBody.innerHTML = html;
     }
 
-    // Jangan lupa untuk menambahkan case 'activity_log' ke fungsi renderView Anda
-    // Contoh:
-    // function renderView(viewName, data, postRenderCallback) {
-    // // ...
-    // case 'activity_log':
-    // htmlFile = 'activity_log_content.html';
-    // setupFunction = setupActivityLogView;
-    // break;
-    // // ...
-    // }
     // Fungsi helper BARU untuk validasi format dd/mm/yyyy
     function isValidDDMMYYYY(dateString) {
         if (!dateString) return false; // Kosong tidak valid untuk fungsi ini, tapi bisa valid untuk filter
@@ -5684,78 +5673,44 @@
         if(modalBody) modalBody.innerHTML = ''; // Kosongkan isi modal
     }
 
-    // BARU: Fungsi untuk navigasi ke tanggal tertentu di tabel ceklok
+    /**
+     * (VERSI BARU) Menavigasi ke tabel ceklok lalu menyorot tanggal tertentu.
+     * Dipanggil dari modal ringkasan di dasbor.
+     */
     function navigateToCeklokDate(dateString, fieldToFocus = null) {
         closeSummaryDetailModal(); // Tutup modal dulu
 
-        // Cari baris dan input yang sesuai di tabel ceklok
-        const tableBody = document.getElementById('ceklokTableBody');
-        if (!tableBody || !dataTanggal || dataTanggal.length === 0) {
-            showAlert("Tabel ceklok tidak termuat atau kosong.", "warning");
+        // 1. Dapatkan periode (bulan/tahun) dari tanggal yang diklik
+        const dateParts = dateString.split('/');
+        if (dateParts.length !== 3) {
+            showAlert("Format tanggal tidak valid untuk navigasi.", "error");
             return;
         }
+        const monthYearToLoad = `${dateParts[1]}/${dateParts[2]}`;
 
-        let targetRowIndex = -1;
-        for (let i = 0; i < dataTanggal.length; i++) {
-            if (dataTanggal[i].tanggal === dateString) {
-                targetRowIndex = i;
-                break;
-            }
-        }
-
-        if (targetRowIndex !== -1) {
-            let inputIdToFocus;
-            if (fieldToFocus) {
-                inputIdToFocus = `${fieldToFocus}${targetRowIndex}`; // Misal: jamMasuk0, jamPulang0
-            } else {
-                // Jika hanya alpa, fokus ke input jam masuk sebagai default
-                inputIdToFocus = `jamMasuk${targetRowIndex}`;
-            }
-            
-            const inputElement = document.getElementById(inputIdToFocus);
-            if (inputElement) {
-                // Pastikan input tidak disabled sebelum fokus (misal jika keterangan libur dipilih)
-                if(!inputElement.disabled) {
-                    inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    setTimeout(() => { // Beri sedikit delay agar scroll selesai sebelum fokus
-                        inputElement.focus();
-                        inputElement.select(); // Pilih isi input jika ada
-                        // Efek highlight sementara
-                        const originalBg = inputElement.style.backgroundColor;
-                        inputElement.style.backgroundColor = 'var(--warning-hover)'; // Warna highlight
-                        setTimeout(() => {
-                            inputElement.style.backgroundColor = originalBg;
-                        }, 1500);
-                    }, 300);
-                } else {
-                    // Jika input disabled (misal karena ada keterangan libur), scroll ke rownya saja
-                    const parentRow = inputElement.closest('tr');
-                    if(parentRow) {
-                        parentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        // Efek highlight sementara
-                        const originalBg = parentRow.style.backgroundColor;
-                        parentRow.style.backgroundColor = 'var(--warning-hover)'; 
-                        setTimeout(() => {
-                            parentRow.style.backgroundColor = originalBg;
-                        }, 1500);
-                    }
-                    showAlert(`Input untuk ${dateString} (${fieldToFocus || 'jam'}) tidak dapat diisi karena ada keterangan lain.`, "info");
-                }
-            } else {
-                showAlert(`Input untuk tanggal ${dateString} tidak ditemukan.`, "error");
-                // Coba scroll ke row jika input spesifik tidak ada (misal hari libur)
-                const rows = tableBody.getElementsByTagName('tr');
-                if (rows[targetRowIndex]) {
-                    rows[targetRowIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }
+        // 2. Periksa apakah pengguna sudah berada di halaman & periode yang benar
+        const isOnCeklokTable = document.getElementById('ceklokTableBody');
+        if (isOnCeklokTable && activeCeklokMonthYear === monthYearToLoad) {
+            // Jika sudah benar, langsung panggil fungsi sorot
+            findAndHighlightDateRow(dateString, fieldToFocus);
         } else {
-            showAlert(`Tanggal ${dateString} tidak ditemukan dalam data ceklok saat ini.`, "warning");
+            // Jika belum, muat halaman ceklok terlebih dahulu,
+            // lalu panggil fungsi sorot sebagai callback setelah selesai.
+            if (loggedInUser && loggedInUser.teacherName) {
+                loadCeklokDataFromServer(
+                    loggedInUser.teacherName, 
+                    monthYearToLoad, 
+                    true, // true karena ini adalah aksi dari guru (user)
+                    () => {
+                        // Ini adalah callback yang akan dijalankan SETELAH tabel dimuat
+                        findAndHighlightDateRow(dateString, fieldToFocus);
+                    }
+                );
+            } else {
+                showAlert("Sesi pengguna tidak valid untuk navigasi.", "error");
+            }
         }
     }
-    // Di dalam <script> di index.html
-
-    // ... (fungsi-fungsi lain) ...
 
     // Fungsi baru untuk navigasi ke halaman "Cek Data Kehadiran"
     function navigateToCekDataKehadiran() {
@@ -5932,42 +5887,6 @@
         });
     }
 
-
-    // Modifikasi renderView untuk menambahkan case baru
-    /*
-    function renderView(viewName, data, postRenderCallback) {
-        // ...
-        case 'cek_data_kehadiran': // Nama view baru
-            htmlFile = 'cek_data_kehadiran_content.html';
-            setupFunction = setupCekDataKehadiranView;
-            break;
-        // ...
-    }
-    */
-
-    // Modifikasi menu untuk guru, misalnya di dalam setupProfileMenuEventListeners atau
-    // jika Anda memiliki fungsi terpisah untuk membangun menu guru:
-    /*
-    // Contoh di setupProfileMenuEventListeners jika menu ada di dropdown profil
-    const profileDropdown = document.getElementById('profileDropdown');
-    if (loggedInUser && loggedInUser.role === ROLE_USER && profileDropdown) {
-        const cekDataLink = document.createElement('a');
-        cekDataLink.href = "#";
-        cekDataLink.textContent = "Cek Data Kehadiran Tahunan";
-        cekDataLink.onclick = function(e) {
-            e.preventDefault();
-            navigateToCekDataKehadiran();
-            toggleProfileDropdown(); // Tutup dropdown setelah klik
-        };
-        // Sisipkan sebelum link logout atau di posisi yang sesuai
-        const logoutLink = document.getElementById('menuLogoutProfile');
-        if(logoutLink) {
-            profileDropdown.insertBefore(cekDataLink, logoutLink);
-        } else {
-            profileDropdown.appendChild(cekDataLink);
-        }
-    }
-    */
     // Fungsi baru untuk menampilkan modal detail Cek Data Kehadiran
     function openCdkDetailModal(dateString, statusText, detailMessage) {
         const modal = document.getElementById('cdkDetailModal');
@@ -6225,6 +6144,193 @@
             });
         }
     });
+
+    /**
+     * Menyiapkan tampilan dashboard untuk pengguna (guru).
+     */
+    function setupUserDashboardView() {
+        window.scrollTo(0, 0);
+        const guruNameEl = document.getElementById('dashboard-guru-name');
+        if (guruNameEl && loggedInUser) {
+            guruNameEl.textContent = loggedInUser.teacherName;
+        }
+
+        // --- TAMBAHKAN KODE INI ---
+        const greetingSpan = document.getElementById('time-based-greeting');
+        if (greetingSpan) {
+            const now = new Date();
+            const hour = now.getHours();
+            let greeting = 'Selamat Datang'; // Default
+
+            if (hour >= 3 && hour < 10) {
+                greeting = 'Selamat Pagi';
+            } else if (hour >= 10 && hour < 15) {
+                greeting = 'Selamat Siang';
+            } else if (hour >= 15 && hour < 19) {
+                greeting = 'Selamat Sore';
+            } else {
+                greeting = 'Selamat Malam';
+            }
+            greetingSpan.textContent = greeting;
+        }
+        // --- AKHIR KODE TAMBAHAN ---
+
+        // Panggil fungsi yang sudah ada untuk menyiapkan dan memuat periode
+        setupDashboardPeriodSelector();
+
+        // Tampilkan pop-up pengingat jika memenuhi syarat
+        if (typeof showEndOfMonthReminder === 'function') {
+            setTimeout(showEndOfMonthReminder, 100);
+        }
+    }
+
+    /**
+     * Menavigasikan pengguna dari dashboard ke halaman pengisian ceklok.
+     */
+    function navigateToCeklokTable() {
+        if (loggedInUser && loggedInUser.teacherName) {
+            const monthToLoad = activeCeklokMonthYear || globalServerCurrentMonthYear;
+            if (monthToLoad) {
+                // Fungsi ini sudah ada dan akan memuat serta merender tabel isian ceklok
+                loadCeklokDataFromServer(loggedInUser.teacherName, monthToLoad, true); // true menandakan ini adalah view untuk guru
+            } else {
+                showAlert("Periode ceklok default tidak dapat ditentukan.", "error");
+            }
+        } else {
+            showAlert("Informasi sesi pengguna tidak lengkap.", "error");
+            logout();
+        }
+    }
+
+    /**
+     * Fungsi helper untuk mencari dan menyorot baris tanggal di tabel ceklok.
+     * Dipanggil setelah tabel ceklok dijamin sudah termuat.
+     */
+    function findAndHighlightDateRow(dateString, fieldToFocus) {
+        const tableBody = document.getElementById('ceklokTableBody');
+        if (!tableBody || !dataTanggal || dataTanggal.length === 0) {
+            // Cek ini sebagai fallback, seharusnya tidak terjadi jika alur benar
+            showAlert("Tabel ceklok tidak termuat atau kosong setelah navigasi.", "warning");
+            return;
+        }
+
+        let targetRowIndex = -1;
+        for (let i = 0; i < dataTanggal.length; i++) {
+            if (dataTanggal[i].tanggal === dateString) {
+                targetRowIndex = i;
+                break;
+            }
+        }
+
+        if (targetRowIndex !== -1) {
+            let inputIdToFocus;
+            if (fieldToFocus) {
+                inputIdToFocus = `${fieldToFocus}${targetRowIndex}`; // Misal: jamMasuk0, jamPulang0
+            } else {
+                inputIdToFocus = `jamMasuk${targetRowIndex}`;
+            }
+            
+            const inputElement = document.getElementById(inputIdToFocus);
+            if (inputElement) {
+                if(!inputElement.disabled) {
+                    inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => {
+                        inputElement.focus();
+                        inputElement.select();
+                        const originalBg = inputElement.style.backgroundColor;
+                        inputElement.style.backgroundColor = 'var(--warning-hover)';
+                        setTimeout(() => {
+                            inputElement.style.backgroundColor = originalBg;
+                        }, 1500);
+                    }, 300);
+                } else {
+                    const parentRow = inputElement.closest('tr');
+                    if(parentRow) {
+                        parentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        const originalBg = parentRow.style.backgroundColor;
+                        parentRow.style.backgroundColor = 'var(--warning-hover)'; 
+                        setTimeout(() => {
+                            parentRow.style.backgroundColor = originalBg;
+                        }, 1500);
+                    }
+                    showAlert(`Input untuk ${dateString} tidak dapat diisi karena ada keterangan lain.`, "info");
+                }
+            } else {
+                const rows = tableBody.getElementsByTagName('tr');
+                if (rows[targetRowIndex]) {
+                    rows[targetRowIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        } else {
+            showAlert(`Tanggal ${dateString} tidak ditemukan dalam data ceklok saat ini.`, "warning");
+        }
+    }
+
+    /**
+     * Mengarahkan pengguna kembali ke halaman dasbor guru.
+     * Fungsi ini dipanggil dari halaman rekap atau kalender tahunan.
+     */
+    function goBackToUserDashboard() {
+        if (loggedInUser && (loggedInUser.role === 'user' || loggedInUser.role === 'admin' || loggedInUser.role === 'superadmin')) {
+            // Render view 'user_dashboard' yang akan memanggil setupUserDashboardView
+            // untuk memuat ulang ringkasan.
+            renderView('user_dashboard');
+        } else {
+            // Fallback jika sesi tidak valid
+            logout();
+        }
+    }
+
+    /**
+     * Memuat ulang data ringkasan di dasbor berdasarkan periode yang dipilih
+     * dari dropdown baru.
+     */
+    function loadDashboardSummaryForSelectedPeriod() {
+        const bulanSelect = document.getElementById('summaryBulanSelect');
+        const tahunSelect = document.getElementById('summaryTahunSelect');
+        
+        if (!bulanSelect || !tahunSelect) {
+            showAlert("Elemen pemilih periode tidak ditemukan.", "error");
+            return;
+        }
+
+        const selectedMonthYear = `${bulanSelect.value}/${tahunSelect.value}`;
+
+        if (loggedInUser && loggedInUser.teacherName) {
+            // Panggil kembali fungsi yang sudah ada untuk memuat ringkasan
+            loadAndDisplayTeacherSummary(loggedInUser.teacherName, selectedMonthYear);
+        } else {
+            showAlert("Sesi pengguna tidak valid.", "error");
+        }
+    }
+
+    /**
+     * Mengisi dropdown periode di dasbor dan memuat data awal.
+     * Ini dipanggil saat setupUserDashboardView dijalankan.
+     */
+    function setupDashboardPeriodSelector() {
+        const bulanSelect = document.getElementById('summaryBulanSelect');
+        const tahunSelect = document.getElementById('summaryTahunSelect');
+
+        if (!bulanSelect || !tahunSelect) return;
+
+        // Mengisi dropdown tahun
+        const defaultYear = getYearFromMMYYYY(globalServerCurrentMonthYear);
+        const minYear = getYearFromMMYYYY(globalAdminMinMonthYear);
+        populateYearSelect('summaryTahunSelect', minYear, defaultYear, defaultYear);
+
+        // Mengatur bulan default
+        bulanSelect.value = getMonthStrFromMMYYYY(globalServerCurrentMonthYear);
+
+        // Memvalidasi rentang bulan yang dapat dipilih
+        validateMonthRange('summaryBulanSelect', 'summaryTahunSelect');
+        
+        // Memuat data untuk periode default saat halaman pertama kali dibuka
+        const initialMonthYear = `${bulanSelect.value}/${tahunSelect.value}`;
+        if (loggedInUser && loggedInUser.teacherName) {
+            loadAndDisplayTeacherSummary(loggedInUser.teacherName, initialMonthYear);
+        }
+    }
   </script>
 </body>
 </html>
