@@ -1,50 +1,5 @@
 <div class="container" id="ceklokInputContainer">
-  <div id="teacherDashboardSummary" class="dashboard-summary-section">
-    <h3 class="summary-title">Ringkasan Kehadiran Bulan Ini</h3>
-    <div id="summaryContentLoading" class="summary-loading">Memuat ringkasan...</div>
-    <div id="summaryContentData" class="summary-data" style="display: none;">
-      <p class="summary-period"><strong>Periode:</strong> <span id="summaryMonthYear"></span></p>
-      <div class="summary-grid">
-        <div class="summary-item color-green">
-          <span class="summary-label">Total Hari Kerja Sebulan:</span>
-          <span class="summary-value" id="summaryTotalWorkingDays"></span> hari
-        </div>
-        <div class="summary-item color-green">
-          <span class="summary-label">Hari Kerja Efektif Berlalu:</span>
-          <span class="summary-value" id="summaryDaysPassed"></span> hari
-        </div>
-        <div class="summary-item color-orange">
-          <span class="summary-label">Ceklok Terisi Lengkap:</span>
-          <span class="summary-value" id="summaryCompletedChecklok"></span> hari
-        </div>
-        <div class="summary-item color-yellow">
-          <span class="summary-label">Hadir (Jam Lengkap):</span>
-          <span class="summary-value" id="summaryPresent"></span> hari
-        </div>
-        <div class="summary-item color-yellow">
-          <span class="summary-label">Hari Libur Sekolah (Diinput Guru):</span>
-          <span class="summary-value" id="summarySchoolHoliday"></span> hari
-        </div>
-        <div class="summary-item color-yellow">
-          <span class="summary-label">Alasan Lain (Valid):</span>
-          <span class="summary-value" id="summaryOtherValidReason"></span> hari
-        </div>
-        <div id="summaryItemAbsent" class="summary-item color-red clickable-summary-item">
-          <span class="summary-label">Alpa (Kosong di Hari Kerja):</span>
-          <span class="summary-value" id="summaryAbsent"></span> hari
-        </div>
-        <div id="summaryItemIncomplete" class="summary-item color-gray clickable-summary-item">
-          <span class="summary-label">Ceklok Tidak Lengkap (Salah Satu Jam):</span>
-          <span class="summary-value" id="summaryIncomplete"></span> hari
-        </div>
-        <div class="summary-item summary-highlight">
-          <span class="summary-label"><strong>Persentase Pengisian Ceklok:</strong></span>
-          <span class="summary-value"><strong><span id="summaryAttendancePercentage"></span>%</strong></span>
-        </div>
-      </div>
-    </div>
-    <div id="summaryContentError" class="error-message summary-error" style="display:none;"></div>
-  </div>
+  <!-- Bagian Ringkasan Kehadiran telah dihilangkan dari halaman ini -->
 
   <h3>INPUT CEKLOK</h3>
   <h3 id="ceklokGuruName" style="color: var(--secondary);">Nama Guru</h3>
@@ -110,19 +65,26 @@
           <th>Hari</th><th>Tanggal</th><th>Data Masuk</th><th>Data Pulang</th>
           <th>Input Jam Masuk (HH.MM)</th><th>Input Jam Pulang (HH.MM)</th>
           <th>Keterangan Libur/Alasan Tidak Masuk</th>
+          <!-- PERBAIKAN: Menambahkan header untuk kolom Aksi -->
+          <th>Aksi</th>
         </tr>
       </thead>
       <tbody id="ceklokTableBody">
-        <tr><td colspan="7">Memuat data...</td></tr>
+        <!-- PERBAIKAN: Mengubah colspan menjadi 8 agar sesuai dengan jumlah header -->
+        <tr><td colspan="8">Memuat data...</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="btn-container">
     <button id="btnSimpanCeklok" onclick="submitCeklokData()">Simpan Data Ceklok</button>
-    <span id="ceklokTombolKembaliContainer" style="display:inline-block;">
-      <button onclick="goBackToAdminDashboard()">Kembali ke Dashboard</button>
+    
+    <span id="ceklokTombolKembaliContainer" style="display:none;">
+      <button class="btn-warning" onclick="goBackToAdminDashboard()">Kembali ke Dashboard Admin</button>
     </span>
+
+    <button id="ceklokTombolKembaliPengguna" class="btn-warning" onclick="goBackToUserDashboard()" style="display: none;">Kembali ke Dasbor</button>
+    
     <button onclick="navigateToHasilCeklok()">Lihat Hasil Ceklok</button>
   </div>
 
@@ -138,24 +100,23 @@
       <br>2. Jika sudah dicatat LOCK ID-nya, silahkan dimasukkan di kotak LOCK_ID di bawah lalu klik Simpan Lock_ID.
       <br>3. Setelah diklik dan berhasil, maka tombol Download File Excel bisa diklik. Silahkan di klik.
       <br>4. Jika sudah terdownload, silahkan upload ke Aplikasi EMIS : Absensi > Aksi > Lihat Detail > UPLOAD EXCEL.</p>
-
       <div class="form-group" style="margin-bottom:15px;">
         <label for="lockIdInput" style="font-weight:bold;">LOCK_ID (Ambil Dari Template EMIS):</label>
         <input type="text" id="lockIdInput" placeholder="Masukkan LOCK ID disini" style="max-width: 250px; display: inline-block; margin-right: 10px; vertical-align: middle;">
         <button id="btnSimpanLockIdClient" onclick="handleSimpanLockIdClientSite()" style="vertical-align: middle;">Simpan LOCK ID</button>
       </div>
-
       <div class="form-group">
         <button id="btnExportExcelClient" onclick="handleExportExcelClientSite()" class="btn-greyed-out" disabled style="padding: 10px 15px;">Download File Excel</button>
         <small id="lockIdStatusMessage" style="display: block; margin-top: 8px; font-style: italic;"></small>
       </div>
     </div>
   </div>
-  <div id="summaryDetailModal" class="modal-overlay" style="display:none; z-index: 20003;"> <div class="modal-content" style="max-width: 500px;">
+  <div id="summaryDetailModal" class="modal-overlay" style="display:none; z-index: 20003;"> 
+    <div class="modal-content" style="max-width: 500px;">
       <span class="modal-close-button" onclick="closeSummaryDetailModal()">&times;</span>
       <h3 id="summaryDetailModalTitle">Detail</h3>
       <div id="summaryDetailModalBody" style="max-height: 300px; overflow-y: auto;">
-        </div>
+      </div>
       <div class="btn-container" style="margin-top:20px;">
         <button type="button" onclick="closeSummaryDetailModal()" style="background-color: #777;">Tutup</button>
       </div>
@@ -171,28 +132,9 @@
     cursor: not-allowed !important;
     border: 1px solid #bbb;
   }
-  .btn-greyed-out:hover {
-    background-color: #ccc !important;
-    color: #666 !important;
-  }
-  .btn-ready-export {
-    background-color: var(--success) !important;
-    color: white !important;
-    cursor: pointer !important;
-    border: 1px solid var(--success-hover);
-  }
-  .btn-ready-export:hover {
-    background-color: var(--success-hover) !important;
-  }
-
-  /* Style untuk item ringkasan yang bisa diklik */
   .clickable-summary-item {
     cursor: pointer;
   }
-  .clickable-summary-item:hover {
-    background-color: #e9ecef; /* Warna hover ringan */
-  }
-  /* Style untuk list di dalam modal */
   #summaryDetailModalBody ul {
     list-style-type: none;
     padding-left: 0;
@@ -204,28 +146,22 @@
   #summaryDetailModalBody li:last-child {
     border-bottom: none;
   }
-  #summaryDetailModalBody li span.modal-item-date { /* Untuk membuat tanggal bisa diklik */
+  #summaryDetailModalBody li span.modal-item-date {
     color: var(--primary);
     text-decoration: underline;
     cursor: pointer;
   }
-  #summaryDetailModalBody li span.modal-item-date:hover {
-    color: var(--secondary);
-  }
-
-  /* CSS untuk Export Excel Collapsible (Tambahkan ini jika belum ada di style global) */
   .collapsible-excel-export {
     margin-top: 30px;
-    border: 1px solid #ddd; /* Border lebih halus */
+    border: 1px solid #ddd;
     border-radius: 8px;
     overflow: hidden;
-    background-color: #f9f9f9; /* Latar belakang untuk keseluruhan collapsible */
+    background-color: #f9f9f9;
   }
-
   .collapsible-trigger {
-    background-color: var(--secondary); /* Warna trigger sedikit beda atau sama dg primary */
+    background-color: var(--secondary);
     color: var(--white);
-    padding: 12px 20px; /* Padding konsisten */
+    padding: 12px 20px;
     width: 100%;
     text-align: left;
     border: none;
@@ -238,57 +174,21 @@
     font-weight: bold;
     transition: background-color 0.3s ease;
   }
-
-  .collapsible-trigger:hover {
-    background-color: var(--primary); /* Warna hover */
-  }
-
   .arrow-icon {
     transition: transform 0.3s ease;
-    font-size: 1em; /* Ukuran panah sedikit lebih besar */
+    font-size: 1em;
     margin-left: 10px;
   }
-
   .arrow-icon.down::before {
-    content: "\25BC"; /* Panah ke bawah */
+    content: "\25BC";
     display: inline-block;
   }
-
   .arrow-icon.up::before {
-    content: "\25B2"; /* Panah ke atas */
+    content: "\25B2";
     display: inline-block;
   }
-
   .collapsible-content {
     padding: 20px;
-    /* background-color: #f9f9f9; Dihapus karena sudah di .collapsible-excel-export */
-    border-top: 1px solid #ddd; /* Garis pemisah jika trigger dan konten beda bg */
-    /* display: none; /* Konten disembunyikan via JS awalnya */
-  }
-
-  /* Pastikan elemen form di dalam konten collapsible tetap terlihat baik */
-  .collapsible-content .form-group {
-      margin-bottom: 15px;
-  }
-  .collapsible-content .form-group label {
-      font-weight: bold;
-      display: block; /* Pastikan label adalah block untuk layout yang baik */
-      margin-bottom: 5px;
-  }
-  .collapsible-content .form-group input[type="text"] {
-      width: auto; /* Sesuaikan jika perlu, atau 100% jika ingin mengisi penuh */
-      max-width: 250px; /* Seperti sebelumnya */
-      display: inline-block;
-      margin-right: 10px;
-      vertical-align: middle;
-  }
-  .collapsible-content .form-group button {
-      vertical-align: middle;
-  }
-  .collapsible-content .form-group small {
-      display: block;
-      margin-top: 8px;
-      font-style: italic;
-      color: var(--grey-text);
+    border-top: 1px solid #ddd;
   }
 </style>
