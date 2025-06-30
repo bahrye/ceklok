@@ -3280,8 +3280,16 @@ function checkAndSendAttendanceReminders() {
 }
 
 /**
- * Mengirimkan ringkasan kehadiran bulanan kepada setiap guru aktif.
+ * MODIFIED FUNCTION V3 (Fix Logging Period)
+ * Mengirimkan ringkasan kehadiran bulanan atau pengingat kekurangan kepada setiap guru aktif.
  * Fungsi ini dipanggil jika tanggal saat ini berada dalam 7 hari terakhir bulan berjalan.
+ *
+ * LOGIKA BARU:
+ * 1. Jika kehadiran guru sudah 100%, kirim email ringkasan lengkap SATU KALI SAJA sebulan.
+ * 2. Jika kehadiran < 100%, kirim email pengingat harian yang HANYA berisi jumlah Alpa dan Ceklok Tidak Lengkap.
+ * 3. Menggunakan nama bulan dalam Bahasa Indonesia.
+ * 4. Memperbaiki format periode yang dicatat di log untuk notifikasi 100%.
+ *
  * @param {Date} todayObj Objek Date untuk hari ini.
  */
 function sendMonthlySummaryNotification(todayObj) {
@@ -3293,7 +3301,6 @@ function sendMonthlySummaryNotification(todayObj) {
     return;
   }
 
-  // Ambil daftar guru yang aktif dan memiliki email valid
   const usersData = usersSheet.getDataRange().getValues();
   const userHeaders = usersData[0].map(h => String(h).trim().toLowerCase());
   const idxUserTeacherName = userHeaders.indexOf("nama_guru_asli");
@@ -3322,68 +3329,179 @@ function sendMonthlySummaryNotification(todayObj) {
   }
 
   const monthYearStr = Utilities.formatDate(todayObj, Session.getScriptTimeZone(), "MM/yyyy");
-  const monthName = Utilities.formatDate(todayObj, Session.getScriptTimeZone(), "MMMM");
+  
+  const monthNamesIndonesian = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const monthIndex = todayObj.getMonth();
+  const monthName = monthNamesIndonesian[monthIndex];
+  
   const year = todayObj.getFullYear();
   const reminderLogSheet = ensureSheet(REMINDER_LOG_SHEET_NAME, [
-    "Nama_Guru", "Target_Tanggal_Absen", "Tipe_Notifikasi", "Tanggal_Notifikasi_Terkirim", "Urutan_Pengingat_Berkala"
+    "Nama_Guru", "Target_Periode", "Tipe_Notifikasi", "Tanggal_Kirim", "Detail"
   ]);
+  const todayStr = Utilities.formatDate(todayObj, Session.getScriptTimeZone(), "dd/MM/yyyy");
 
-  // Kirim email ke setiap guru
   activeTeachers.forEach(teacher => {
-    // Gunakan tipe notifikasi unik agar tidak terkirim berulang kali di hari yang sama
-    const notifTypeForLog = `ringkasan_bulanan_${monthYearStr.replace('/', '-')}`;
-    const todayStr = Utilities.formatDate(todayObj, Session.getScriptTimeZone(), "dd/MM/yyyy");
+    Logger.log(`Memproses notifikasi untuk ${teacher.name} untuk bulan ${monthYearStr}`);
+    const summaryResult = getTeacherMonthlySummary(teacher.name, monthYearStr);
 
-    if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, monthYearStr, notifTypeForLog)) {
-      Logger.log(`Menyiapkan ringkasan untuk ${teacher.name} untuk bulan ${monthYearStr}`);
+    if (summaryResult.success) {
+      const summary = summaryResult.summary;
 
-      // Ambil data ringkasan menggunakan fungsi yang sudah ada
-      const summaryResult = getTeacherMonthlySummary(teacher.name, monthYearStr);
-
-      if (summaryResult.success) {
-        const summary = summaryResult.summary;
-        const subject = `Ringkasan Kehadiran Anda Bulan ${monthName} ${year}`;
-        
-        // Buat isi email
-        let body = `Yth. ${teacher.name},\n\n`;
-        body += `Ini adalah pemberitahuan harian Anda selama minggu terakhir bulan ini.\n`;
-        body += `Berikut adalah ringkasan kehadiran Anda untuk bulan ${monthName} ${year} (data per tanggal ${todayStr}):\n\n`;
-        body += `-------------------------------------------------\n`;
-        body += `Total Hari Kerja Sebulan: ${summary.totalWorkingDaysInMonth} hari\n`;
-        body += `Hari Kerja Efektif Berlalu: ${summary.effectiveWorkingDaysPassed} hari\n`;
-        body += `Ceklok Terisi Lengkap: ${summary.completedChecklok} hari\n`;
-        body += `   - Hadir (Jam Lengkap): ${summary.present} hari\n`;
-        body += `   - Hari Libur Sekolah (Input Guru): ${summary.schoolHoliday} hari\n`;
-        body += `   - Alasan Lain (Valid): ${summary.otherValidReason} hari\n`;
-        body += `Alpa : ${summary.absent} hari\n`;
-        body += `Ceklok Tidak Lengkap (Salah Satu Jam): ${summary.incomplete} hari\n`;
-        body += `-------------------------------------------------\n`;
-        body += `Persentase Pengisian Ceklok Anda: ${summary.attendancePercentage}%\n\n`;
-        body += `Mohon diperiksa kembali dan lengkapi data Anda jika ada yang kurang sebelum akhir bulan.\n\n`;
-        body += `Terima kasih.\n${EMAIL_SENDER_NAME}`;
-
-        // Kirim email
-        try {
-          MailApp.sendEmail({
-            to: teacher.email,
-            subject: subject,
-            body: body,
-            name: EMAIL_SENDER_NAME
-          });
-          // Catat ke log agar tidak mengirim email yang sama di hari yang sama
-          helper_logSentNotification(reminderLogSheet, teacher.name, monthYearStr, notifTypeForLog, 0);
-          Logger.log(`Email ringkasan berhasil dikirim ke ${teacher.name} (${teacher.email})`);
-        } catch (e) {
-          Logger.log(`Gagal mengirim email ringkasan ke ${teacher.email}: ${e.toString()}`);
+      if (summary.attendancePercentage === 100) {
+        const notifType100Percent = `summary_100_percent_sent`;
+        if (!helper_hasSentNotificationInMonth(reminderLogSheet, teacher.name, monthYearStr, notifType100Percent)) {
+          Logger.log(`Kehadiran ${teacher.name} sudah 100%. Mengirim email ringkasan lengkap (satu kali).`);
+          
+          const subject = `Selamat! Kehadiran Anda Sudah 100% Untuk Bulan ${monthName} ${year}`;
+          let body = `Yth. ${teacher.name},\n\n`;
+          body += `Selamat! Pengisian data kehadiran Anda untuk bulan ${monthName} ${year} telah lengkap (100%).\n\n`;
+          body += `Berikut adalah ringkasan akhir Anda:\n`;
+          body += `-------------------------------------------------\n`;
+          body += `Total Hari Kerja: ${summary.totalWorkingDaysInMonth} hari\n`;
+          body += `Ceklok Terisi Lengkap: ${summary.completedChecklok} hari\n`;
+          body += `   - Hadir (Jam Lengkap): ${summary.present} hari\n`;
+          body += `   - Hari Libur Sekolah (Input Guru): ${summary.schoolHoliday} hari\n`;
+          body += `   - Alasan Lain (Valid): ${summary.otherValidReason} hari\n`;
+          body += `Alpa: 0 hari\n`;
+          body += `Ceklok Tidak Lengkap: 0 hari\n`;
+          body += `-------------------------------------------------\n\n`;
+          body += `Terima kasih atas kedisiplinan Anda.\n\n`;
+          body += `${EMAIL_SENDER_NAME}`;
+          
+          try {
+            MailApp.sendEmail({ to: teacher.email, subject: subject, body: body, name: EMAIL_SENDER_NAME });
+            // --- PERBAIKAN LOGGING DI SINI ---
+            // Pastikan mengirim monthYearStr ("MM/yyyy") sebagai periode log
+            helper_logSentNotification(reminderLogSheet, teacher.name, monthYearStr, notifType100Percent, "Sent on " + todayStr);
+            Logger.log(`Email ringkasan 100% berhasil dikirim ke ${teacher.name} (${teacher.email})`);
+          } catch (e) {
+            Logger.log(`Gagal mengirim email ringkasan 100% ke ${teacher.email}: ${e.toString()}`);
+          }
+        } else {
+          Logger.log(`Notifikasi 100% untuk ${teacher.name} bulan ${monthYearStr} sudah pernah dikirim. Tidak mengirim lagi.`);
         }
 
       } else {
-        Logger.log(`Gagal mendapatkan data ringkasan untuk ${teacher.name}: ${summaryResult.error}`);
+        const notifTypeReminder = `daily_reminder_incomplete`;
+        // Untuk pengingat harian, kita menggunakan todayStr sebagai periode agar unik setiap hari
+        if (!helper_hasSentNotificationToday(reminderLogSheet, teacher.name, todayStr, notifTypeReminder)) {
+           Logger.log(`Kehadiran ${teacher.name} masih < 100%. Mengirim email pengingat harian.`);
+
+           const subject = `Pengingat: Mohon Lengkapi Kehadiran Bulan ${monthName} ${year}`;
+           let body = `Yth. ${teacher.name},\n\n`;
+           body += `Ini adalah pemberitahuan harian Anda selama minggu terakhir bulan ini.\n`;
+           body += `Sistem kami mencatat bahwa data kehadiran Anda untuk bulan ${monthName} ${year} masih belum lengkap.\n\n`;
+           body += `Berikut adalah data yang perlu menjadi perhatian (data per tanggal ${todayStr}):\n`;
+           body += `-------------------------------------------------\n`;
+           body += `Jumlah Alpa (Data Kosong): ${summary.absent} hari\n`;
+           body += `Jumlah Ceklok Tidak Lengkap (Hanya 1 jam terisi): ${summary.incomplete} hari\n`;
+           body += `-------------------------------------------------\n\n`;
+           body += `Mohon untuk segera melengkapi data Anda melalui aplikasi Ceklok sebelum akhir bulan.\n\n`;
+           body += `Terima kasih.\n${EMAIL_SENDER_NAME}`;
+
+           try {
+             MailApp.sendEmail({ to: teacher.email, subject: subject, body: body, name: EMAIL_SENDER_NAME });
+             helper_logSentNotification(reminderLogSheet, teacher.name, todayStr, notifTypeReminder, `Absent: ${summary.absent}, Incomplete: ${summary.incomplete}`);
+             Logger.log(`Email pengingat harian berhasil dikirim ke ${teacher.name} (${teacher.email})`);
+           } catch(e) {
+             Logger.log(`Gagal mengirim email pengingat harian ke ${teacher.email}: ${e.toString()}`);
+           }
+        } else {
+            Logger.log(`Pengingat harian untuk ${teacher.name} sudah dikirim hari ini (${todayStr}). Tidak mengirim lagi.`);
+        }
       }
     } else {
-      Logger.log(`Ringkasan untuk ${teacher.name} bulan ${monthYearStr} sudah dikirim hari ini. Tidak mengirim lagi.`);
+      Logger.log(`Gagal mendapatkan data ringkasan untuk ${teacher.name}: ${summaryResult.error}`);
     }
   });
+}
+
+/**
+ * Helper: Mencatat notifikasi yang sudah dikirim ke sheet Reminder_Log.
+ * VERSI FINAL: Memaksa format periode "MM/YYYY" menjadi teks dengan apostrof
+ * untuk mencegah konversi otomatis oleh Google Sheet.
+ */
+function helper_logSentNotification(reminderLogSheet, teacherName, periodOrDateStr, notifType, detail) {
+  if (reminderLogSheet) {
+    let periodToLog = periodOrDateStr;
+
+    // Cek apakah periode yang akan dicatat memiliki format "MM/YYYY"
+    if (/^\d{2}\/\d{4}$/.test(periodOrDateStr)) {
+      // **INILAH KUNCI PERBAIKANNYA**
+      // Tambahkan apostrof di depan untuk memaksa Google Sheet menyimpannya sebagai teks.
+      periodToLog = "'" + periodOrDateStr;
+      Logger.log(`DEBUG (helper_logSentNotification): Format periode MM/YYYY terdeteksi. Menyimpan ke log sebagai teks: ${periodToLog}`);
+    }
+
+    // Tulis baris baru ke log dengan nilai yang sudah diformat paksa
+    reminderLogSheet.appendRow([teacherName, periodToLog, notifType, new Date(), detail || ""]);
+  }
+}
+
+/**
+ * Helper: Memeriksa apakah notifikasi untuk guru, tanggal target, dan tipe tertentu sudah dikirim HARI INI.
+ */
+function helper_hasSentNotificationToday(reminderLogSheet, teacherName, targetDateStr, notifType) {
+  if (!reminderLogSheet) return false;
+  const todayLog = new Date();
+  todayLog.setHours(0,0,0,0);
+  const logData = reminderLogSheet.getDataRange().getValues();
+
+  for (let i = logData.length - 1; i >= 1; i--) {
+    const row = logData[i];
+    const logTeacher = String(row[0]).trim();
+    const logTargetPeriod = String(row[1]).trim();
+    const logNotifType = String(row[2]).trim();
+    const logSentTimestamp = row[3];
+    
+    let logSentDate = null;
+    if (logSentTimestamp instanceof Date) { logSentDate = new Date(logSentTimestamp); }
+    else if (typeof logSentTimestamp === 'string' && logSentTimestamp) { try { logSentDate = new Date(logSentTimestamp); } catch(e) {} }
+    else if (typeof logSentTimestamp === 'number') { logSentDate = new Date(logSentTimestamp); }
+
+    if(logSentDate) logSentDate.setHours(0,0,0,0);
+
+    if (logTeacher === teacherName && logTargetPeriod === targetDateStr && logNotifType === notifType && logSentDate && logSentDate.getTime() === todayLog.getTime()) {
+      return true; 
+    }
+  }
+  return false;
+}
+
+/**
+ * Helper: Memeriksa apakah notifikasi untuk guru, periode bulan, dan tipe tertentu sudah pernah dikirim.
+ * VERSI DEBUG: Menambahkan logging untuk melacak proses pengecekan.
+ */
+function helper_hasSentNotificationInMonth(reminderLogSheet, teacherName, monthYearStr, notifType) {
+  if (!reminderLogSheet) {
+    Logger.log(`DEBUG: helper_hasSentNotificationInMonth: Sheet 'Reminder_Log' tidak ditemukan.`);
+    return false;
+  }
+  const logData = reminderLogSheet.getDataRange().getValues();
+  
+  // Log nilai yang sedang kita cari untuk debugging
+  Logger.log(`DEBUG: Mencari log untuk: Nama='${teacherName}', Periode='${monthYearStr}', Tipe='${notifType}'`);
+
+  for (let i = 1; i < logData.length; i++) {
+    const row = logData[i];
+    const logTeacher = String(row[0]).trim();
+    const logTargetPeriod = String(row[1]).trim();
+    const logNotifType = String(row[2]).trim();
+
+    // Hanya tampilkan log dari baris yang relevan dengan guru yang diperiksa untuk mengurangi noise
+    if (logTeacher === teacherName) {
+       Logger.log(`DEBUG: Memeriksa baris ${i + 1}: Nama='${logTeacher}', Periode='${logTargetPeriod}', Tipe='${logNotifType}'`);
+    }
+    
+    // Proses perbandingan data
+    if (logTeacher === teacherName && logTargetPeriod === monthYearStr && logNotifType === notifType) {
+      Logger.log(`--> DEBUG: COCOK! Ditemukan di baris ${i + 1}. Notifikasi akan dilewati (SKIP).`);
+      return true; // Ditemukan, notifikasi tidak akan dikirim lagi.
+    }
+  }
+  
+  Logger.log(`--> DEBUG: TIDAK COCOK. Tidak ada log yang sesuai untuk ${teacherName} periode ${monthYearStr}. Notifikasi kemungkinan akan dikirim.`);
+  return false; // Tidak ditemukan, notifikasi akan dikirim.
 }
 
 /**
@@ -3653,65 +3771,6 @@ function processPeriodicEmptyAttendanceReminder(teacher, allCeklokData, ceklokHe
         Logger.log(`Notifikasi pengisian berkala (Urutan: ${newSequence}) untuk ${teacher.name} target ${targetEmptyDateStr} sudah dikirim hari ini (dicegah duplikasi email).`);
     }
   }
-}
-
-
-/**
- * Helper: Mencatat notifikasi yang sudah dikirim ke sheet Reminder_Log.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} reminderLogSheet Sheet log.
- * @param {string} teacherName Nama guru.
- * @param {string} targetDateStr Tanggal target absensi (dd/MM/yyyy).
- * @param {string} notifType Tipe notifikasi (misal "tidak_lengkap", "berkala_kosong_1").
- * @param {number} sequence Urutan pengingat untuk tipe berkala.
- */
-function helper_logSentNotification(reminderLogSheet, teacherName, targetDateStr, notifType, sequence) {
-  if (reminderLogSheet) {
-    reminderLogSheet.appendRow([teacherName, targetDateStr, notifType, new Date(), sequence || 0]);
-  }
-}
-
-/**
- * Helper: Memeriksa apakah notifikasi untuk guru, tanggal target, dan tipe tertentu sudah dikirim hari ini.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} reminderLogSheet Sheet log.
- * @param {string} teacherName Nama guru.
- * @param {string} targetDateStr Tanggal target absensi (dd/MM/yyyy).
- * @param {string} notifType Tipe notifikasi.
- * @return {boolean} True jika sudah dikirim hari ini.
- */
-function helper_hasSentNotificationToday(reminderLogSheet, teacherName, targetDateStr, notifType) {
-  if (!reminderLogSheet) return false;
-  const todayLog = new Date();
-  todayLog.setHours(0,0,0,0);
-  const logData = reminderLogSheet.getDataRange().getValues();
-
-  for (let i = logData.length - 1; i >= 1; i--) { // Cek dari data terbaru
-    const row = logData[i];
-    // Kolom: Nama_Guru (0), Target_Tanggal_Absen (1), Tipe_Notifikasi (2), Tanggal_Notifikasi_Terkirim (3)
-    const logTeacher = String(row[0]).trim();
-    const logTargetDate = String(row[1]).trim();
-    const logNotifType = String(row[2]).trim();
-    const logSentTimestamp = row[3]; // Bisa jadi string atau Date object
-    
-    let logSentDate = null;
-    if (logSentTimestamp instanceof Date) {
-        logSentDate = new Date(logSentTimestamp);
-    } else if (typeof logSentTimestamp === 'string' && logSentTimestamp) {
-        try { logSentDate = new Date(logSentTimestamp); } catch(e) { /* abaikan jika parse gagal */ }
-    } else if (typeof logSentTimestamp === 'number') { // Jika timestamp epoch
-        logSentDate = new Date(logSentTimestamp);
-    }
-
-    if(logSentDate) logSentDate.setHours(0,0,0,0);
-
-    if (logTeacher === teacherName && 
-        logTargetDate === targetDateStr && 
-        logNotifType === notifType && 
-        logSentDate && 
-        logSentDate.getTime() === todayLog.getTime()) {
-      return true; 
-    }
-  }
-  return false;
 }
 
 /**
