@@ -1169,6 +1169,8 @@
     <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v2.0</p>
   </footer>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
   <script>
     // Variabel global
     let loggedInUser = null;
@@ -6369,6 +6371,76 @@
         lazyGifs.forEach(gif => {
             gifObserver.observe(gif);
         });
+    }
+
+    /**
+     * (VERSI 2)
+     * Meng-handle proses impor dari file Excel. Nama guru diambil dari sesi aktif.
+     */
+    function handleImportExcel() {
+      const fileInput = document.getElementById('excelFileInput');
+      const selectedFile = fileInput.files[0];
+      
+      // Ambil nama guru dari variabel global yang sudah di-set saat login
+      // atau saat admin memilih guru.
+      const activeTeacherName = namaGuru; 
+
+      if (!activeTeacherName) {
+        showAlert('Sesi guru tidak aktif. Tidak bisa mengimpor data.', 'error');
+        return;
+      }
+
+      if (!selectedFile) {
+        showAlert('Silakan pilih file Excel untuk diimpor.', 'error');
+        return;
+      }
+
+      showLoading("Membaca file Excel...");
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          const data = new Uint8Array(event.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+          if (jsonData.length < 2) {
+            hideLoading();
+            showAlert('File Excel kosong atau tidak memiliki data.', 'error');
+            return;
+          }
+
+          showLoading("Mengimpor data ke server...");
+          google.script.run
+            .withSuccessHandler(response => {
+              hideLoading();
+              if (response.success) {
+                showAlert(response.message, 'success');
+                // Muat ulang data ceklok untuk menampilkan hasil impor
+                loadCeklokDataForSelectedMonth();
+              } else {
+                showAlert(response.error, 'error');
+              }
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              showAlert('Gagal mengimpor data: ' + err.message, 'error');
+            })
+            .importFromExcel(activeTeacherName, jsonData); // Kirim nama guru yang aktif
+
+        } catch (e) {
+          hideLoading();
+          showAlert('Gagal memproses file Excel: ' + e.message, 'error');
+        }
+      };
+      reader.onerror = function() {
+        hideLoading();
+        showAlert('Gagal membaca file.', 'error');
+      };
+      reader.readAsArrayBuffer(selectedFile);
     }
   </script>
 </body>
