@@ -6178,6 +6178,9 @@
         // Panggil fungsi yang sudah ada untuk menyiapkan dan memuat periode
         setupDashboardPeriodSelector();
 
+        // Panggil fungsi lazy loading setelah view di-render
+        setupLazyLoadGifs(); // <-- PEMANGGILAN FUNGSI BARU
+
         // Tampilkan pop-up pengingat jika memenuhi syarat
         if (typeof showEndOfMonthReminder === 'function') {
             setTimeout(showEndOfMonthReminder, 100);
@@ -6330,6 +6333,42 @@
         if (loggedInUser && loggedInUser.teacherName) {
             loadAndDisplayTeacherSummary(loggedInUser.teacherName, initialMonthYear);
         }
+    }
+
+    /**
+     * Menyiapkan lazy loading untuk gambar GIF menggunakan Intersection Observer.
+     */
+    function setupLazyLoadGifs() {
+        const lazyGifs = document.querySelectorAll('.lazy-gif');
+
+        if (!lazyGifs.length) return;
+
+        const observerOptions = {
+            root: null, // Menggunakan viewport sebagai root
+            rootMargin: '0px',
+            threshold: 0.01 // Picu callback bahkan jika hanya 1% dari gambar terlihat
+        };
+
+        const gifObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                const gif = entry.target;
+                if (entry.isIntersecting) {
+                    // Gambar terlihat, muat GIF dari data-src
+                    if (gif.dataset.src && gif.src !== gif.dataset.src) {
+                        gif.src = gif.dataset.src;
+                    }
+                } else {
+                    // Gambar tidak terlihat, reset GIF dengan mengosongkan src
+                    if (gif.src) {
+                        gif.src = "";
+                    }
+                }
+            });
+        }, observerOptions);
+
+        lazyGifs.forEach(gif => {
+            gifObserver.observe(gif);
+        });
     }
   </script>
 </body>
