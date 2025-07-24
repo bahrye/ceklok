@@ -382,9 +382,21 @@ function getCeklokData(nama, bulanTahun) {
   }
 }
 
-
 function simpanData(nama, dataInput, actorUsername, actorRole) {
+  // 1. Dapatkan lock untuk skrip
+  const lock = LockService.getScriptLock();
   try {
+    // 2. Coba kunci proses ini selama 30 detik.
+    // Jika ada proses lain yang berjalan, ini akan mengembalikan false.
+    if (!lock.tryLock(30000)) {
+      const errorMessage = "Server sedang sibuk memproses penyimpanan lain. Coba lagi dalam beberapa saat.";
+      Logger.log(`simpanData GAGAL mendapatkan lock untuk Aktor: ${actorUsername}, Guru: ${nama}. Pesan: ${errorMessage}`);
+      // Kembalikan pesan error yang jelas ke pengguna
+      return `Error: ${errorMessage}`;
+    }
+
+    // --- MULAI LOGIKA ASLI FUNGSI ANDA (setelah lock berhasil didapat) ---
+
     if (!dataInput || dataInput.length === 0 || !dataInput[0].tanggal) {
       logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, "Data input tidak valid (payload)", "FAIL");
       return "Error: Data input tidak valid untuk disimpan.";
@@ -397,7 +409,6 @@ function simpanData(nama, dataInput, actorUsername, actorRole) {
     }
     const bulanTahunSimpan = `${parts[1]}/${parts[2]}`;
 
-    // 1. Pengecekan status penguncian bulan (tetap diperlukan)
     const lockStatusResult = getLockedMonths();
     if (lockStatusResult.success && (lockStatusResult.months || []).includes(bulanTahunSimpan)) {
       logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_FAIL", nama, `Penyimpanan ditolak, bulan ${bulanTahunSimpan} terkunci`, "FAIL");
@@ -413,12 +424,10 @@ function simpanData(nama, dataInput, actorUsername, actorRole) {
       return `Error: Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.`;
     }
 
-    // 2. Baca SEMUA data dari sheet ke memori dalam satu kali panggilan
     const dataRange = sheet.getDataRange();
     const allSheetData = dataRange.getValues();
     const headers = allSheetData[0].map(h => String(h).trim());
     
-    // Validasi header
     const namaColIdx = headers.indexOf("Nama_Guru");
     const tanggalColIdx = headers.indexOf("Tanggal");
     const masukColIdx = headers.indexOf("Jam_Masuk");
@@ -430,22 +439,20 @@ function simpanData(nama, dataInput, actorUsername, actorRole) {
         return `Error: ${errorMsg}`;
     }
 
-    // 3. Buat sebuah "peta" untuk pencarian data yang sangat cepat
     const dataMap = new Map();
     for (let i = 1; i < allSheetData.length; i++) {
         const row = allSheetData[i];
         const guru = String(row[namaColIdx]).trim();
         if (row[tanggalColIdx] instanceof Date) {
             const tanggal = Utilities.formatDate(new Date(row[tanggalColIdx]), Session.getScriptTimeZone(), "dd/MM/yyyy");
-            const key = `${guru}#${tanggal}`; // Kunci unik: NamaGuru#dd/MM/yyyy
-            dataMap.set(key, { rowIndex: i, data: row }); // Simpan indeks baris asli dan datanya
+            const key = `${guru}#${tanggal}`;
+            dataMap.set(key, { rowIndex: i, data: row });
         }
     }
 
     let hasChanges = false;
     const rowsToAppend = [];
 
-    // 4. Proses semua input dari pengguna di dalam memori
     dataInput.forEach(inputRow => {
         if (!inputRow || !inputRow.tanggal) return;
 
@@ -464,7 +471,6 @@ function simpanData(nama, dataInput, actorUsername, actorRole) {
         const targetEntityLog = `${nama} (${tanggal})`;
 
         if (existingEntry) {
-            // Jika data sudah ada, modifikasi array 'allSheetData'
             const rowIndex = existingEntry.rowIndex;
             const oldData = existingEntry.data;
             const oldJm = oldData[masukColIdx] ? String(oldData[masukColIdx]).trim() : '';
@@ -479,7 +485,6 @@ function simpanData(nama, dataInput, actorUsername, actorRole) {
                 logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_DATA", targetEntityLog, `Data diubah. JM: '${oldJm}'->'${jmToSave}', JP: '${oldJp}'->'${jpToSave}', Ket: '${oldKet}'->'${ketLiburToSave}'`, "SUCCESS");
             }
         } else if (jmToSave || jpToSave || ketLiburToSave) {
-            // Jika data baru, tambahkan ke array untuk 'append' nanti
             const dateParts = tanggal.split("/");
             if (dateParts.length === 3) {
                 const dateObject = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]));
@@ -489,23 +494,20 @@ function simpanData(nama, dataInput, actorUsername, actorRole) {
                 newRow[masukColIdx] = jmToSave;
                 newRow[pulangColIdx] = jpToSave;
                 newRow[ketLiburManualColIdx] = ketLiburToSave;
-                rowsToAppend.push(newRow); // Kumpulkan baris baru
+                rowsToAppend.push(newRow);
                 logUserActivity(actorUsername, actorRole, "CREATE_CEKLOK_DATA", targetEntityLog, `Data dibuat. JM: '${jmToSave}', JP: '${jpToSave}', Ket: '${ketLiburToSave}'`, "SUCCESS");
             }
         }
     });
 
-    // 5. Tulis kembali semua perubahan ke sheet dalam satu kali operasi
     if (hasChanges) {
         dataRange.setValues(allSheetData);
     }
 
-    // 6. Tambahkan semua baris baru dalam satu kali operasi
     if (rowsToAppend.length > 0) {
         sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, headers.length).setValues(rowsToAppend);
     }
     
-    // (Opsional) Format ulang kolom jika ada baris baru yang ditambahkan
     if (rowsToAppend.length > 0) {
         if (masukColIdx > -1) sheet.getRange(2, masukColIdx + 1, sheet.getLastRow() - 1, 1).setNumberFormat("@");
         if (pulangColIdx > -1) sheet.getRange(2, pulangColIdx + 1, sheet.getLastRow() - 1, 1).setNumberFormat("@");
@@ -520,6 +522,11 @@ function simpanData(nama, dataInput, actorUsername, actorRole) {
     Logger.log(`Error in simpanData (Batch Version) (Nama: ${nama}): ${e.toString()}\nStack: ${e.stack}`);
     logUserActivity(actorUsername, actorRole, "UPDATE_CEKLOK_SYSTEM_ERROR", nama || "N/A", `Error sistem: ${e.message}`, "ERROR");
     return `Error saat menyimpan: ${e.message}`;
+  } finally {
+    // 3. Pastikan untuk selalu melepaskan lock setelah selesai.
+    if (lock) {
+      lock.releaseLock();
+    }
   }
 }
 
@@ -5162,15 +5169,12 @@ function resetActivityLog(timeframeIdentifier) {
   }
 }
 
-// Sisipkan fungsi ini di dalam file Kode.gs.html
-
 /**
- * (VERSI 2)
+ * (VERSI 3)
  * Mengimpor data dari file Excel dan memperbarui sheet Ceklok_Manual.
- * Data dicocokkan berdasarkan Nama Guru dan Tanggal.
- * - Menyertakan kolom keterangan/alasan.
- * - Memperbaiki format tanggal menjadi date-only.
- * - Memaksa format jam menjadi teks untuk mencegah salah format.
+ * - Melacak baris yang gagal dan memberikan laporan detail.
+ * - Tidak menimpa data yang ada dengan data kosong dari Excel.
+ * - Data di aplikasi hanya akan diperbarui jika ada data valid di file Excel untuk tanggal yang sama.
  *
  * @param {string} teacherName Nama guru yang datanya akan diimpor.
  * @param {Array<Array<string>>} excelData Array 2D berisi data dari Excel.
@@ -5191,113 +5195,161 @@ function importFromExcel(teacherName, excelData) {
       return { success: false, error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' tidak ditemukan.` };
     }
 
-    const allCeklokData = ceklokSheet.getDataRange().getValues();
-    const ceklokHeaders = allCeklokData[0].map(h => String(h).trim().toLowerCase());
-    const idxNama = ceklokHeaders.indexOf("nama_guru");
-    const idxTanggal = ceklokHeaders.indexOf("tanggal");
-    const idxMasuk = ceklokHeaders.indexOf("jam_masuk");
-    const idxPulang = ceklokHeaders.indexOf("jam_pulang");
-    const idxKetManual = ceklokHeaders.indexOf("ket_libur_manual");
-
-    if ([idxNama, idxTanggal, idxMasuk, idxPulang, idxKetManual].includes(-1)) {
-      return { success: false, error: "Header kolom di 'Ceklok_Manual' tidak lengkap." };
+    // Mengunci proses untuk mencegah race condition
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(30000)) {
+      return { success: false, error: "Server sedang sibuk. Coba lagi dalam beberapa saat." };
     }
 
-    const excelHeaders = excelData[0].map(h => String(h).trim().toLowerCase());
-    const idxExcelTgl = excelHeaders.indexOf("tanggal");
-    const idxExcelMasuk = excelHeaders.indexOf("jam masuk");
-    const idxExcelPulang = excelHeaders.indexOf("jam pulang");
-    // **BARU**: Mencari kolom keterangan. Kita coba beberapa nama umum.
-    const idxExcelKet = excelHeaders.indexOf("alasan tidak hadir") !== -1 
-                        ? excelHeaders.indexOf("alasan tidak hadir") 
-                        : excelHeaders.indexOf("keterangan");
+    try {
+      const allCeklokData = ceklokSheet.getDataRange().getValues();
+      const ceklokHeaders = allCeklokData[0].map(h => String(h).trim().toLowerCase());
+      const idxNama = ceklokHeaders.indexOf("nama_guru");
+      const idxTanggal = ceklokHeaders.indexOf("tanggal");
+      const idxMasuk = ceklokHeaders.indexOf("jam_masuk");
+      const idxPulang = ceklokHeaders.indexOf("jam_pulang");
+      const idxKetManual = ceklokHeaders.indexOf("ket_libur_manual");
 
-    if ([idxExcelTgl, idxExcelMasuk, idxExcelPulang].includes(-1)) {
+      if ([idxNama, idxTanggal, idxMasuk, idxPulang, idxKetManual].includes(-1)) {
+        return { success: false, error: "Header kolom di 'Ceklok_Manual' tidak lengkap." };
+      }
+
+      const excelHeaders = excelData[0].map(h => String(h).trim().toLowerCase());
+      const idxExcelTgl = excelHeaders.indexOf("tanggal");
+      const idxExcelMasuk = excelHeaders.indexOf("jam masuk");
+      const idxExcelPulang = excelHeaders.indexOf("jam pulang");
+      const idxExcelKet = excelHeaders.indexOf("alasan tidak hadir") !== -1
+                          ? excelHeaders.indexOf("alasan tidak hadir")
+                          : excelHeaders.indexOf("keterangan");
+
+      if ([idxExcelTgl, idxExcelMasuk, idxExcelPulang].includes(-1)) {
         return { success: false, error: "Format kolom di file Excel tidak sesuai. Pastikan ada kolom 'TANGGAL', 'JAM MASUK', dan 'JAM PULANG'." };
-    }
-
-    let updatedCount = 0;
-    let createdCount = 0;
-
-    // Mulai dari baris kedua data Excel (indeks 1)
-    for (let i = 1; i < excelData.length; i++) {
-      const row = excelData[i];
-      const tanggalExcelRaw = row[idxExcelTgl];
-      let jamMasukExcel = formatTimeToHHMM_or_Empty(String(row[idxExcelMasuk] || ''));
-      let jamPulangExcel = formatTimeToHHMM_or_Empty(String(row[idxExcelPulang] || ''));
-      // **BARU**: Ambil data keterangan dari Excel
-      const keteranganExcel = (idxExcelKet !== -1 && row[idxExcelKet]) ? String(row[idxExcelKet]).trim() : '';
-      
-      // Skip baris jika tidak ada data sama sekali
-      if (!tanggalExcelRaw && !jamMasukExcel && !jamPulangExcel && !keteranganExcel) continue;
-
-      // **BARU**: Logika jika ada keterangan, maka jam dikosongkan
-      if (keteranganExcel) {
-        jamMasukExcel = '';
-        jamPulangExcel = '';
       }
 
-      // Konversi tanggal dari Excel (bisa berupa angka serial atau string)
-      let tanggalObj;
-      if (typeof tanggalExcelRaw === 'number') {
-        tanggalObj = new Date((tanggalExcelRaw - 25569) * 86400 * 1000);
-      } else if (typeof tanggalExcelRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(tanggalExcelRaw)) {
-        tanggalObj = new Date(tanggalExcelRaw);
-      } else {
-        continue; // Skip jika format tanggal tidak dikenali
-      }
+      let updatedCount = 0;
+      let createdCount = 0;
+      let skippedCount = 0;
+      const failedRows = []; // Untuk melacak baris yang gagal
 
-      // **PERBAIKAN**: Pastikan objek tanggal tidak memiliki komponen waktu (set ke awal hari)
-      const dateOnlyObj = new Date(tanggalObj.getFullYear(), tanggalObj.getMonth(), tanggalObj.getDate());
-      const tanggalStr = Utilities.formatDate(dateOnlyObj, Session.getScriptTimeZone(), "dd/MM/yyyy");
+      for (let i = 1; i < excelData.length; i++) {
+        const row = excelData[i];
+        const excelRowNumber = i + 1; // Nomor baris di file Excel (1-based)
 
-      // Cari baris yang cocok di sheet Ceklok_Manual
-      let foundRowIndex = -1;
-      for (let j = 1; j < allCeklokData.length; j++) {
-        const ceklokRow = allCeklokData[j];
-        if (String(ceklokRow[idxNama]).trim() === teacherName &&
-            ceklokRow[idxTanggal] instanceof Date &&
-            Utilities.formatDate(new Date(ceklokRow[idxTanggal]), Session.getScriptTimeZone(), "dd/MM/yyyy") === tanggalStr) {
-          foundRowIndex = j + 1; // 1-based index untuk sheet
-          break;
+        const tanggalExcelRaw = row[idxExcelTgl];
+        let jamMasukExcel = formatTimeToHHMM_or_Empty(String(row[idxExcelMasuk] || ''));
+        let jamPulangExcel = formatTimeToHHMM_or_Empty(String(row[idxExcelPulang] || ''));
+        const keteranganExcel = (idxExcelKet !== -1 && row[idxExcelKet]) ? String(row[idxExcelKet]).trim() : '';
+
+        // **LOGIKA BARU 1: Skip baris jika tidak ada data sama sekali di Excel**
+        if (!tanggalExcelRaw && !jamMasukExcel && !jamPulangExcel && !keteranganExcel) {
+            skippedCount++;
+            continue; // Lanjut ke baris berikutnya
+        }
+
+        // Validasi dan konversi tanggal
+        let tanggalObj;
+        if (typeof tanggalExcelRaw === 'number' && tanggalExcelRaw > 0) {
+          tanggalObj = new Date((tanggalExcelRaw - 25569) * 86400 * 1000);
+        } else if (typeof tanggalExcelRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(tanggalExcelRaw)) {
+          tanggalObj = new Date(tanggalExcelRaw);
+        } else if (typeof tanggalExcelRaw === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(tanggalExcelRaw)) {
+          const parts = tanggalExcelRaw.split('/');
+          tanggalObj = new Date(parts[2], parts[1] - 1, parts[0]);
+        }
+        else {
+          // **LOGIKA BARU 2: Catat baris yang gagal karena format tanggal**
+          // Hanya catat error jika ada data lain di baris tersebut
+          if (jamMasukExcel || jamPulangExcel || keteranganExcel) {
+            failedRows.push({ row: excelRowNumber, reason: "Format tanggal tidak valid ('" + tanggalExcelRaw + "')" });
+          }
+          continue;
+        }
+
+        // Pastikan objek tanggal valid
+        if (isNaN(tanggalObj.getTime())) {
+            if (jamMasukExcel || jamPulangExcel || keteranganExcel) {
+               failedRows.push({ row: excelRowNumber, reason: "Tanggal tidak dapat diproses ('" + tanggalExcelRaw + "')" });
+            }
+            continue;
+        }
+
+        const dateOnlyObj = new Date(tanggalObj.getFullYear(), tanggalObj.getMonth(), tanggalObj.getDate());
+        const tanggalStr = Utilities.formatDate(dateOnlyObj, Session.getScriptTimeZone(), "dd/MM/yyyy");
+
+        // Jika ada keterangan, jam dikosongkan
+        if (keteranganExcel) {
+          jamMasukExcel = '';
+          jamPulangExcel = '';
+        }
+
+        // Cari baris yang cocok di sheet Ceklok_Manual
+        let foundRowIndex = -1;
+        for (let j = 1; j < allCeklokData.length; j++) {
+          const ceklokRow = allCeklokData[j];
+          if (String(ceklokRow[idxNama]).trim() === teacherName &&
+              ceklokRow[idxTanggal] instanceof Date &&
+              Utilities.formatDate(new Date(ceklokRow[idxTanggal]), Session.getScriptTimeZone(), "dd/MM/yyyy") === tanggalStr) {
+            foundRowIndex = j + 1;
+            break;
+          }
+        }
+
+        // **LOGIKA BARU 3: Cek apakah ada data di Excel sebelum menimpa**
+        const hasDataInExcel = jamMasukExcel || jamPulangExcel || keteranganExcel;
+
+        if (foundRowIndex !== -1) {
+          // Jika data sudah ada di aplikasi
+          if (hasDataInExcel) {
+            // Timpa hanya jika ada data di Excel
+            ceklokSheet.getRange(foundRowIndex, idxMasuk + 1).setValue(jamMasukExcel);
+            ceklokSheet.getRange(foundRowIndex, idxPulang + 1).setValue(jamPulangExcel);
+            ceklokSheet.getRange(foundRowIndex, idxKetManual + 1).setValue(keteranganExcel);
+            updatedCount++;
+          } else {
+            // Jika tidak ada data di Excel, lewati (jangan timpa)
+            skippedCount++;
+          }
+        } else {
+          // Jika data belum ada di aplikasi
+          if (hasDataInExcel) {
+            // Tambah baris baru hanya jika ada data di Excel
+            let newRowValues = new Array(ceklokHeaders.length).fill('');
+            newRowValues[idxNama] = teacherName;
+            newRowValues[idxTanggal] = dateOnlyObj;
+            newRowValues[idxMasuk] = jamMasukExcel;
+            newRowValues[idxPulang] = jamPulangExcel;
+            newRowValues[idxKetManual] = keteranganExcel;
+            ceklokSheet.appendRow(newRowValues);
+            createdCount++;
+          } else {
+            // Jika tidak ada data di Excel, lewati
+            skippedCount++;
+          }
         }
       }
 
-      if (foundRowIndex !== -1) {
-        // Update baris yang sudah ada
-        ceklokSheet.getRange(foundRowIndex, idxMasuk + 1).setValue(jamMasukExcel);
-        ceklokSheet.getRange(foundRowIndex, idxPulang + 1).setValue(jamPulangExcel);
-        ceklokSheet.getRange(foundRowIndex, idxKetManual + 1).setValue(keteranganExcel);
-        updatedCount++;
-      } else {
-        // Tambah baris baru jika tidak ditemukan
-        let newRowValues = new Array(ceklokHeaders.length).fill('');
-        newRowValues[idxNama] = teacherName;
-        newRowValues[idxTanggal] = dateOnlyObj; // Gunakan objek tanggal tanpa waktu
-        newRowValues[idxMasuk] = jamMasukExcel;
-        newRowValues[idxPulang] = jamPulangExcel;
-        newRowValues[idxKetManual] = keteranganExcel;
-        ceklokSheet.appendRow(newRowValues);
-        createdCount++;
+      if (ceklokSheet.getLastRow() > 1) {
+        const lastDataRow = ceklokSheet.getLastRow();
+        ceklokSheet.getRange(2, idxTanggal + 1, lastDataRow - 1, 1).setNumberFormat("dd/mm/yyyy");
+        ceklokSheet.getRange(2, idxMasuk + 1, lastDataRow - 1, 1).setNumberFormat("@");
+        ceklokSheet.getRange(2, idxPulang + 1, lastDataRow - 1, 1).setNumberFormat("@");
+        ceklokSheet.getRange(2, idxKetManual + 1, lastDataRow - 1, 1).setNumberFormat("@");
       }
+
+      // **LOGIKA BARU 4: Buat pesan hasil yang detail**
+      let message = `Impor selesai. Berhasil: ${updatedCount} data diperbarui, ${createdCount} data ditambahkan. Dilewati: ${skippedCount} baris kosong.`;
+      if (failedRows.length > 0) {
+        message += `\n\nGagal impor ${failedRows.length} baris:\n`;
+        const failedRowMessages = failedRows.map(f => ` - Baris ${f.row} (${f.reason})`);
+        message += failedRowMessages.join('\n');
+      }
+
+      logUserActivity(Session.getActiveUser().getEmail(), 'admin', 'IMPORT_EXCEL_SUCCESS', teacherName, `Updated: ${updatedCount}, Created: ${createdCount}, Skipped: ${skippedCount}, Failed: ${failedRows.length}`, 'SUCCESS');
+      return { success: true, message: message };
+
+    } finally {
+      lock.releaseLock();
     }
-    
-    // **PERBAIKAN**: Setelah loop selesai, set format kolom ke teks dan tanggal
-    if (ceklokSheet.getLastRow() > 1) {
-      const lastDataRow = ceklokSheet.getLastRow();
-      // Format kolom tanggal ke 'dd/mm/yyyy'
-      ceklokSheet.getRange(2, idxTanggal + 1, lastDataRow - 1, 1).setNumberFormat("dd/mm/yyyy");
-      // Format kolom jam dan keterangan ke Teks Biasa ('@')
-      ceklokSheet.getRange(2, idxMasuk + 1, lastDataRow - 1, 1).setNumberFormat("@");
-      ceklokSheet.getRange(2, idxPulang + 1, lastDataRow - 1, 1).setNumberFormat("@");
-      ceklokSheet.getRange(2, idxKetManual + 1, lastDataRow - 1, 1).setNumberFormat("@");
-    }
-
-    // Log aktivitas
-    logUserActivity(Session.getActiveUser().getEmail(), 'admin', 'IMPORT_EXCEL_SUCCESS', teacherName, `Data diperbarui: ${updatedCount}, Data baru dibuat: ${createdCount}`, 'SUCCESS');
-
-    return { success: true, message: `Impor berhasil. Data diperbarui: ${updatedCount}, Data baru ditambahkan: ${createdCount}.` };
-
   } catch (e) {
     Logger.log(`Error di importFromExcel (guru: ${teacherName}): ${e.toString()}\nStack: ${e.stack}`);
     logUserActivity(Session.getActiveUser().getEmail(), 'admin', 'IMPORT_EXCEL_ERROR', teacherName, e.message, 'ERROR');
