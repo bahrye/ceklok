@@ -38,9 +38,9 @@
     #app {
       flex-grow: 1;
       width: 100%;
+      max-width: 100vw; /* Tambahkan baris ini */
       padding: 10px;
       box-sizing: border-box;
-      /* Tambahan untuk memaksa konten di dalamnya ke tengah */
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -981,6 +981,15 @@
     }
     .reminder-modal-button:hover {
       background-color: #2563EB; /* Warna biru lebih gelap (blue-600) */
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      overflow-x: hidden;
+      width: 100%;
     }
   </style>
 </head>
