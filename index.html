@@ -2344,6 +2344,16 @@
             if (btnKembaliPengguna) btnKembaliPengguna.style.display = 'none';
             if (btnKembaliAdminContainer) btnKembaliAdminContainer.style.display = 'inline-block';
         }
+
+
+        // ===== KODE JAVASCRIPT BARU (PERBAIKAN - EFEK PERMANEN) =====
+        const importContainer = document.querySelector('.collapsible-excel-export');
+        if (importContainer) {
+            // Cukup tambahkan kelas 'glow-effect' untuk memulai animasi secara permanen.
+            importContainer.classList.add('glow-effect');
+        }
+        // ==========================================================
+
         setupLockIdAndExportClientFeatures();
         window.scrollTo(0, 0);
     }
