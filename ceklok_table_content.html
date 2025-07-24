@@ -10,7 +10,7 @@
       </button>
       <div class="collapsible-content" style="display: none;">
           <p style="font-size:0.9em; color: var(--grey-text); margin-top:0;">
-              Gunakan fitur ini untuk mengunggah data kehadiran dari file Excel. Pastikan format file Anda memiliki kolom "TANGGAL", "JAM MASUK", "JAM PULANG" dan "ALASAN TIDAK HADIR".
+              Gunakan fitur ini untuk mengunggah data kehadiran dari file Template EMIS. Pastikan format file Anda memiliki kolom "TANGGAL", "JAM MASUK", "JAM PULANG" dan "ALASAN TIDAK HADIR".
           </p>
           <div class="form-group" style="margin-bottom:15px;">
               <label for="excelFileInput" style="font-weight:bold;">Pilih File Template:</label>
@@ -212,5 +212,39 @@
   .collapsible-content {
     padding: 20px;
     border-top: 1px solid #ddd;
+  }
+
+  /* ===== KODE CSS BARU (PERBAIKAN - EFEK PELANGI + GETARAN) ===== */
+  .glow-effect {
+    animation: rainbow-glow 3s infinite ease-in-out;
+    border: 2px solid transparent;
+    /* Menambahkan properti will-change untuk optimasi performa animasi */
+    will-change: transform, box-shadow, border-color;
+  }
+
+  /* Definisi keyframes yang diperbarui dengan efek getaran (transform) */
+  @keyframes rainbow-glow {
+    0%, 100% {
+      /* Kembali ke warna awal (Biru) dan posisi normal */
+      border-color: #00aaff;
+      box-shadow: 0 0 15px #00aaff, 0 0 20px #0077cc;
+      transform: translateY(0) scale(1); /* Posisi awal */
+    }
+    25% {
+      /* Berubah ke warna Hijau */
+      border-color: #48d1cc;
+      box-shadow: 0 0 15px #48d1cc, 0 0 20px #20b2aa;
+    }
+    50% {
+      /* Puncak animasi: warna Kuning, bayangan maksimal, dan bergerak ke atas */
+      border-color: #ffc107;
+      box-shadow: 0 0 20px #ffc107, 0 0 25px #e0a800;
+      transform: translateY(-3px) scale(1.02); /* Bergerak 3px ke atas dan sedikit membesar */
+    }
+    75% {
+      /* Berubah ke warna Ungu */
+      border-color: #be4bdb;
+      box-shadow: 0 0 15px #be4bdb, 0 0 20px #9c36b5;
+    }
   }
 </style>
