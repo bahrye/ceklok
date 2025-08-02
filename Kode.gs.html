@@ -2428,13 +2428,15 @@ function generatePrintableSheet(selectedMonthYear) {
 
 
 /**
- * Mengekspor sheet tertentu ke PDF dengan print area yang disesuaikan.
+ * (VERSI BARU)
+ * Mengekspor sheet tertentu ke PDF dengan nama file yang disesuaikan.
  * @param {string} sheetIdToPrint ID dari sheet yang akan diekspor.
  * @param {number} printRowCount Jumlah baris yang akan dicetak.
  * @param {number} printColCount Jumlah kolom yang akan dicetak.
+ * @param {string} monthYearForFilename Periode bulan/tahun (format "MM/YYYY") untuk nama file.
  * @return {object} Objek berisi URL PDF atau error.
  */
-function downloadSheetAsPDF(sheetIdToPrint, printRowCount, printColCount) {
+function downloadSheetAsPDF(sheetIdToPrint, printRowCount, printColCount, monthYearForFilename) {
   try {
     if (!sheetIdToPrint || !printRowCount || !printColCount) {
         return { error: "Parameter untuk download PDF tidak lengkap."};
@@ -2446,50 +2448,25 @@ function downloadSheetAsPDF(sheetIdToPrint, printRowCount, printColCount) {
       return { error: `Sheet dengan ID '${sheetIdToPrint}' tidak ditemukan untuk PDF.` };
     }
     
-    const sheetName = sheet.getName(); // Dapatkan nama sheet untuk filename PDF
-    const fileName = `${sheetName}_${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd")}.pdf`;
-
-    // Mengatur print area (A1 notation)
-    // Kolom terakhir adalah printColCount, Baris terakhir adalah printRowCount
-    const printAreaRange = `A1:${getCellA1Notation(printRowCount, printColCount)}`;
-    Logger.log("Print Area: " + printAreaRange);
-
+    // === PERUBAHAN UTAMA UNTUK NAMA FILE ===
+    let fileName;
+    if (monthYearForFilename && /^\d{2}\/\d{4}$/.test(monthYearForFilename)) {
+        const formattedPeriod = monthYearForFilename.replace('/', '_');
+        fileName = `Ceklok bln ${formattedPeriod}.pdf`;
+    } else {
+        // Fallback jika periode tidak dikirim atau formatnya salah
+        fileName = `Ceklok_${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd")}.pdf`;
+    }
+    // === AKHIR PERUBAHAN ===
 
     const exportUrl = ss.getUrl().replace(/edit$/, '') + 'export?';
     const params = {
-      format: 'pdf',
-      portrait: false, // Lanskap biasanya lebih cocok untuk tabel lebar
-      size: 'A4',      // Atau 'letter', dll.
-      fitw: true,      // Fit to width
-      // scale: 1, // Skala Normal (100%)
-      top_margin: 0.5,
-      bottom_margin: 0.5,
-      left_margin: 0.5,
-      right_margin: 0.5,
-      sheetnames: false,
-      printtitle: false,
-      pagenumbers: false,
-      gridlines: false, // Biasanya false untuk tampilan cetak yang bersih
-      fzr: false,       // Freeze rows = false
-      fzc: false,       // Freeze columns = false
-      gid: sheetIdToPrint,
-      // Menambahkan parameter untuk print area (jika didukung, seringkali r1,c1,r2,c2 lebih reliable)
-      // Namun, parameter export Google Sheets tidak secara langsung mendukung 'printAreaRange' via A1.
-      // Kita akan mengandalkan `fitw` dan batasan data yang ditulis ke sheet sementara.
-      // Jika ingin kontrol print area lebih presisi, cara alternatif adalah membuat file Google Docs/Slides
-      // dari data, lalu ekspor ke PDF, atau menggunakan API pihak ketiga.
-
-      // Untuk PDF export, kita lebih banyak mengontrol data YANG ADA di sheet sementara.
-      // Pastikan sheet sementara hanya berisi data hingga printRowCount dan printColCount.
-      // Parameter di bawah ini untuk export CSV/TSV, mungkin tidak berlaku untuk PDF tapi dicoba:
-      // 'c1': 0, // Kolom mulai (0-indexed)
-      // 'r1': 0, // Baris mulai (0-indexed)
-      // 'c2': printColCount -1,
-      // 'r2': printRowCount -1
+      format: 'pdf', portrait: false, size: 'A4', fitw: true,
+      top_margin: 0.5, bottom_margin: 0.5, left_margin: 0.5, right_margin: 0.5,
+      sheetnames: false, printtitle: false, pagenumbers: false,
+      gridlines: false, fzr: false, fzc: false, gid: sheetIdToPrint,
     };
 
-    // Hapus kolom dan baris ekstra di sheet sementara jika ada, sebelum export
-    // Ini lebih efektif daripada parameter URL untuk PDF
     if (sheet.getMaxColumns() > printColCount) {
         sheet.deleteColumns(printColCount + 1, sheet.getMaxColumns() - printColCount);
     }
@@ -2498,35 +2475,20 @@ function downloadSheetAsPDF(sheetIdToPrint, printRowCount, printColCount) {
     }
     SpreadsheetApp.flush();
 
-
     const query = Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&');
     const blob = UrlFetchApp.fetch(exportUrl + query, {
       headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
       muteHttpExceptions: true
-    }).getBlob().setName(fileName);
+    }).getBlob().setName(fileName); // Menggunakan nama file baru
 
     if (blob.getContentType() !== "application/pdf") {
         Logger.log("Gagal membuat PDF, respons bukan PDF. Konten: " + blob.getDataAsString());
         return { error: "Gagal membuat PDF dari server. Respons bukan PDF."};
     }
 
-    // Simpan ke Drive sementara agar bisa dapat URL publik (jika diperlukan untuk direct link)
-    // Atau langsung kirim sebagai base64 jika frontend bisa handle.
-    // Untuk window.open, kita perlu URL yang bisa diakses.
-    // Namun, karena kita akan menghapus sheet, membuat file di Drive mungkin tidak ideal.
-    // Coba langsung buat data URL jika frontend bisa (tapi window.open biasanya butuh http URL)
-    // Untuk saat ini, kita kembalikan data untuk dibuat file di frontend jika mau,
-    // atau kita bisa buat file di Drive dan berikan linknya.
-    // Paling sederhana: kembalikan base64 dan biarkan frontend membuat blob & link download.
-
-    // Menggunakan Google Drive untuk mendapatkan URL yang dapat diunduh
     const tempFolder = DriveApp.getFoldersByName("TempPdfCeklok").hasNext() ? DriveApp.getFoldersByName("TempPdfCeklok").next() : DriveApp.createFolder("TempPdfCeklok");
     const pdfFile = tempFolder.createFile(blob);
-    const downloadUrl = pdfFile.getDownloadUrl().replace("&exportFormat=pdf", ""); // URL untuk diunduh
-
-    // Jadwalkan penghapusan file PDF dari Drive juga (opsional, tapi baik)
-    // Ini memerlukan mekanisme cleanup Drive File terpisah jika diinginkan.
-    // Untuk sekarang, fokus pada penghapusan sheet.
+    const downloadUrl = pdfFile.getDownloadUrl().replace("&exportFormat=pdf", "");
 
     return { success: true, downloadUrl: downloadUrl, fileName: fileName };
 
@@ -5354,5 +5316,140 @@ function importFromExcel(teacherName, excelData) {
     Logger.log(`Error di importFromExcel (guru: ${teacherName}): ${e.toString()}\nStack: ${e.stack}`);
     logUserActivity(Session.getActiveUser().getEmail(), 'admin', 'IMPORT_EXCEL_ERROR', teacherName, e.message, 'ERROR');
     return { success: false, error: `Gagal mengimpor data: ${e.message}` };
+  }
+}
+
+// Tambahkan fungsi ini di dalam file Kode.gs.html Anda
+
+/**
+ * Mengambil data kehadiran untuk 2 bulan terakhir (bulan ini dan bulan sebelumnya)
+ * untuk ditampilkan dalam format kalender di dasbor pengguna.
+ * @param {string} teacherName Nama guru yang datanya akan diambil.
+ * @return {object} Objek hasil operasi {success: boolean, data?: object, error?: string}.
+ */
+function getTwoMonthAttendanceData(teacherName) {
+  try {
+    if (!teacherName) {
+      return { success: false, error: "Nama guru harus diisi." };
+    }
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11 (Januari=0)
+
+    const prevMonthDate = new Date(currentYear, currentMonth - 1, 1);
+    const prevMonthYear = prevMonthDate.getFullYear();
+    const prevMonth = prevMonthDate.getMonth();
+
+    const monthsToFetch = [
+        { year: prevMonthYear, month: prevMonth },
+        { year: currentYear, month: currentMonth }
+    ];
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ceklokManualSheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
+    const kalenderSheet = ss.getSheetByName(KALENDER_SHEET_NAME);
+
+    if (!ceklokManualSheet || !kalenderSheet) {
+      return { success: false, error: "Sheet Ceklok_Manual atau Kalender_Pendidikan tidak ditemukan." };
+    }
+
+    const allCeklokData = ceklokManualSheet.getDataRange().getValues();
+    const ceklokHeaders = allCeklokData[0].map(h => String(h).trim().toLowerCase());
+    const idxNama = ceklokHeaders.indexOf("nama_guru");
+    const idxTanggalCeklok = ceklokHeaders.indexOf("tanggal");
+    const idxMasuk = ceklokHeaders.indexOf("jam_masuk");
+    const idxPulang = ceklokHeaders.indexOf("jam_pulang");
+    const idxKetManual = ceklokHeaders.indexOf("ket_libur_manual");
+    
+    // Buat Peta (Map) data ceklok guru untuk pencarian cepat
+    const teacherCeklokEntries = {};
+    for (let i = 1; i < allCeklokData.length; i++) {
+        const row = allCeklokData[i];
+        if (String(row[idxNama]).trim() === teacherName && row[idxTanggalCeklok] instanceof Date) {
+            const dateKey = Utilities.formatDate(new Date(row[idxTanggalCeklok]), Session.getScriptTimeZone(), "dd/MM/yyyy");
+            teacherCeklokEntries[dateKey] = {
+                jamMasuk: String(row[idxMasuk] || "").trim(),
+                jamPulang: String(row[idxPulang] || "").trim(),
+                ketManual: String(row[idxKetManual] || "").trim()
+            };
+        }
+    }
+
+    // Buat Peta (Map) hari libur dari kalender
+    const kalenderLiburMap = {};
+    if (kalenderSheet.getLastRow() > 1) {
+      const kalenderData = kalenderSheet.getRange(2, 1, kalenderSheet.getLastRow() - 1, 2).getDisplayValues();
+      kalenderData.forEach(row => {
+        if (row[0] && String(row[0]).trim() !== "") {
+          kalenderLiburMap[String(row[0]).trim()] = String(row[1]).trim() || "Hari Libur";
+        }
+      });
+    }
+
+    const resultData = {};
+    const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+    const today = new Date();
+    today.setHours(0,0,0,0);
+
+    monthsToFetch.forEach(m => {
+        const year = m.year;
+        const monthIdx = m.month;
+        const monthName = monthNames[monthIdx];
+        const monthKey = `${monthName} ${year}`;
+        resultData[monthKey] = [];
+
+        const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+
+        for (let day = 1; day <= daysInMonth; day++) {
+             const dateObj = new Date(year, monthIdx, day);
+             dateObj.setHours(0,0,0,0);
+             const dateStr_ddMMyyyy = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "dd/MM/yyyy");
+             
+             let status = "white"; 
+             let detailMessage = "Jadwal Mendatang";
+             let isNonWorkingScheduled = false;
+
+             const dayOfWeek = dateObj.getDay();
+             const ceklokEntry = teacherCeklokEntries[dateStr_ddMMyyyy];
+             const kalenderEntry = kalenderLiburMap[dateStr_ddMMyyyy];
+
+             if (dayOfWeek === 0) {
+                 status = 'white'; detailMessage = 'Hari Minggu'; isNonWorkingScheduled = true;
+             } else if (kalenderEntry) {
+                 status = 'blue'; detailMessage = `Hari Libur: ${kalenderEntry}`; isNonWorkingScheduled = true;
+             } else if (ceklokEntry) {
+                 const { jamMasuk, jamPulang, ketManual } = ceklokEntry;
+                 if (ketManual) {
+                     status = 'blue'; detailMessage = `Keterangan: ${ketManual}`; isNonWorkingScheduled = true;
+                 } else if (jamMasuk && jamPulang) {
+                     status = 'green'; detailMessage = 'Hadir (Jam Masuk & Pulang Terisi)';
+                 } else if (jamMasuk || jamPulang) {
+                     status = 'yellow'; detailMessage = jamMasuk ? 'Jam Pulang Kosong' : 'Jam Masuk Kosong';
+                 } else { // Entri ada tapi semua kosong
+                     if (dateObj <= today) {
+                        status = 'red'; detailMessage = 'Alpa (Tidak Ada Data)';
+                     }
+                 }
+             } else { // Tidak ada entri sama sekali
+                 if (dateObj <= today) {
+                    status = 'red'; detailMessage = 'Alpa (Tidak Ada Data)';
+                 }
+             }
+
+             resultData[monthKey].push({
+                date: day,
+                status: status,
+                isNonWorkingScheduled: isNonWorkingScheduled,
+                detailMessage: detailMessage
+             });
+        }
+    });
+    
+    return { success: true, data: resultData };
+
+  } catch (e) {
+    Logger.log(`Error in getTwoMonthAttendanceData (teacher: ${teacherName}): ${e.toString()}`);
+    return { success: false, error: `Gagal memproses data 2 bulan: ${e.message}` };
   }
 }
