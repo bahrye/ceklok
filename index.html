@@ -1174,6 +1174,24 @@
     </div>
   </div>
 
+  <div id="customConfirmModal" class="modal-overlay" style="display:none; z-index: 20005;">
+      <div class="modal-content" style="max-width: 450px; text-align: center;">
+          <div id="customConfirmIcon" style="margin-bottom: 15px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--info);">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+          </div>
+          <h3 id="customConfirmTitle" style="margin-top:0; font-size: 1.4em;">Konfirmasi Tindakan</h3>
+          <p id="customConfirmMessage" style="margin-bottom: 25px; font-size: 1em; color: var(--grey-text);">Apakah Anda yakin ingin melanjutkan?</p>
+          <div class="btn-container">
+              <button id="customConfirmOkButton">OK</button>
+              <button id="customConfirmCancelButton" style="background-color: #aaa;">Batal</button>
+          </div>
+      </div>
+    </div>
+
   <footer>
     <p>&copy; <span id="currentYear">2024</span> Created by Syamsul Bahri || v2.5</p>
   </footer>
@@ -6202,6 +6220,9 @@
         // Panggil fungsi lazy loading setelah view di-render
         setupLazyLoadGifs(); // <-- PEMANGGILAN FUNGSI BARU
 
+        // PANGGILAN FUNGSI BARU
+        loadTwoMonthAttendanceSummary();
+
         // Tampilkan pop-up pengingat jika memenuhi syarat
         if (typeof showEndOfMonthReminder === 'function') {
             setTimeout(showEndOfMonthReminder, 100);
@@ -6460,6 +6481,267 @@
         showAlert('Gagal membaca file.', 'error');
       };
       reader.readAsArrayBuffer(selectedFile);
+    }
+
+    function loadTwoMonthAttendanceSummary() {
+        const container = document.getElementById('twoMonthCalendarContainer');
+        if (!container) return;
+
+        container.innerHTML = '<p style="text-align:center; color: var(--grey-text);"><i>Memuat data kehadiran 2 bulan terakhir...</i></p>';
+
+        google.script.run
+            .withSuccessHandler(response => {
+                if (response.success && response.data) {
+                    renderTwoMonthCalendars(response.data);
+                } else {
+                    container.innerHTML = `<p style="text-align:center; color:red;">${response.error || 'Gagal memuat data.'}</p>`;
+                }
+            })
+            .withFailureHandler(err => {
+                container.innerHTML = `<p style="text-align:center; color:red;">Error server: ${err.message}</p>`;
+            })
+            .getTwoMonthAttendanceData(loggedInUser.teacherName);
+    }
+
+    // Tambahkan fungsi helper baru ini di dalam tag <script> di file index.html Anda
+    function parseIndonesianMonthYear(monthYearString) {
+        const monthNames = ["januari", "februari", "maret", "april", "mei", "juni", "juli", "agustus", "september", "oktober", "november", "desember"];
+        const parts = monthYearString.toLowerCase().split(' ');
+        if (parts.length !== 2) return new Date(monthYearString); // Fallback
+
+        const monthIndex = monthNames.indexOf(parts[0]);
+        const year = parseInt(parts[1], 10);
+
+        if (monthIndex > -1 && !isNaN(year)) {
+            return new Date(year, monthIndex, 1);
+        }
+        return new Date(monthYearString); // Fallback untuk keamanan
+    }
+
+    // Ganti fungsi renderTwoMonthCalendars yang lama dengan versi yang sudah diperbaiki ini
+    function renderTwoMonthCalendars(data) {
+        const container = document.getElementById('twoMonthCalendarContainer');
+        container.innerHTML = ''; // Hapus pesan loading
+
+        const dayHeaders = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+        
+        // === PERBAIKAN UTAMA ADA DI SINI ===
+        // Mengurutkan bulan secara kronologis (bulan lalu, lalu bulan sekarang)
+        // Ini akan memastikan bulan sebelumnya ditampilkan terlebih dahulu (di bagian atas).
+        const monthOrder = Object.keys(data).sort((a, b) => {
+            const dateA = parseIndonesianMonthYear(a);
+            const dateB = parseIndonesianMonthYear(b);
+            return dateA - dateB; // Urutan ascending: bulan sebelumnya akan pertama
+        });
+        // ===================================
+
+        monthOrder.forEach(monthKey => {
+            if (Object.hasOwnProperty.call(data, monthKey)) {
+                const monthData = data[monthKey];
+                const [monthName, yearStr] = monthKey.split(' ');
+                const year = parseInt(yearStr);
+                const monthIndex = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"].indexOf(monthName);
+
+                const monthContainer = document.createElement('div');
+                monthContainer.className = 'cdk-month-container';
+                monthContainer.innerHTML = `<h4>${monthKey}</h4>`;
+
+                const daysGrid = document.createElement('div');
+                daysGrid.className = 'cdk-days-grid';
+
+                dayHeaders.forEach(header => {
+                    const dayHeaderEl = document.createElement('div');
+                    dayHeaderEl.className = 'cdk-day-header';
+                    dayHeaderEl.textContent = header;
+                    daysGrid.appendChild(dayHeaderEl);
+                });
+
+                let firstDayOfMonth = new Date(year, monthIndex, 1).getDay();
+                let dayOffset = (firstDayOfMonth === 0) ? 6 : firstDayOfMonth - 1;
+
+                for (let i = 0; i < dayOffset; i++) {
+                    const emptyCell = document.createElement('div');
+                    emptyCell.className = 'cdk-day-cell empty-offset';
+                    daysGrid.appendChild(emptyCell);
+                }
+
+                monthData.forEach(dayEntry => {
+                    const dayCell = document.createElement('div');
+                    dayCell.className = 'cdk-day-cell';
+                    if (dayEntry.isNonWorkingScheduled) {
+                        dayCell.classList.add('is-non-working-scheduled');
+                    }
+
+                    const dateNumber = document.createElement('span');
+                    dateNumber.className = 'cdk-date-number';
+                    dateNumber.textContent = dayEntry.date;
+                    dayCell.appendChild(dateNumber);
+
+                    const statusDot = document.createElement('span');
+                    statusDot.className = `cdk-status-dot ${dayEntry.status}`;
+
+                    if (dayEntry.status !== 'white') {
+                        statusDot.classList.add('clickable');
+                        const dateForModal = `${String(dayEntry.date).padStart(2, '0')}/${String(monthIndex + 1).padStart(2, '0')}/${year}`;
+                        let statusTextForModal = "";
+                        switch(dayEntry.status) {
+                            case "green": statusTextForModal = "Hadir"; break;
+                            case "yellow": statusTextForModal = "Tidak Lengkap"; break;
+                            case "red": statusTextForModal = "Alpa"; break;
+                            case "blue": statusTextForModal = "Hari Libur/Keterangan"; break;
+                            default: statusTextForModal = "Info";
+                        }
+                        statusDot.onclick = function() {
+                            openTwoMonthCdkDetailModal(dateForModal, statusTextForModal, dayEntry.detailMessage);
+                        };
+                    }
+                    dayCell.appendChild(statusDot);
+                    daysGrid.appendChild(dayCell);
+                });
+
+                monthContainer.appendChild(daysGrid);
+                container.appendChild(monthContainer);
+            }
+        });
+    }
+
+    function openTwoMonthCdkDetailModal(dateString, statusText, detailMessage) {
+        const modal = document.getElementById('twoMonthCdkDetailModal');
+        const modalTitle = document.getElementById('twoMonthCdkDetailModalTitle');
+        const modalDateEl = document.getElementById('twoMonthCdkDetailModalDate');
+        const modalBody = document.getElementById('twoMonthCdkDetailModalBody');
+        if(modal && modalTitle && modalDateEl && modalBody){
+            modalTitle.textContent = `Detail Kehadiran - ${statusText}`;
+            modalDateEl.textContent = `Tanggal: ${dateString}`;
+            modalBody.textContent = detailMessage;
+            modal.style.display = 'flex';
+        }
+    }
+
+    function closeTwoMonthCdkDetailModal() {
+        const modal = document.getElementById('twoMonthCdkDetailModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    /**
+     * (VERSI BARU) Menampilkan modal konfirmasi sebelum mengunduh PDF.
+     * @param {string} source Halaman asal pemanggilan ('dashboard' atau 'ceklok_page').
+     */
+    function handleDirectUserPdfDownload(source) {
+        let monthYearToPrint = '';
+
+        if (source === 'dashboard') {
+            const bulanSelect = document.getElementById('summaryBulanSelect');
+            const tahunSelect = document.getElementById('summaryTahunSelect');
+            if (bulanSelect && tahunSelect && bulanSelect.value && tahunSelect.value) {
+                monthYearToPrint = `${bulanSelect.value}/${tahunSelect.value}`;
+            } else {
+                showAlert("Gagal mendapatkan periode dari dasbor. Silakan coba lagi.", "error");
+                return;
+            }
+        } else if (source === 'ceklok_page') {
+            if (activeCeklokMonthYear) {
+                monthYearToPrint = activeCeklokMonthYear;
+            } else {
+                showAlert("Tidak ada periode ceklok yang aktif untuk diunduh. Silakan muat data terlebih dahulu.", "error");
+                return;
+            }
+        } else {
+            showAlert("Sumber unduhan tidak dikenal.", "error");
+            return;
+        }
+
+        // Panggil modal konfirmasi kustom
+        showCustomConfirm(
+            `Anda akan mengunduh rekap PDF untuk periode <strong>${monthYearToPrint}</strong>. Lanjutkan?`,
+            function() { // Fungsi ini akan dijalankan jika pengguna menekan "OK"
+                initiatePdfDownload(monthYearToPrint);
+            }
+        );
+    }
+
+
+    /**
+     * (VERSI BARU)
+     * Memulai proses pembuatan dan pengunduhan PDF untuk periode tertentu.
+     * @param {string} periodeCetak Periode yang akan dicetak (format "MM/YYYY").
+     */
+    function initiatePdfDownload(periodeCetak) {
+        if (!periodeCetak) {
+            showAlert("Periode untuk pencetakan PDF tidak valid.", "warning");
+            return;
+        }
+
+        showLoading(`Menyiapkan data PDF untuk periode ${periodeCetak}...`);
+        google.script.run
+            .withSuccessHandler(responseGenerate => {
+                if (responseGenerate.success) {
+                    showAlert(responseGenerate.message || "Sheet sementara disiapkan, mengunduh PDF...", "info", 2000);
+                    google.script.run
+                        .withSuccessHandler(responseDownload => {
+                            hideLoading();
+                            if (responseDownload.success && responseDownload.downloadUrl) {
+                                window.open(responseDownload.downloadUrl, '_blank');
+                                // Tampilkan nama file baru di notifikasi
+                                showAlert(`PDF "${responseDownload.fileName}" berhasil dibuat dan proses unduh dimulai.`, "success", 7000);
+                            } else {
+                                showAlert(responseDownload.error || "Gagal mengunduh PDF.", "error");
+                            }
+                        })
+                        .withFailureHandler(errDownload => {
+                            hideLoading();
+                            showAlert(`Error server saat mengunduh PDF: ${errDownload.message}`, "error");
+                        })
+                        // === PERUBAHAN UTAMA: Menambahkan 'periodeCetak' sebagai parameter ke-4 ===
+                        .downloadSheetAsPDF(responseGenerate.sheetId, responseGenerate.lastDataRow, responseGenerate.lastDataCol, periodeCetak);
+                } else {
+                    hideLoading();
+                    showAlert(responseGenerate.error || "Gagal menyiapkan data cetak.", "error");
+                }
+            })
+            .withFailureHandler(errGenerate => {
+                hideLoading();
+                showAlert(`Error server saat menyiapkan data cetak: ${errGenerate.message}`, "error");
+            })
+            .generatePrintableSheet(periodeCetak);
+    }
+
+    /**
+     * Menampilkan modal konfirmasi kustom.
+     * @param {string} message Pesan yang akan ditampilkan di modal.
+     * @param {function} onConfirm Callback yang akan dieksekusi saat tombol OK diklik.
+     */
+    function showCustomConfirm(message, onConfirm) {
+        const modal = document.getElementById('customConfirmModal');
+        const messageEl = document.getElementById('customConfirmMessage');
+        const okButton = document.getElementById('customConfirmOkButton');
+        const cancelButton = document.getElementById('customConfirmCancelButton');
+
+        if (!modal || !messageEl || !okButton || !cancelButton) return;
+
+        messageEl.innerHTML = message; // Gunakan innerHTML agar tag <strong> berfungsi
+        
+        modal.style.display = 'flex';
+
+        okButton.onclick = function() {
+            modal.style.display = 'none';
+            if (onConfirm) {
+                onConfirm();
+            }
+        };
+
+        cancelButton.onclick = function() {
+            modal.style.display = 'none';
+        };
+        
+        // Tutup modal jika klik di luar area konten
+        modal.onclick = function(event) {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        };
     }
   </script>
 </body>
