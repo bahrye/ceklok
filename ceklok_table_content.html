@@ -1,6 +1,4 @@
 <div class="container" id="ceklokInputContainer">
-  <!-- Bagian Ringkasan Kehadiran telah dihilangkan dari halaman ini -->
-
   <h3>INPUT CEKLOK</h3>
 
   <div class="collapsible-excel-export" style="margin-bottom: 25px; background-color: #e7f5ff;">
@@ -87,12 +85,10 @@
           <th>Hari</th><th>Tanggal</th><th>Data Masuk</th><th>Data Pulang</th>
           <th>Input Jam Masuk (HH.MM)</th><th>Input Jam Pulang (HH.MM)</th>
           <th>Keterangan Libur/Alasan Tidak Masuk</th>
-          <!-- PERBAIKAN: Menambahkan header untuk kolom Aksi -->
           <th>Aksi</th>
         </tr>
       </thead>
       <tbody id="ceklokTableBody">
-        <!-- PERBAIKAN: Mengubah colspan menjadi 8 agar sesuai dengan jumlah header -->
         <tr><td colspan="8">Memuat data...</td></tr>
       </tbody>
     </table>
@@ -107,7 +103,7 @@
 
     <button id="ceklokTombolKembaliPengguna" class="btn-warning" onclick="goBackToUserDashboard()" style="display: none;">Kembali ke Dasbor</button>
     
-    <button onclick="navigateToHasilCeklok()">Lihat Hasil Ceklok</button>
+    <button onclick="handleDirectUserPdfDownload('ceklok_page')">Unduh Rekap PDF</button>
   </div>
 
   <div class="collapsible-excel-export">
