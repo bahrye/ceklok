@@ -594,17 +594,40 @@
         </div>
 
         <div class="secondary-actions">
-             <h3>Lihat Riwayat</h3>
-             <div class="btn-container">
-                <button class="btn-secondary-action" onclick="handleDirectUserPdfDownload('dashboard')">
-                    <i class="fa-solid fa-file-pdf"></i>
-                    Unduh Rekap Bulanan (PDF)
-                </button>
-                <button class="btn-secondary-action" onclick="navigateToCekDataKehadiran()">
-                    <i class="fa-solid fa-calendar-week"></i>
-                    Kalender Kehadiran Tahunan
-                </button>
-             </div>
+                <h3>Lihat Riwayat & Pengaturan</h3>
+                <div class="btn-container">
+                    <button class="btn-secondary-action" onclick="handleDirectUserPdfDownload('dashboard')">
+                        <i class="fa-solid fa-file-pdf"></i>
+                        Unduh Rekap Bulanan (PDF)
+                    </button>
+                    <button class="btn-secondary-action" onclick="navigateToCekDataKehadiran()">
+                        <i class="fa-solid fa-calendar-week"></i>
+                        Kalender Kehadiran Tahunan
+                    </button>
+                    <button class="btn-secondary-action" onclick="openSchoolHolidaySettingsModal()">
+                        <i class="fa-solid fa-school-lock"></i>
+                        Setting Hari Libur Sekolah
+                    </button>
+                </div>
+            </div>
+        <div id="schoolHolidaySettingsModal" class="modal-overlay" style="display:none; z-index: 20002;">
+          <div class="modal-content" style="max-width: 500px;">
+            <span class="modal-close-button" onclick="closeSchoolHolidaySettingsModal()">&times;</span>
+            <h3>Setting Hari Libur Sekolah Mingguan</h3>
+            <p>Pilih hari yang akan secara otomatis diatur sebagai "Hari Libur Sekolah" pada tabel isian ceklok Anda. Perubahan akan berlaku untuk pengisian periode selanjutnya.</p>
+            <div id="holidaySettingsCheckboxes" style="margin-top: 20px;">
+                <label style="display: block; margin-bottom: 10px;"><input type="checkbox" id="chkSenin" value="senin"> Senin</label>
+                <label style="display: block; margin-bottom: 10px;"><input type="checkbox" id="chkSelasa" value="selasa"> Selasa</label>
+                <label style="display: block; margin-bottom: 10px;"><input type="checkbox" id="chkRabu" value="rabu"> Rabu</label>
+                <label style="display: block; margin-bottom: 10px;"><input type="checkbox" id="chkKamis" value="kamis"> Kamis</label>
+                <label style="display: block; margin-bottom: 10px;"><input type="checkbox" id="chkJumat" value="jumat"> Jumat</label>
+                <label style="display: block; margin-bottom: 10px;"><input type="checkbox" id="chkSabtu" value="sabtu"> Sabtu</label>
+            </div>
+            <div class="btn-container" style="margin-top: 25px;">
+                <button onclick="saveSchoolHolidaySettings()">Simpan Pengaturan</button>
+                <button type="button" onclick="closeSchoolHolidaySettingsModal()" style="background-color: #777;">Batal</button>
+            </div>
+          </div>
         </div>
 
         <div class="recent-attendance-section" style="margin-top: 40px;">
