@@ -1,0 +1,27 @@
+<div class="container" id="unlockRequestsContainer">
+  <h2>Kelola Permintaan Buka Kunci Hari Libur</h2>
+  <p style="text-align:center; color: var(--grey-text); margin-top:-15px; margin-bottom: 25px;">
+    Setujui permintaan untuk mengizinkan guru mengubah data pada hari libur yang telah mereka atur sebelumnya.
+  </p>
+
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Nama Guru</th>
+          <th>Tanggal yang Diajukan</th>
+          <th>Tanggal Permintaan</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="unlockRequestsTableBody">
+        <tr><td colspan="5" style="text-align:center;">Memuat data permintaan...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="btn-container" style="margin-top: 30px;">
+    <button onclick="goBackToAdminDashboard()">Kembali ke Dashboard Admin</button>
+  </div>
+</div>
