@@ -5453,3 +5453,34 @@ function getTwoMonthAttendanceData(teacherName) {
     return { success: false, error: `Gagal memproses data 2 bulan: ${e.message}` };
   }
 }
+
+/**
+ * Fungsi ini berjalan secara otomatis untuk mengunci data Ceklok bulan sebelumnya.
+ * Didesain untuk dijalankan oleh pemicu (trigger) harian.
+ */
+function autoLockPreviousMonth() {
+  const today = new Date();
+  const currentDay = today.getDate();
+
+  // Hanya jalankan logika jika hari ini adalah tanggal 10
+  if (currentDay === 10) {
+    // Dapatkan tanggal bulan sebelumnya.
+    // Dengan mengatur hari ke 0, kita mendapatkan hari terakhir dari bulan sebelumnya.
+    const prevMonthDate = new Date(today.getFullYear(), today.getMonth(), 0);
+    const prevMonth = String(prevMonthDate.getMonth() + 1).padStart(2, '0'); // getMonth() berbasis 0 (Jan=0)
+    const prevMonthYear = prevMonthDate.getFullYear();
+    const monthYearToLock = `${prevMonth}/${prevMonthYear}`;
+
+    Logger.log(`Hari ini tanggal 10. Mencoba mengunci bulan: ${monthYearToLock}`);
+
+    // Panggil fungsi lockMonth yang sudah ada.
+    // Kita simulasikan detail 'actor' untuk keperluan logging.
+    const actorUsername = "SYSTEM_AUTOLOCK";
+    const actorRole = "SYSTEM";
+    
+    // Memanggil fungsi lockMonth yang sudah ada di dalam kode Anda
+    lockMonth(monthYearToLock, actorUsername, actorRole);
+  } else {
+    Logger.log(`Hari ini bukan tanggal 10 (tanggal ${currentDay}). Tidak ada bulan yang dikunci.`);
+  }
+}
