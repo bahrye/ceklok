@@ -1444,10 +1444,6 @@
                 htmlFile = 'cek_data_kehadiran_content.html';
                 setupFunction = setupCekDataKehadiranView;
                 break;
-            case 'unlock_requests_view': // <-- TAMBAHKAN CASE INI
-                htmlFile = 'unlock_requests_content.html';
-                setupFunction = setupUnlockRequestsView;
-                break;
             default:
                 console.error("Tampilan tidak dikenal:", viewName);
                 const appEl = document.getElementById('app');
@@ -2239,7 +2235,7 @@
         const btnKembaliContainer = document.getElementById('ceklokTombolKembaliContainer');
         const summaryDashboardElement = document.getElementById('teacherDashboardSummary');
 
-        const isMonthLocked = data.isLocked;
+        const isMonthLocked = isLocked;
         const btnSimpanCeklok = document.getElementById('btnSimpanCeklok');
         const ceklokLockMessageDiv = document.getElementById('ceklokLockMessage');
 
@@ -2311,18 +2307,17 @@
             let bodyHtml = '';
             if (rows && rows.length > 0) {
                 rows.forEach((row, i) => {
-                    // Cek jika hari libur kalender/minggu
                     if (row.isLibur) {
+                        // MODIFIKASI COLSPAN DI SINI
                         bodyHtml += `<tr class="libur-row">
                             <td class="libur-text" data-label="Hari">${row.hari}</td>
                             <td class="libur-text" data-label="Tanggal">${row.tanggal}</td>
-                            <td colspan="6" class="libur-note" data-label="Keterangan"><span class="holiday-description">${row.keterangan || 'Hari Libur'}</span></td>
+                            <td data-label="Data Masuk" style="text-align: center;">-</td>
+                            <td data-label="Data Pulang" style="text-align: center;">-</td>
+                            <td colspan="4" class="libur-note" data-label="Keterangan"><span class="holiday-description">${row.keterangan || 'Hari Libur'}</span></td>
                         </tr>`;
                     } else {
-                        // Ini adalah hari kerja
-                        let ketLiburDropdownHtml = `<select id="ketLiburManual${i}" class="inline-select ket-libur-manual-dropdown" data-rowindex="${i}">...</select>`;
-                        // (Isi dropdown seperti kode sebelumnya)
-                        ketLiburDropdownHtml = `<select id="ketLiburManual${i}" class="inline-select ket-libur-manual-dropdown" data-rowindex="${i}" ${isMonthLocked ? 'disabled' : ''}>`;
+                        let ketLiburDropdownHtml = `<select id="ketLiburManual${i}" class="inline-select ket-libur-manual-dropdown" data-rowindex="${i}" ${isMonthLocked ? 'disabled' : ''}>`;
                         ketLiburDropdownHtml += '<option value="">-- Alasan Tidak Hadir --</option>';
                         if (ketLiburOptions && ketLiburOptions.length > 0) {
                             ketLiburOptions.forEach(opt => {
@@ -2331,40 +2326,34 @@
                             });
                         }
                         ketLiburDropdownHtml += '</select>';
-
-                        // --- LOGIKA BARU UNTUK KUNCI OTOMATIS ---
-                        const isAutoLockedByHolidaySetting = row.isSchoolHolidaySetting;
-                        const inputDisabledAttr = isMonthLocked || isAutoLockedByHolidaySetting ? 'disabled' : '';
-                        if(isAutoLockedByHolidaySetting) {
-                           // Set dropdown ke "Hari Libur Sekolah" jika terkunci otomatis
-                           ketLiburDropdownHtml = ketLiburDropdownHtml.replace(`value="Hari Libur Sekolah"`, `value="Hari Libur Sekolah" selected`);
-                        }
                         
-                        // Aksi: Tombol "Hapus" atau "Minta Buka Kunci"
-                        let actionButtonHtml = '';
-                        if(isAutoLockedByHolidaySetting && !isMonthLocked) {
-                            actionButtonHtml = `<button class="btn-warning" style="padding: 5px 10px; font-size: 0.9em;" onclick="handleRequestUnlock('${row.tanggal}')" title="Minta izin admin untuk edit hari ini">Minta Buka Kunci</button>`;
-                        } else {
-                            actionButtonHtml = `<button class="btn-danger" style="padding: 5px 10px; font-size: 0.9em;" onclick="clearCeklokRow(${i})" title="Hapus Isian Baris Ini" ${isMonthLocked ? 'disabled' : ''}>Hapus</button>`;
-                        }
-                        // ------------------------------------
+                        const isKetLiburManualSelected = row.keteranganLiburManual && row.keteranganLiburManual.trim() !== "";
+                        const jamMasukInputValue = isKetLiburManualSelected ? "" : (row.dataMasuk || "");
+                        const jamPulangInputValue = isKetLiburManualSelected ? "" : (row.dataPulang || "");
 
+                        const inputDisabledAttr = isMonthLocked ? 'disabled' : (isKetLiburManualSelected ? 'disabled' : '');
+
+                        // --- BARIS HTML UTAMA YANG DIMODIFIKASI ---
                         bodyHtml += `<tr>
                             <td data-label="Hari">${row.hari}</td>
                             <td data-label="Tanggal">${row.tanggal}</td>
                             <td data-label="Data Masuk" style="text-align: center;">${row.dataMasuk || '-'}</td>
                             <td data-label="Data Pulang" style="text-align: center;">${row.dataPulang || '-'}</td>
-                            <td data-label="Input Jam Masuk"><input type="text" class="inline-input" id="jamMasuk${i}" placeholder="HH.MM" value="${row.dataMasuk || ''}" ${inputDisabledAttr}></td>
-                            <td data-label="Input Jam Pulang"><input type="text" class="inline-input" id="jamPulang${i}" placeholder="HH.MM" value="${row.dataPulang || ''}" ${inputDisabledAttr}></td>
-                            <td data-label="Keterangan Libur/Alasan">${ketLiburDropdownHtml.replace('<select', `<select ${inputDisabledAttr}`)}</td>
-                            <td data-label="Aksi" class="actions-cell">${actionButtonHtml}</td>
+                            <td data-label="Input Jam Masuk"><input type="text" class="inline-input" id="jamMasuk${i}" placeholder="HH.MM" value="${jamMasukInputValue}" ${inputDisabledAttr}></td>
+                            <td data-label="Input Jam Pulang"><input type="text" class="inline-input" id="jamPulang${i}" placeholder="HH.MM" value="${jamPulangInputValue}" ${inputDisabledAttr}></td>
+                            <td data-label="Keterangan Libur/Alasan">${ketLiburDropdownHtml}</td>
+                            <td data-label="Aksi" class="actions-cell">
+                                <button class="btn-danger" style="padding: 5px 10px; font-size: 0.9em;" onclick="clearCeklokRow(${i})" title="Hapus Isian Baris Ini" ${isMonthLocked ? 'disabled' : ''}>Hapus</button>
+                            </td>
                         </tr>`;
                     }
                 });
             } else {
-                bodyHtml = `<tr><td colspan="8" style="text-align:center;">Tidak ada data untuk periode ini.</td></tr>`;
+                // MODIFIKASI COLSPAN DI SINI
+                bodyHtml = `<tr><td colspan="8" style="text-align:center;">Tidak ada data untuk periode ini atau periode belum dipilih.</td></tr>`;
             }
             tableBody.innerHTML = bodyHtml;
+            
             attachTimeInputValidationToCeklok();
             attachKetLiburDropdownListeners();
         }
@@ -6753,166 +6742,6 @@
                 modal.style.display = 'none';
             }
         };
-    }
-
-    // --- TAMBAHKAN FUNGSI-FUNGSI BARU INI ---
-
-    function openSchoolHolidaySettingsModal() {
-        const modal = document.getElementById('schoolHolidaySettingsModal');
-        if (modal) {
-            modal.style.display = 'flex';
-            loadAndSetHolidaySettings();
-        }
-    }
-
-    function closeSchoolHolidaySettingsModal() {
-        const modal = document.getElementById('schoolHolidaySettingsModal');
-        if (modal) {
-            modal.style.display = 'none';
-        }
-    }
-
-    function loadAndSetHolidaySettings() {
-        showLoading("Memuat pengaturan...");
-        google.script.run
-            .withSuccessHandler(response => {
-                hideLoading();
-                if (response.success) {
-                    const settings = response.settings;
-                    for (const day in settings) {
-                        const checkbox = document.getElementById(`chk${day.charAt(0).toUpperCase() + day.slice(1)}`);
-                        if (checkbox) {
-                            checkbox.checked = settings[day];
-                        }
-                    }
-                } else {
-                    showAlert(response.error, 'error');
-                }
-            })
-            .withFailureHandler(err => {
-                hideLoading();
-                showAlert(`Gagal memuat pengaturan: ${err.message}`, 'error');
-            })
-            .getSchoolHolidaySettings(loggedInUser.teacherName);
-    }
-
-    function saveSchoolHolidaySettings() {
-        const settings = {
-            teacherName: loggedInUser.teacherName,
-            senin: document.getElementById('chkSenin').checked,
-            selasa: document.getElementById('chkSelasa').checked,
-            rabu: document.getElementById('chkRabu').checked,
-            kamis: document.getElementById('chkKamis').checked,
-            jumat: document.getElementById('chkJumat').checked,
-            sabtu: document.getElementById('chkSabtu').checked,
-        };
-
-        showLoading("Menyimpan pengaturan...");
-        google.script.run
-            .withSuccessHandler(response => {
-                hideLoading();
-                showAlert(response.message || response.error, response.success ? 'success' : 'error');
-                if (response.success) {
-                    closeSchoolHolidaySettingsModal();
-                }
-            })
-            .withFailureHandler(err => {
-                hideLoading();
-                showAlert(`Gagal menyimpan: ${err.message}`, 'error');
-            })
-            .saveSchoolHolidaySettings(settings);
-    }
-    
-    function handleRequestUnlock(dateString) {
-      if (!dateString) {
-        showAlert("Tanggal untuk permintaan tidak valid.", "error");
-        return;
-      }
-      if (!confirm(`Anda akan meminta admin untuk membuka kunci isian pada tanggal ${dateString}. Lanjutkan?`)) {
-        return;
-      }
-      showLoading("Mengirim permintaan buka kunci...");
-      google.script.run
-        .withSuccessHandler(response => {
-          hideLoading();
-          showAlert(response.message || response.error, response.success ? 'success' : 'error');
-          // Tidak perlu reload halaman, cukup beri notifikasi
-        })
-        .withFailureHandler(err => {
-          hideLoading();
-          showAlert(`Gagal mengirim permintaan: ${err.message}`, 'error');
-        })
-        .requestHolidayUnlock(loggedInUser.teacherName, dateString);
-    }
-
-    function navigateToUnlockRequests() {
-      renderView('unlock_requests_view');
-    }
-
-    function setupUnlockRequestsView() {
-      window.scrollTo(0, 0);
-      const tableBody = document.getElementById('unlockRequestsTableBody');
-      if (tableBody) tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Memuat data permintaan...</td></tr>';
-
-      showLoading("Memuat daftar permintaan...");
-      google.script.run
-        .withSuccessHandler(response => {
-          hideLoading();
-          if (response.success) {
-            renderUnlockRequestsTable(response.requests);
-          } else {
-            if (tableBody) tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:red;">${response.error || 'Gagal memuat data.'}</td></tr>`;
-          }
-        })
-        .withFailureHandler(err => {
-          hideLoading();
-          if (tableBody) tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:red;">Error server: ${err.message}</td></tr>`;
-        })
-        .getUnlockRequests();
-    }
-
-    function renderUnlockRequestsTable(requests) {
-      const tableBody = document.getElementById('unlockRequestsTableBody');
-      if (!tableBody) return;
-      let html = '';
-      if (requests && requests.length > 0) {
-        requests.forEach(req => {
-          const requestDate = req.requestDate ? new Date(req.requestDate).toLocaleString('id-ID') : '-';
-          html += `<tr>
-            <td data-label="Nama Guru">${req.teacherName}</td>
-            <td data-label="Tanggal">${req.dateToUnlock}</td>
-            <td data-label="Tgl. Permintaan">${requestDate}</td>
-            <td data-label="Status">${req.status}</td>
-            <td data-label="Aksi" class="actions-cell">
-              <button class="btn-success" onclick="handleProcessUnlockRequest('${req.requestId}', 'approve')">Setujui</button>
-              <button class="btn-danger" onclick="handleProcessUnlockRequest('${req.requestId}', 'reject')">Tolak</button>
-            </td>
-          </tr>`;
-        });
-      } else {
-        html = '<tr><td colspan="5" style="text-align:center;">Tidak ada permintaan buka kunci yang tertunda.</td></tr>';
-      }
-      tableBody.innerHTML = html;
-    }
-
-    function handleProcessUnlockRequest(requestId, action) {
-        if (!confirm(`Yakin ingin ${action === 'approve' ? 'MENYETUJUI' : 'MENOLAK'} permintaan ini?`)) {
-            return;
-        }
-        showLoading("Memproses permintaan...");
-        google.script.run
-            .withSuccessHandler(response => {
-                hideLoading();
-                showAlert(response.message || response.error, response.success ? 'success' : 'error');
-                if (response.success) {
-                    setupUnlockRequestsView(); // Muat ulang daftar permintaan
-                }
-            })
-            .withFailureHandler(err => {
-                hideLoading();
-                showAlert(`Gagal memproses: ${err.message}`, 'error');
-            })
-            .processUnlockRequest(requestId, action, loggedInUser.username);
     }
   </script>
 </body>
