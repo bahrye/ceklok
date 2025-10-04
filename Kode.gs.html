@@ -39,6 +39,10 @@ const CONFIG_SHEET_NAME = "Setting";
 
 const ss = SpreadsheetApp.getActiveSpreadsheet();
 
+// --- DI BAGIAN ATAS, TAMBAHKAN VARIABEL GLOBAL BARU ---
+const SCHOOL_HOLIDAY_SETTINGS_SHEET_NAME = "SchoolHolidaySettings";
+const UNLOCK_REQUESTS_SHEET_NAME = "UnlockRequests";
+
 
 function doGet(e) {
   return HtmlService.createHtmlOutputFromFile('index')
@@ -253,9 +257,11 @@ function getInitialData() {
   }
 }
 
+// --- MODIFIKASI FUNGSI getCeklokData ---
+// Ganti fungsi getCeklokData yang ada dengan versi ini.
 function getCeklokData(nama, bulanTahun) {
   try {
-    // 1. Validasi Awal (tetap sama, sudah cukup efisien)
+    // ... (validasi awal tetap sama) ...
     const settings = getCeklokInputSettings();
     if (settings.error) {
       Logger.log(`getCeklokData: Peringatan - Gagal memuat settings untuk validasi bulan - ${settings.error}`);
@@ -281,12 +287,13 @@ function getCeklokData(nama, bulanTahun) {
     const sheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
     const liburSheet = ss.getSheetByName(KALENDER_SHEET_NAME);
     const opsiKetLiburSheet = ss.getSheetByName(OPSIKETLIBUR_SHEET_NAME);
+    const holidaySettingsSheet = ss.getSheetByName(SCHOOL_HOLIDAY_SETTINGS_SHEET_NAME); // TAMBAHKAN INI
 
     if (!sheet || !liburSheet) {
         return { error: `Sheet '${CEKLOK_MANUAL_SHEET_NAME}' atau '${KALENDER_SHEET_NAME}' tidak ditemukan.` };
     }
 
-    // 2. Baca data libur dan opsi keterangan dalam satu kali operasi
+    // ... (kode untuk membaca liburMap dan ketLiburOptions tetap sama) ...
     const liburMap = new Map();
     if (liburSheet.getLastRow() > 1) {
         liburSheet.getRange(2, 1, liburSheet.getLastRow() - 1, 2).getDisplayValues().forEach(([tgl, ket]) => {
@@ -299,6 +306,24 @@ function getCeklokData(nama, bulanTahun) {
       ketLiburOptions = opsiKetLiburSheet.getRange(2, 1, opsiKetLiburSheet.getLastRow() - 1, 1).getValues().flat().filter(String).map(o => String(o).trim());
     }
 
+    // --- TAMBAHAN: Ambil pengaturan hari libur guru ---
+    const schoolHolidaySettings = {};
+    const dayMapping = { 1: 'senin', 2: 'selasa', 3: 'rabu', 4: 'kamis', 5: 'jumat', 6: 'sabtu' };
+    if (holidaySettingsSheet) {
+      const settingsData = holidaySettingsSheet.getDataRange().getValues();
+      const headers = settingsData[0].map(h => h.toLowerCase());
+      const teacherRowData = settingsData.find(row => row[0] === nama);
+      if (teacherRowData) {
+        headers.slice(1).forEach((day, index) => {
+          if (teacherRowData[index + 1] === true) {
+            const dayIndex = Object.keys(dayMapping).find(key => dayMapping[key] === day);
+            if(dayIndex) schoolHolidaySettings[dayIndex] = true;
+          }
+        });
+      }
+    }
+    // --------------------------------------------------
+
     const [mmStr, yyyyStr] = bulanTahun.split("/");
     const mm = parseInt(mmStr, 10);
     const yyyy = parseInt(yyyyStr, 10);
@@ -306,7 +331,7 @@ function getCeklokData(nama, bulanTahun) {
         return { error: "Bulan/Tahun tidak valid." };
     }
 
-    // 3. Buat Peta (Map) dari data ceklok untuk pencarian super cepat
+    // ... (kode untuk membuat ceklokDataMap tetap sama) ...
     const allData = sheet.getDataRange().getValues();
     const headers = allData[0].map(h => String(h).trim());
     const namaColIdx = headers.indexOf("Nama_Guru");
@@ -323,10 +348,8 @@ function getCeklokData(nama, bulanTahun) {
     for (let i = 1; i < allData.length; i++) {
         const row = allData[i];
         const guru = String(row[namaColIdx]).trim();
-        // Proses hanya data untuk guru yang diminta untuk efisiensi
         if (guru === nama && row[tanggalColIdx] instanceof Date) {
             const tanggal = Utilities.formatDate(new Date(row[tanggalColIdx]), Session.getScriptTimeZone(), "dd/MM/yyyy");
-            // Simpan data relevan ke Map
             ceklokDataMap.set(tanggal, {
                 jamMasuk: String(row[masukColIdx] || ''),
                 jamPulang: String(row[pulangColIdx] || ''),
@@ -335,7 +358,6 @@ function getCeklokData(nama, bulanTahun) {
         }
     }
 
-    // 4. Bangun hasil data dengan pencarian cepat dari Map
     const resultData = [];
     const namaHariIndonesia = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
     const lastDay = new Date(yyyy, mm, 0).getDate();
@@ -344,12 +366,23 @@ function getCeklokData(nama, bulanTahun) {
       const dateObj = new Date(yyyy, mm - 1, i);
       const dateStr = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "dd/MM/yyyy");
       const hari = namaHariIndonesia[dateObj.getDay()];
+      const dayOfWeek = dateObj.getDay(); // 0 for Sunday, 6 for Saturday
 
       const keteranganKalender = liburMap.get(dateStr) || '';
-      const isLiburKalender = (dateObj.getDay() === 0) || (keteranganKalender !== '');
+      const isLiburKalender = (dayOfWeek === 0) || (keteranganKalender !== '');
       
-      // Ambil data dari Map (operasi ini sangat cepat)
       const dataRow = ceklokDataMap.get(dateStr);
+
+      // --- MODIFIKASI: Terapkan pengaturan hari libur ---
+      let isSchoolHolidaySetting = schoolHolidaySettings[dayOfWeek] === true && !isLiburKalender;
+      let keteranganLiburManualValue = dataRow ? dataRow.ketManual : '';
+      
+      if (isSchoolHolidaySetting && (!dataRow || !dataRow.ketManual)) {
+        // Jika hari ini adalah hari libur yang di-set guru DAN belum ada keterangan manual lain,
+        // maka otomatis set ke "Hari Libur Sekolah".
+        keteranganLiburManualValue = "Hari Libur Sekolah";
+      }
+      // ----------------------------------------------------
 
       resultData.push({
         hari,
@@ -358,11 +391,12 @@ function getCeklokData(nama, bulanTahun) {
         dataPulang: dataRow ? dataRow.jamPulang : '',
         isLibur: isLiburKalender,
         keterangan: keteranganKalender,
-        keteranganLiburManual: dataRow ? dataRow.ketManual : ''
+        keteranganLiburManual: keteranganLiburManualValue,
+        isSchoolHolidaySetting: isSchoolHolidaySetting && (!dataRow || dataRow.ketManual === "Hari Libur Sekolah") // TAMBAHKAN FLAG INI
       });
     }
 
-    // Pengecekan status penguncian bulan (tetap sama)
+    // ... (kode untuk memeriksa status lock bulan tetap sama) ...
     const lockStatusResult = getLockedMonths();
     let isMonthCurrentlyLocked = false;
     if (lockStatusResult.success) {
@@ -370,6 +404,7 @@ function getCeklokData(nama, bulanTahun) {
     } else {
       Logger.log(`getCeklokData: Peringatan - Gagal memeriksa status kunci bulan ${bulanTahun} - ${lockStatusResult.error}`);
     }
+
 
     return { 
       data: resultData, 
@@ -5482,5 +5517,202 @@ function autoLockPreviousMonth() {
     lockMonth(monthYearToLock, actorUsername, actorRole);
   } else {
     Logger.log(`Hari ini bukan tanggal 10 (tanggal ${currentDay}). Tidak ada bulan yang dikunci.`);
+  }
+}
+
+// --- TAMBAHKAN FUNGSI-FUNGSI BARU INI DI MANA SAJA DALAM FILE ---
+
+/**
+ * Mengambil pengaturan hari libur sekolah mingguan untuk seorang guru.
+ * @param {string} teacherName Nama guru.
+ * @return {object} Objek berisi pengaturan hari libur atau error.
+ */
+function getSchoolHolidaySettings(teacherName) {
+  try {
+    const sheet = ensureSheet(SCHOOL_HOLIDAY_SETTINGS_SHEET_NAME, ["Nama_Guru", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]);
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0].map(h => h.toLowerCase());
+    const teacherRow = data.find(row => row[0] === teacherName);
+
+    if (teacherRow) {
+      const settings = {};
+      headers.slice(1).forEach((day, index) => {
+        settings[day] = teacherRow[index + 1] === true;
+      });
+      return { success: true, settings: settings };
+    } else {
+      // Jika tidak ada pengaturan, kembalikan default (semua false)
+      return { success: true, settings: { senin: false, selasa: false, rabu: false, kamis: false, jumat: false, sabtu: false } };
+    }
+  } catch (e) {
+    Logger.log(`Error in getSchoolHolidaySettings for ${teacherName}: ${e.toString()}`);
+    return { success: false, error: `Gagal mengambil pengaturan: ${e.message}` };
+  }
+}
+
+/**
+ * Menyimpan pengaturan hari libur sekolah mingguan untuk seorang guru.
+ * @param {object} settings Objek berisi nama guru dan pengaturan harinya.
+ * @return {object} Hasil operasi.
+ */
+function saveSchoolHolidaySettings(settings) {
+  if (!settings || !settings.teacherName) {
+    return { success: false, error: "Informasi guru tidak lengkap." };
+  }
+  try {
+    const sheet = ensureSheet(SCHOOL_HOLIDAY_SETTINGS_SHEET_NAME, ["Nama_Guru", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]);
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0].map(h => h.toLowerCase());
+    const teacherName = settings.teacherName;
+    let rowIndex = -1;
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === teacherName) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    const days = ["senin", "selasa", "rabu", "kamis", "jumat", "sabtu"];
+    const newRowData = [teacherName];
+    days.forEach(day => {
+      newRowData.push(settings[day] === true);
+    });
+
+    if (rowIndex !== -1) {
+      // Update baris yang ada
+      sheet.getRange(rowIndex, 1, 1, newRowData.length).setValues([newRowData]);
+    } else {
+      // Tambah baris baru
+      sheet.appendRow(newRowData);
+    }
+    return { success: true, message: "Pengaturan hari libur berhasil disimpan." };
+  } catch (e) {
+    Logger.log(`Error in saveSchoolHolidaySettings for ${settings.teacherName}: ${e.toString()}`);
+    return { success: false, error: `Gagal menyimpan pengaturan: ${e.message}` };
+  }
+}
+
+/**
+ * Guru mengajukan permintaan untuk membuka kunci hari libur yang diatur otomatis.
+ * @param {string} teacherName Nama guru.
+ * @param {string} dateToUnlock Tanggal yang ingin dibuka kuncinya (format dd/MM/yyyy).
+ * @return {object} Hasil operasi.
+ */
+function requestHolidayUnlock(teacherName, dateToUnlock) {
+  try {
+    if (!teacherName || !dateToUnlock) {
+      return { success: false, error: "Nama guru dan tanggal harus diisi." };
+    }
+    const sheet = ensureSheet(UNLOCK_REQUESTS_SHEET_NAME, ["RequestID", "TeacherName", "DateToUnlock", "RequestDate", "Status", "ProcessedBy", "ProcessedDate"]);
+    
+    // Cek apakah sudah ada permintaan pending untuk tanggal yang sama
+    const data = sheet.getDataRange().getValues();
+    const existingRequest = data.find(row => row[1] === teacherName && row[2] === dateToUnlock && row[4] === 'pending');
+    if (existingRequest) {
+      return { success: false, error: `Anda sudah memiliki permintaan untuk tanggal ${dateToUnlock} yang sedang diproses.` };
+    }
+
+    const requestId = Utilities.getUuid();
+    sheet.appendRow([requestId, teacherName, dateToUnlock, new Date(), 'pending', '', '']);
+    return { success: true, message: `Permintaan untuk membuka kunci tanggal ${dateToUnlock} telah dikirim ke admin.` };
+  } catch (e) {
+    Logger.log(`Error in requestHolidayUnlock: ${e.toString()}`);
+    return { success: false, error: `Gagal mengirim permintaan: ${e.message}` };
+  }
+}
+
+/**
+ * Admin mengambil daftar permintaan buka kunci yang masih pending.
+ * @return {object} Objek berisi daftar permintaan atau error.
+ */
+function getUnlockRequests() {
+  try {
+    const sheet = ensureSheet(UNLOCK_REQUESTS_SHEET_NAME, ["RequestID", "TeacherName", "DateToUnlock", "RequestDate", "Status"]);
+    if (sheet.getLastRow() < 2) {
+      return { success: true, requests: [] };
+    }
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0].map(h => h.toLowerCase());
+    const requests = data.slice(1).map(row => ({
+      requestId: row[headers.indexOf('requestid')],
+      teacherName: row[headers.indexOf('teachername')],
+      dateToUnlock: row[headers.indexOf('datetounlock')],
+      requestDate: row[headers.indexOf('requestdate')],
+      status: row[headers.indexOf('status')]
+    })).filter(req => req.status === 'pending');
+    
+    return { success: true, requests: requests };
+  } catch (e) {
+    Logger.log(`Error in getUnlockRequests: ${e.toString()}`);
+    return { success: false, error: `Gagal mengambil data permintaan: ${e.message}` };
+  }
+}
+
+/**
+ * Admin memproses permintaan buka kunci (setujui/tolak).
+ * @param {string} requestId ID permintaan.
+ * @param {string} action 'approve' atau 'reject'.
+ * @param {string} adminUsername Nama admin yang memproses.
+ * @return {object} Hasil operasi.
+ */
+function processUnlockRequest(requestId, action, adminUsername) {
+  try {
+    const requestsSheet = ss.getSheetByName(UNLOCK_REQUESTS_SHEET_NAME);
+    if (!requestsSheet) return { success: false, error: "Sheet UnlockRequests tidak ditemukan." };
+
+    const data = requestsSheet.getDataRange().getValues();
+    let requestRowIndex = -1;
+    let requestData = null;
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === requestId) {
+        requestRowIndex = i + 1;
+        requestData = { teacherName: data[i][1], dateToUnlock: data[i][2], status: data[i][4] };
+        break;
+      }
+    }
+
+    if (!requestData) return { success: false, error: "Permintaan tidak ditemukan." };
+    if (requestData.status !== 'pending') return { success: false, error: `Permintaan ini sudah berstatus '${requestData.status}'.` };
+
+    if (action === 'approve') {
+      const ceklokSheet = ss.getSheetByName(CEKLOK_MANUAL_SHEET_NAME);
+      const ceklokData = ceklokSheet.getDataRange().getValues();
+      const ceklokHeaders = ceklokData[0].map(h => h.toLowerCase());
+      const idxNama = ceklokHeaders.indexOf("nama_guru");
+      const idxTanggal = ceklokHeaders.indexOf("tanggal");
+      const idxKetManual = ceklokHeaders.indexOf("ket_libur_manual");
+
+      let ceklokRowIndex = -1;
+      for (let i = 1; i < ceklokData.length; i++) {
+        const row = ceklokData[i];
+        if (row[idxNama] === requestData.teacherName && 
+            Utilities.formatDate(new Date(row[idxTanggal]), Session.getScriptTimeZone(), "dd/MM/yyyy") === requestData.dateToUnlock) {
+          ceklokRowIndex = i + 1;
+          break;
+        }
+      }
+
+      if (ceklokRowIndex !== -1) {
+        ceklokSheet.getRange(ceklokRowIndex, idxKetManual + 1).setValue(''); // Hapus keterangan "Hari Libur Sekolah"
+      } else {
+        // Jika tidak ada barisnya, tidak masalah, karena guru bisa input baru.
+        Logger.log(`Tidak ditemukan baris ceklok untuk ${requestData.teacherName} pada ${requestData.dateToUnlock} untuk dihapus keterangannya.`);
+      }
+      
+      // Update status di sheet permintaan
+      requestsSheet.getRange(requestRowIndex, 5).setValue('approved'); // Kolom status
+    } else { // reject
+      requestsSheet.getRange(requestRowIndex, 5).setValue('rejected'); // Kolom status
+    }
+
+    requestsSheet.getRange(requestRowIndex, 6).setValue(adminUsername); // Kolom ProcessedBy
+    requestsSheet.getRange(requestRowIndex, 7).setValue(new Date()); // Kolom ProcessedDate
+
+    return { success: true, message: `Permintaan berhasil di-${action}.` };
+  } catch (e) {
+    Logger.log(`Error in processUnlockRequest: ${e.toString()}`);
+    return { success: false, error: `Gagal memproses permintaan: ${e.message}` };
   }
 }
